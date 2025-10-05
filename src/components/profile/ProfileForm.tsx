@@ -1,12 +1,9 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { updateProfile } from 'firebase/auth'
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { ImagePlus, Trash2, Loader2, X } from 'lucide-react'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { auth, storage } from '@/lib/firebase'
 import { UserProfile } from '@/types/user'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +13,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useToast } from '@/components/ui/toast'
 import { COLOR_PALETTE, getHexForColorName, getNameForHex, normalizeHex } from '@/lib/colors'
 import { cn } from '@/lib/utils'
+import { buildStoragePath, normaliseStoragePath, removeFromStorage, uploadToStorage } from '@/lib/storage'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 
 interface ProfileFormState {
   displayName?: string
@@ -26,6 +25,7 @@ interface ProfileFormState {
   favoriteColors: string[]
   favoriteStyles: string[]
   photoURL?: string
+  photoPath?: string
 }
 
 const styleOptions: ChipOption[] = [
@@ -72,6 +72,15 @@ function normaliseDisplayName(value: unknown): string | undefined {
 export function ProfileForm() {
   const { userProfile, updateUserProfile } = useAuth()
   const { toast } = useToast()
+
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient()
+    } catch (error) {
+      console.error('Supabase client initialisation failed:', error)
+      return null
+    }
+  }, [])
 
   const [formData, setFormData] = useState<ProfileFormState>({
     displayName: undefined,
@@ -123,6 +132,7 @@ export function ProfileForm() {
       favoriteColors: prepareFavoriteColors(userProfile.favoriteColors),
       favoriteStyles: userProfile.favoriteStyles ?? [],
       photoURL: userProfile.photoURL ?? undefined,
+      photoPath: userProfile.photoPath ?? undefined,
     })
     setPreviewUrl(null)
   }, [prepareFavoriteColors, userProfile])
@@ -225,6 +235,7 @@ export function ProfileForm() {
     favoriteColors: uniqueFavoriteColors,
     favoriteStyles: formData.favoriteStyles,
     photoURL: formData.photoURL || undefined,
+    photoPath: formData.photoPath || undefined,
     updatedAt: new Date(),
   })
 
@@ -232,7 +243,15 @@ export function ProfileForm() {
     event.preventDefault()
     setLoading(true)
     try {
-      await updateUserProfile(buildUpdatePayload())
+      const payload = buildUpdatePayload()
+      await updateUserProfile(payload)
+      if (supabase) {
+        try {
+          await supabase.auth.updateUser({ data: { display_name: payload.displayName ?? null } })
+        } catch (error) {
+          console.warn('Failed to sync Supabase auth profile:', error)
+        }
+      }
       toast({ variant: 'success', title: 'Profile updated' })
     } catch (error) {
       console.error('Failed to update profile:', error)
@@ -276,8 +295,8 @@ export function ProfileForm() {
     })
 
   const handlePhotoSelected = async (file: File) => {
-    const uid = auth?.currentUser?.uid || userProfile?.uid
-    if (!uid || !storage) {
+    const uid = userProfile?.uid
+    if (!uid || !supabase) {
       toast({ variant: 'error', title: 'Unable to upload', description: 'Please sign in before uploading a photo.' })
       return
     }
@@ -289,48 +308,25 @@ export function ProfileForm() {
       const previewObjectUrl = URL.createObjectURL(resized)
       setPreviewUrl(previewObjectUrl)
 
-      const objectRef = storageRef(storage, `users/${uid}/profile.webp`)
-      const uploadTask = uploadBytesResumable(objectRef, resized, { contentType: 'image/webp' })
+      const storagePath = buildStoragePath({ userId: uid, originalName: 'profile.webp', folder: 'profiles' })
+      const result = await uploadToStorage(storagePath, resized, { contentType: 'image/webp', cacheControl: '3600', upsert: true })
 
-      await new Promise<void>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          try { uploadTask.cancel() } catch {}
-          reject(new Error('Upload timed out'))
-        }, 45_000)
+      const previousPath = formData.photoPath || userProfile?.photoPath
+      if (previousPath && normaliseStoragePath(previousPath) !== normaliseStoragePath(storagePath)) {
+        try {
+          await removeFromStorage(previousPath)
+        } catch (err) {
+          console.warn('Failed to delete previous profile photo:', err)
+        }
+      }
 
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-            setUploadProgress(percent)
-          },
-          (err) => {
-            window.clearTimeout(timeoutId)
-            reject(err)
-          },
-          async () => {
-            window.clearTimeout(timeoutId)
-            const url = await getDownloadURL(objectRef)
-            setFormData((prev) => ({ ...prev, photoURL: url }))
-            await updateUserProfile({ photoURL: url, updatedAt: new Date() })
-            if (auth?.currentUser) {
-              try {
-                await updateProfile(auth.currentUser, { photoURL: url })
-              } catch (err) {
-                console.warn('Failed to sync Firebase Auth photoURL:', err)
-              }
-            }
-            toast({ variant: 'success', title: 'Profile photo updated' })
-            resolve()
-          },
-        )
-      })
-    } catch (error: any) {
+      setFormData((prev) => ({ ...prev, photoURL: result.publicUrl, photoPath: storagePath }))
+      await updateUserProfile({ photoURL: result.publicUrl, photoPath: storagePath, updatedAt: new Date() })
+      setUploadProgress(100)
+      toast({ variant: 'success', title: 'Profile photo updated' })
+    } catch (error) {
       console.error('Failed to upload profile image:', error)
-      const description =
-        typeof error?.message === 'string' && error.message.includes('timed out')
-          ? 'Upload timed out. Please try again.'
-          : 'Failed to upload profile image. Please try again.'
+      const description = error instanceof Error ? error.message : 'Failed to upload profile image. Please try again.'
       toast({ variant: 'error', title: 'Upload failed', description })
     } finally {
       setUploading(false)
@@ -338,40 +334,33 @@ export function ProfileForm() {
     }
   }
 
+
   const handleRemovePhoto = async () => {
-    const uid = auth?.currentUser?.uid || userProfile?.uid
-    if (!uid || !storage) {
+    if (!supabase || !userProfile?.uid) {
       toast({ variant: 'error', title: 'Unable to remove photo', description: 'You must be signed in.' })
       return
     }
 
     try {
-      const current = formData.photoURL ?? ''
-      if (current) {
+      const currentPath = formData.photoPath || userProfile?.photoPath
+      if (currentPath) {
         try {
-          const objectRef = storageRef(storage, `users/${uid}/profile.webp`)
-          await deleteObject(objectRef)
+          await removeFromStorage(currentPath)
         } catch (error) {
           console.warn('Failed to delete stored photo:', error)
         }
       }
 
-      setFormData((prev) => ({ ...prev, photoURL: undefined }))
+      setFormData((prev) => ({ ...prev, photoURL: undefined, photoPath: undefined }))
       setPreviewUrl(null)
-      await updateUserProfile({ photoURL: undefined, updatedAt: new Date() })
-      if (auth?.currentUser) {
-        try {
-          await updateProfile(auth.currentUser, { photoURL: null })
-        } catch (error) {
-          console.warn('Failed to clear Firebase Auth photoURL:', error)
-        }
-      }
+      await updateUserProfile({ photoURL: undefined, photoPath: undefined, updatedAt: new Date() })
       toast({ variant: 'success', title: 'Profile photo removed' })
     } catch (error) {
       console.error('Failed to remove profile photo:', error)
-      toast({ variant: 'error', title: 'Remove failed' })
+      toast({ variant: 'error', title: 'Failed to remove photo' })
     }
   }
+
 
   return (
     <Card className="mx-auto max-w-2xl">

@@ -1,14 +1,13 @@
 ﻿/** @type {import('next').NextConfig} */
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseHostname = supabaseUrl ? new URL(supabaseUrl).hostname : 'supabase.co'
+
 const nextConfig = {
   images: {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'firebasestorage.app',
+        hostname: supabaseHostname,
       },
       {
         protocol: 'https',
@@ -28,3 +27,4 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+

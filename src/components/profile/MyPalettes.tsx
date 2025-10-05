@@ -1,78 +1,92 @@
-'use client';
+'use client'
 
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  deleteDoc,
-  doc
-} from 'firebase/firestore';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SavedPalette } from '@/types/palette';
-import { Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react'
+import { Trash2 } from 'lucide-react'
+
+import { useAuth } from '@/contexts/AuthContext'
+import { getSupabaseClient } from '@/lib/supabaseClient'
+import { SavedPalette } from '@/types/palette'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export function MyPalettes() {
-  const { user } = useAuth();
-  const [items, setItems] = useState<SavedPalette[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth()
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient()
+    } catch (error) {
+      console.error('Supabase client initialisation failed:', error)
+      return null
+    }
+  }, [])
+  const [items, setItems] = useState<SavedPalette[]>([])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    (async () => {
-      if (!user) return;
-      setLoading(true);
+    if (!user || !supabase) return
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
       try {
-        const q = query(
-          collection(db, 'palettes'),
-          where('ownerId', '==', user.uid),
-          orderBy('createdAt', 'desc')
-        );
-        const snap = await getDocs(q);
-        const list: SavedPalette[] = [];
-        snap.forEach((d) => {
-          const data: any = d.data();
-          list.push({
-            id: d.id,
-            ownerId: data.ownerId,
-            baseHex: data.baseHex,
-            dominantHexes: data.dominantHexes || [],
-            richMatches: data.richMatches || null,
-            plan: data.plan || {},
-            source: data.source || 'analyzer',
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-            updatedAt: data.updatedAt?.toDate?.() || new Date()
-          });
-        });
-        setItems(list);
+        const { data, error } = await supabase
+          .from('palettes')
+          .select('*')
+          .eq('owner_id', user.uid)
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (cancelled) return
+        const mapped = (data ?? []).map((row: any) => ({
+          id: row.id,
+          ownerId: row.owner_id,
+          baseHex: row.base_hex,
+          dominantHexes: row.dominant_hexes ?? [],
+          richMatches: row.rich_matches ?? null,
+          plan: row.plan ?? {},
+          source: row.source ?? 'analyzer',
+          createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+          updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+        })) as SavedPalette[]
+        setItems(mapped)
+      } catch (error) {
+        console.error('Failed to load palettes:', error)
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false)
       }
-    })();
-  }, [user]);
+    }
+
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabase, user])
 
   const remove = async (id: string) => {
-    if (!confirm('Remove this saved palette?')) return;
-    await deleteDoc(doc(db, 'palettes', id));
-    setItems((prev) => prev.filter((i) => i.id !== id));
-  };
+    if (!supabase) {
+      alert('Supabase not configured')
+      return
+    }
+    if (!confirm('Remove this saved palette?')) return
+    const { error } = await supabase
+      .from('palettes')
+      .delete()
+      .eq('id', id)
+      .eq('owner_id', user?.uid ?? '')
+    if (error) {
+      console.error('Failed to delete palette:', error)
+      alert('Failed to delete palette')
+      return
+    }
+    setItems((prev) => prev.filter((i) => i.id !== id))
+  }
 
   const Row = ({
     label,
     colors
   }: {
-    label: string;
-    colors: string[];
+    label: string
+    colors: string[]
   }) => (
     <div className="grid grid-cols-[7rem,1fr] items-center gap-3">
       <div className="text-xs text-gray-600">{label}</div>
@@ -87,7 +101,7 @@ export function MyPalettes() {
         ))}
       </div>
     </div>
-  );
+  )
 
   return (
     <Card className="max-w-4xl mx-auto mt-6">
@@ -98,11 +112,11 @@ export function MyPalettes() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {loading && <div className="text-sm text-gray-600">Loading‚Ä¶</div>}
+        {loading && <div className="text-sm text-gray-600">LoadingÖ</div>}
         {!loading && items.length === 0 && (
           <div className="text-sm text-gray-600">
             No saved palettes yet. Build one in the Analyzer or Closet and
-            click ‚ÄúSave to Profile‚Äù.
+            click ìSave to Profileî.
           </div>
         )}
         <div className="space-y-5">
@@ -184,7 +198,7 @@ export function MyPalettes() {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
-export default MyPalettes;
+export default MyPalettes

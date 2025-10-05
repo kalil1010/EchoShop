@@ -1,16 +1,9 @@
-'use client'
+﻿'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import {
-  User,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-} from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 
-import { auth, db } from '@/lib/firebase'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 import { AuthUser, UserProfile } from '@/types/user'
 
 interface AuthContextType {
@@ -21,20 +14,32 @@ interface AuthContextType {
   signUp: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
-  isFirebaseEnabled: boolean
+  isSupabaseEnabled: boolean
+}
+
+interface ProfileRow {
+  id: string
+  email: string | null
+  display_name: string | null
+  photo_url: string | null
+  photo_path: string | null
+  gender: string | null
+  age: number | null
+  height: number | null
+  weight: number | null
+  favorite_colors: string[] | null
+  favorite_styles: string[] | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-function toDate(value: unknown): Date {
+function toDate(value: string | null | Date | undefined): Date {
+  if (!value) return new Date()
   if (value instanceof Date) return value
-  if (value && typeof (value as any).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate()
-  }
-  if (typeof value === 'number' || typeof value === 'string') {
-    return new Date(value)
-  }
-  return new Date()
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
 
 function sanitiseProfile(profile: UserProfile): UserProfile {
@@ -42,131 +47,226 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     ...profile,
     displayName: profile.displayName ?? undefined,
     photoURL: profile.photoURL ?? undefined,
+    photoPath: profile.photoPath ?? undefined,
     favoriteColors: profile.favoriteColors ?? [],
     favoriteStyles: profile.favoriteStyles ?? [],
   }
 }
 
+function mapAuthUser(user: User): AuthUser {
+  const metadata = user.user_metadata || {}
+  return {
+    uid: user.id,
+    email: user.email,
+    displayName: (metadata.full_name as string | undefined) ?? (metadata.display_name as string | undefined) ?? null,
+    photoURL: (metadata.avatar_url as string | undefined) ?? null,
+    emailVerified: !!user.email_confirmed_at,
+  }
+}
+
+function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
+  return sanitiseProfile({
+    uid: row.id,
+    email: row.email ?? fallback.email ?? '',
+    displayName: row.display_name ?? fallback.displayName ?? undefined,
+    photoURL: row.photo_url ?? fallback.photoURL ?? undefined,
+    photoPath: row.photo_path ?? undefined,
+    gender: (row.gender as UserProfile['gender'] | null) ?? undefined,
+    age: row.age ?? undefined,
+    height: row.height ?? undefined,
+    weight: row.weight ?? undefined,
+    favoriteColors: row.favorite_colors ?? [],
+    favoriteStyles: row.favorite_styles ?? [],
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  })
+}
+
+function buildBootstrapProfile(user: AuthUser): UserProfile {
+  const now = new Date()
+  return sanitiseProfile({
+    uid: user.uid,
+    email: user.email ?? '',
+    displayName: user.displayName ?? undefined,
+    photoURL: user.photoURL ?? undefined,
+    photoPath: undefined,
+    favoriteColors: [],
+    favoriteStyles: [],
+    createdAt: now,
+    updatedAt: now,
+  })
+}
+
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient()
+    } catch (error) {
+      console.error('Supabase client initialisation failed:', error)
+      return null
+    }
+  }, [])
+
   const [user, setUser] = useState<AuthUser | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const isFirebaseEnabled = auth !== null && db !== null
+  const isSupabaseEnabled = !!supabase
 
   useEffect(() => {
-    if (!isFirebaseEnabled) {
+    if (!supabase) {
       setLoading(false)
       return
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
-      if (firebaseUser) {
-        const authUser: AuthUser = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-          emailVerified: firebaseUser.emailVerified,
-        }
-        setUser(authUser)
+    let isMounted = true
 
-        try {
-          const profileSnap = await getDoc(doc(db, 'users', firebaseUser.uid))
-          if (profileSnap.exists()) {
-            const data = profileSnap.data() as UserProfile
-            setUserProfile(sanitiseProfile({
-              ...data,
-              updatedAt: toDate((data as any).updatedAt ?? data.updatedAt),
-              createdAt: toDate((data as any).createdAt ?? data.createdAt),
-            }))
-          } else {
-            const bootstrap: UserProfile = sanitiseProfile({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName ?? undefined,
-              photoURL: firebaseUser.photoURL ?? undefined,
-              favoriteColors: [],
-              favoriteStyles: [],
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-            await setDoc(doc(db, 'users', firebaseUser.uid), bootstrap, { merge: true })
-            setUserProfile(bootstrap)
-          }
-        } catch (error) {
-          console.warn('Failed to fetch user profile:', error)
-          const fallback: UserProfile = sanitiseProfile({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName ?? undefined,
-            photoURL: firebaseUser.photoURL ?? undefined,
-            favoriteColors: [],
-            favoriteStyles: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-          setUserProfile(fallback)
+    const loadUserProfile = async (authUser: AuthUser) => {
+      try {
+        const { data, error } = await supabase
+          .from<ProfileRow>('profiles')
+          .select('*')
+          .eq('id', authUser.uid)
+          .maybeSingle()
+
+        if (error && error.code !== 'PGRST116') {
+          throw error
         }
+
+        if (data) {
+          if (!isMounted) return
+          setUserProfile(mapProfileRow(data, authUser))
+        } else {
+          const bootstrap = buildBootstrapProfile(authUser)
+          const row: Partial<ProfileRow> = {
+            id: authUser.uid,
+            email: authUser.email,
+            display_name: bootstrap.displayName ?? null,
+            photo_url: bootstrap.photoURL ?? null,
+      photo_path: bootstrap.photoPath ?? null,
+            photo_path: bootstrap.photoPath ?? null,
+            favorite_colors: bootstrap.favoriteColors,
+            favorite_styles: bootstrap.favoriteStyles,
+            created_at: bootstrap.createdAt.toISOString(),
+            updated_at: bootstrap.updatedAt.toISOString(),
+          }
+          const { error: insertError } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+          if (insertError) {
+            console.warn('Failed to bootstrap profile:', insertError)
+          }
+          if (!isMounted) return
+          setUserProfile(bootstrap)
+        }
+      } catch (err) {
+        console.warn('Failed to load profile:', err)
+        if (!isMounted) return
+        setUserProfile(buildBootstrapProfile(authUser))
+      }
+    }
+
+    const loadInitialSession = async () => {
+      const { data } = await supabase.auth.getSession()
+      const sessionUser = data.session?.user
+
+      if (!isMounted) return
+
+      if (sessionUser) {
+        const mapped = mapAuthUser(sessionUser)
+        setUser(mapped)
+        await loadUserProfile(mapped)
       } else {
         setUser(null)
         setUserProfile(null)
       }
+      setLoading(false)
+    }
 
+    loadInitialSession()
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
+      if (!isMounted) return
+      const sessionUser = session?.user
+      if (sessionUser) {
+        const mapped = mapAuthUser(sessionUser)
+        setUser(mapped)
+        loadUserProfile(mapped)
+      } else {
+        setUser(null)
+        setUserProfile(null)
+      }
       setLoading(false)
     })
 
-    return unsubscribe
-  }, [isFirebaseEnabled])
+    return () => {
+      isMounted = false
+      listener.subscription.unsubscribe()
+    }
+  }, [supabase])
 
   const signIn = async (email: string, password: string) => {
-    if (!isFirebaseEnabled) {
-      throw new Error('Firebase is not properly configured')
-    }
-    await signInWithEmailAndPassword(auth, email, password)
+    if (!supabase) throw new Error('Supabase is not properly configured')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
   }
 
   const signUp = async (email: string, password: string, displayName?: string) => {
-    if (!isFirebaseEnabled) {
-      throw new Error('Firebase is not properly configured')
-    }
+    if (!supabase) throw new Error('Supabase is not properly configured')
 
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    const firebaseUser = userCredential.user
-
-    const profile: UserProfile = sanitiseProfile({
-      uid: firebaseUser.uid,
-      email: firebaseUser.email || email,
-      displayName: displayName ?? undefined,
-      favoriteColors: [],
-      favoriteStyles: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName ?? null,
+        },
+      },
     })
 
-    await setDoc(doc(db, 'users', firebaseUser.uid), profile)
-    setUserProfile(profile)
+    if (error) throw error
+
+    const newUser = data.user
+    if (!newUser) return
+
+    const authUser = mapAuthUser(newUser)
+    const bootstrap = buildBootstrapProfile(authUser)
+
+    const row: Partial<ProfileRow> = {
+      id: authUser.uid,
+      email: authUser.email,
+      display_name: bootstrap.displayName ?? null,
+      photo_url: bootstrap.photoURL ?? null,
+      photo_path: bootstrap.photoPath ?? null,
+            photo_path: bootstrap.photoPath ?? null,
+      favorite_colors: bootstrap.favoriteColors,
+      favorite_styles: bootstrap.favoriteStyles,
+      created_at: bootstrap.createdAt.toISOString(),
+      updated_at: bootstrap.updatedAt.toISOString(),
+    }
+
+    const { error: profileError } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+    if (profileError) {
+      console.warn('Failed to seed profile during sign-up:', profileError)
+    }
+
+    setUserProfile(bootstrap)
   }
 
   const logout = async () => {
-    if (!isFirebaseEnabled) {
-      throw new Error('Firebase is not properly configured')
-    }
-    await signOut(auth)
+    if (!supabase) throw new Error('Supabase is not properly configured')
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
   }
 
   const updateUserProfile = async (profileUpdates: Partial<UserProfile>) => {
-    if (!isFirebaseEnabled) {
-      throw new Error('Firebase is not properly configured')
-    }
+    if (!supabase) throw new Error('Supabase is not properly configured')
     if (!user) throw new Error('No user logged in')
     if (!userProfile) throw new Error('User profile not ready')
 
@@ -179,7 +279,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date(),
     })
 
-    await setDoc(doc(db, 'users', user.uid), merged, { merge: true })
+    const row: Partial<ProfileRow> = {
+      id: user.uid,
+      email: merged.email,
+      display_name: merged.displayName ?? null,
+      photo_url: merged.photoURL ?? null,
+      photo_path: merged.photoPath ?? null,
+      gender: merged.gender ?? null,
+      age: merged.age ?? null,
+      height: merged.height ?? null,
+      weight: merged.weight ?? null,
+      favorite_colors: merged.favoriteColors,
+      favorite_styles: merged.favoriteStyles,
+      updated_at: merged.updatedAt.toISOString(),
+    }
+
+    const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+    if (error) throw error
+
     setUserProfile(merged)
   }
 
@@ -191,11 +308,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     logout,
     updateUserProfile,
-    isFirebaseEnabled,
+    isSupabaseEnabled,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
 
 

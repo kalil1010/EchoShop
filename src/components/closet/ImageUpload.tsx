@@ -1,18 +1,16 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Upload, Image as ImageIcon, Loader2 } from 'lucide-react'
-import { normalizeStorageUrl } from '@/lib/storage'
 import { getMatchingColors, analyzeImageColors } from '@/lib/imageAnalysis'
 import { useToast } from '@/components/ui/toast'
 import { ClothingItem } from '@/types/clothing'
 import { useAuth } from '@/contexts/AuthContext'
-import { collection, addDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage, isUsingEmulators } from '@/lib/firebase'
+import { getSupabaseClient } from '@/lib/supabaseClient'
+import { type ClothingRow, mapClothingRow, uploadClothingImage } from '@/lib/closet'
 import { savePaletteForUser } from '@/lib/palette'
 
 interface ImageUploadProps {
@@ -21,6 +19,14 @@ interface ImageUploadProps {
 
 export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const { user } = useAuth()
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient()
+    } catch (error) {
+      console.error('Supabase client initialisation failed:', error)
+      return null
+    }
+  }, [])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -143,43 +149,44 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 
   const handleUpload = async () => {
     if (!selectedFile || !user || !analysis) return
+    if (!supabase) {
+      toast({ variant: 'error', title: 'Supabase not configured', description: 'Please add Supabase environment variables.' })
+      return
+    }
 
     setUploading(true)
     try {
-      // Upload image to Firebase Storage
-      const storageRef = ref(storage, `closet/${user.uid}/${Date.now()}_${selectedFile.name}`)
-      const snapshot = await uploadBytes(storageRef, selectedFile)
-      const rawUrl = await getDownloadURL(snapshot.ref)
-      const imageUrl = isUsingEmulators ? rawUrl : normalizeStorageUrl(rawUrl)
-      const storagePath = snapshot.ref.fullPath
+      const { storagePath, publicUrl } = await uploadClothingImage(user.uid, selectedFile)
 
-      // Create clothing item document
-      const clothingItem: Omit<ClothingItem, 'id'> = {
-        userId: user.uid,
-        imageUrl,
-        storagePath,
-        garmentType: garmentType as ClothingItem['garmentType'],
-        dominantColors: analysis.dominantColors,
-        ...(aiPrimaryHex ? { primaryHex: aiPrimaryHex } : {}),
-        ...(aiColorNames && aiColorNames.length ? { colorNames: aiColorNames } : {}),
-        ...(aiMatches ? { aiMatches } : {}),
+      const nowIso = new Date().toISOString()
+      const insertPayload = {
+        user_id: user.uid,
+        image_url: publicUrl,
+        storage_path: storagePath,
+        garment_type: garmentType as ClothingItem['garmentType'],
+        dominant_colors: analysis.dominantColors,
+        primary_hex: aiPrimaryHex,
+        color_names: aiColorNames,
+        ai_matches: aiRichMatches,
+        description: description || null,
         season: 'all',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ...(description ? { description } : {}),
+        created_at: nowIso,
+        updated_at: nowIso,
       }
 
-      // Save to Firestore
-      const docRef = await addDoc(collection(db, 'clothing'), clothingItem)
-      
-      const newItem: ClothingItem = {
-        id: docRef.id,
-        ...clothingItem,
-      }
+      const { data, error } = await supabase
+        .from('clothing')
+        .insert(insertPayload)
+        .select('*')
+        .maybeSingle()
+
+      if (error) throw error
+      if (!data) throw new Error('No data returned from Supabase')
+
+      const newItem = mapClothingRow(data as ClothingRow)
 
       onItemAdded?.(newItem)
-      
-      // Reset form
+
       setSelectedFile(null)
       setPreview(null)
       setAnalysis(null)
@@ -187,10 +194,13 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
-      
     } catch (error) {
       console.error('Upload failed:', error)
-      alert('Failed to upload item. Please try again.')
+      toast({
+        variant: 'error',
+        title: 'Failed to upload item',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      })
     } finally {
       setUploading(false)
     }
@@ -509,7 +519,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                     )
                     toast({ variant: 'success', title: 'Saved palette to profile' })
                   } catch (e: any) {
-                    toast({ variant: 'error', title: 'Save failed', description: e?.message || 'Unable to write to Firestore' })
+                    toast({ variant: 'error', title: 'Save failed', description: e?.message || 'Unable to save to Supabase' })
                   }
                 }}
                 variant="outline"

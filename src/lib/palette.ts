@@ -1,43 +1,55 @@
-// palette.ts
+﻿import { getSupabaseClient } from '@/lib/supabaseClient'
+import { NewSavedPalette } from '@/types/palette'
 
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
-import { NewSavedPalette } from '@/types/palette';
+interface PaletteInsert {
+  id: string
+  owner_id: string
+  base_hex: string
+  dominant_hexes: string[]
+  rich_matches: unknown
+  plan: unknown
+  source: string | null
+  created_at: string
+  updated_at: string
+}
 
-/**
- * Saves a new palette document for the authenticated user.
- *
- * @param {NewSavedPalette} payload - The palette data (excluding ownerId and timestamps).
- * @param {string} paletteId - The Firestore document ID to assign.
- * @returns {Promise<string>} - The ID of the saved document.
- */
-export async function savePaletteForUser(
-  payload: NewSavedPalette,
-  paletteId: string
-): Promise<string> {
-  // Ensure user is signed in
-  const user = auth.currentUser;
+export async function savePaletteForUser(payload: NewSavedPalette, paletteId: string): Promise<string> {
+  const supabase = getSupabaseClient()
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+
+  if (userError) {
+    throw new Error(`Unable to determine current user: ${userError.message}`)
+  }
+
+  const user = userData?.user
   if (!user) {
-    throw new Error('User must be signed in to save a palette.');
+    throw new Error('User must be signed in to save a palette.')
   }
 
-  try {
-    // Reference the document with the provided ID
-    const paletteRef = doc(db, 'palettes', paletteId);
+  const now = new Date().toISOString()
 
-    // Merge payload with ownership and timestamps
-    await setDoc(paletteRef, {
-      ...payload,
-      ownerId: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    return paletteRef.id;
-  } catch (e: any) {
-    const code = e.code || 'unknown';
-    const message = e.message || String(e);
-    console.error('[palettes] save failed:', code, message);
-    throw new Error(`Save failed (${code}): ${message}`);
+  const row: PaletteInsert = {
+    id: paletteId,
+    owner_id: user.id,
+    base_hex: payload.baseHex,
+    dominant_hexes: payload.dominantHexes,
+    rich_matches: payload.richMatches ?? null,
+    plan: payload.plan ?? null,
+    source: payload.source ?? null,
+    created_at: now,
+    updated_at: now,
   }
+
+  const { data, error } = await supabase
+    .from<PaletteInsert>('palettes')
+    .upsert(row, { onConflict: 'id' })
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    console.error('[palettes] save failed:', error)
+    throw new Error(`Save failed (${error.code ?? 'unknown'}): ${error.message}`)
+  }
+
+  return data?.id ?? paletteId
 }

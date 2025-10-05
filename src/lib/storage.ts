@@ -1,41 +1,62 @@
-const STORAGE_EMULATOR_HOSTS = new Set(['127.0.0.1', 'localhost'])
+﻿import { getSupabaseClient, getSupabaseStorageConfig } from '@/lib/supabaseClient'
 
-export function isEmulatorStorageUrl(url?: string | null): boolean {
-  if (!url) return false
-  try {
-    const parsed = new URL(url)
-    return STORAGE_EMULATOR_HOSTS.has(parsed.hostname)
-  } catch (err) {
-    return false
+export interface StoragePathOptions {
+  userId: string
+  originalName: string
+  folder?: string
+}
+
+export function buildStoragePath({ userId, originalName, folder }: StoragePathOptions): string {
+  const sanitizedUser = userId.replace(/[^a-zA-Z0-9_-]/g, '') || 'anonymous'
+  const timestamp = Date.now()
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const { folder: defaultFolder } = getSupabaseStorageConfig()
+  const baseFolder = folder ?? defaultFolder
+  const segments = [baseFolder, sanitizedUser, `${timestamp}-${safeName}`].filter(Boolean)
+  return segments.join('/')
+}
+
+export function getPublicStorageUrl(storagePath: string): string {
+  const supabase = getSupabaseClient()
+  const { bucket } = getSupabaseStorageConfig()
+  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath)
+  return data?.publicUrl ?? ''
+}
+
+export function getStorageBucket(): string {
+  const { bucket } = getSupabaseStorageConfig()
+  return bucket
+}
+
+export function normaliseStoragePath(pathValue?: string | null): string | undefined {
+  if (!pathValue) return undefined
+  return pathValue.replace(/^[\\/]+/, '')
+}
+
+export async function uploadToStorage(
+  storagePath: string,
+  file: Blob | File,
+  options?: { contentType?: string; upsert?: boolean; cacheControl?: string }
+) {
+  const supabase = getSupabaseClient()
+  const { bucket } = getSupabaseStorageConfig()
+  const { error } = await supabase.storage.from(bucket).upload(storagePath, file, {
+    cacheControl: options?.cacheControl ?? '3600',
+    upsert: options?.upsert ?? true,
+    contentType: options?.contentType,
+  })
+  if (error) throw error
+  return {
+    storagePath,
+    publicUrl: getPublicStorageUrl(storagePath),
   }
 }
 
-export function normalizeStorageUrl(url?: string | null): string {
-  if (!url) return ''
-  try {
-    const parsed = new URL(url)
-    if (!STORAGE_EMULATOR_HOSTS.has(parsed.hostname)) {
-      return url
-    }
-    parsed.protocol = 'https:'
-    parsed.hostname = 'firebasestorage.googleapis.com'
-    parsed.port = ''
-    return parsed.toString()
-  } catch (err) {
-    return url
-  }
-}
-
-export function extractStoragePath(url?: string | null): string | undefined {
-  if (!url) return undefined
-  try {
-    const parsed = new URL(url)
-    const pathMatch = parsed.pathname.match(/\/v0\/b\/[^/]+\/o\/(.+)$/)
-    if (!pathMatch) {
-      return undefined
-    }
-    return decodeURIComponent(pathMatch[1])
-  } catch (err) {
-    return undefined
-  }
+export async function removeFromStorage(storagePath: string) {
+  const supabase = getSupabaseClient()
+  const { bucket } = getSupabaseStorageConfig()
+  const pathValue = normaliseStoragePath(storagePath)
+  if (!pathValue) return
+  const { error } = await supabase.storage.from(bucket).remove([pathValue])
+  if (error) throw error
 }

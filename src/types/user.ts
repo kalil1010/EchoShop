@@ -1,8 +1,9 @@
-export interface UserProfile {
+﻿export interface UserProfile {
 uid: string
 email: string
 displayName?: string
 photoURL?: string
+photoPath?: string
 gender?: 'male' | 'female' | 'other'
 age?: number
 height?: number // in cm

@@ -1,77 +1,91 @@
-import { collection, query, where, getDocs, deleteDoc, doc, orderBy, updateDoc } from 'firebase/firestore'
-import { normalizeStorageUrl, extractStoragePath } from '@/lib/storage'
-import { deleteObject, ref } from 'firebase/storage'
-import { db, storage, isUsingEmulators } from '@/lib/firebase'
+﻿import { getSupabaseClient } from '@/lib/supabaseClient'
+import { buildStoragePath, getPublicStorageUrl, getStorageBucket, normaliseStoragePath, uploadToStorage } from '@/lib/storage'
 import { ClothingItem } from '@/types/clothing'
 
+export interface ClothingRow {
+  id: string
+  user_id: string
+  image_url: string | null
+  storage_path: string | null
+  garment_type: ClothingItem['garmentType']
+  dominant_colors: string[] | null
+  primary_hex: string | null
+  color_names: string[] | null
+  ai_matches: unknown
+  description: string | null
+  brand: string | null
+  season: ClothingItem['season'] | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export function mapClothingRow(row: ClothingRow): ClothingItem {
+  const storagePath = normaliseStoragePath(row.storage_path)
+  const imageUrl = row.image_url || (storagePath ? getPublicStorageUrl(storagePath) : '')
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    imageUrl,
+    storagePath: storagePath ?? undefined,
+    garmentType: row.garment_type,
+    dominantColors: row.dominant_colors ?? [],
+    primaryHex: row.primary_hex ?? undefined,
+    colorNames: row.color_names ?? undefined,
+    aiMatches: row.ai_matches ?? undefined,
+    description: row.description ?? undefined,
+    brand: row.brand ?? undefined,
+    season: row.season ?? 'all',
+    createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+  }
+}
+
 export async function getUserClothing(userId: string): Promise<ClothingItem[]> {
+  const supabase = getSupabaseClient()
+
   try {
-    const q = query(
-      collection(db, 'clothing'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    )
-    
-    const querySnapshot = await getDocs(q)
-    const items: ClothingItem[] = []
-    const pendingUpdates: Promise<void>[] = []
+    const { data, error } = await supabase
+      .from<ClothingRow>('clothing')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
 
-    for (const snapshotDoc of querySnapshot.docs) {
-      const data = snapshotDoc.data() as Record<string, any>
-      const rawUrl = typeof data.imageUrl === 'string' ? data.imageUrl : ''
-      const imageUrl = normalizeStorageUrl(rawUrl)
-      const storagePath = data.storagePath || extractStoragePath(rawUrl)
-
-      const createdAtSource = data.createdAt
-      const updatedAtSource = data.updatedAt
-      const createdAt = createdAtSource?.toDate ? createdAtSource.toDate() : (createdAtSource ? new Date(createdAtSource) : new Date())
-      const updatedAt = updatedAtSource?.toDate ? updatedAtSource.toDate() : (updatedAtSource ? new Date(updatedAtSource) : createdAt)
-
-      const docData = {
-        id: snapshotDoc.id,
-        ...data,
-        imageUrl,
-        ...(storagePath ? { storagePath } : {}),
-        createdAt,
-        updatedAt,
-      } as ClothingItem
-
-      items.push(docData)
-
-      if (!isUsingEmulators) {
-        const updates: Record<string, any> = {}
-        if (rawUrl && rawUrl !== imageUrl) {
-          updates.imageUrl = imageUrl
-        }
-        if (storagePath && !data.storagePath) {
-          updates.storagePath = storagePath
-        }
-        if (Object.keys(updates).length > 0) {
-          pendingUpdates.push(updateDoc(doc(db, 'clothing', snapshotDoc.id), updates))
-        }
-      }
+    if (error) {
+      throw error
     }
 
-    if (pendingUpdates.length > 0) {
-      await Promise.allSettled(pendingUpdates)
-    }
-
-    return items
+    if (!data) return []
+    return data.map(mapClothingRow)
   } catch (error) {
     console.error('Failed to fetch clothing items:', error)
     return []
   }
 }
 
+export async function uploadClothingImage(userId: string, file: File): Promise<{ storagePath: string; publicUrl: string }> {
+  const storagePath = buildStoragePath({ userId, originalName: file.name })
+  const { publicUrl } = await uploadToStorage(storagePath, file, {
+    contentType: file.type || 'image/webp',
+    upsert: false,
+    cacheControl: '3600',
+  })
+  return { storagePath, publicUrl }
+}
+
 export async function deleteClothingItem(item: ClothingItem): Promise<void> {
+  const supabase = getSupabaseClient()
+  const bucket = getStorageBucket()
+
   try {
-    // Delete from Firestore
-    await deleteDoc(doc(db, 'clothing', item.id))
-    
-    // Delete image from Storage
-    const targetPath = item.storagePath || extractStoragePath(item.imageUrl) || item.imageUrl
-    const imageRef = ref(storage, targetPath)
-    await deleteObject(imageRef)
+    const { error } = await supabase.from('clothing').delete().eq('id', item.id).eq('user_id', item.userId)
+    if (error) throw error
+
+    const storagePath = normaliseStoragePath(item.storagePath) || null
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage.from(bucket).remove([storagePath])
+      if (storageError) throw storageError
+    }
   } catch (error) {
     console.error('Failed to delete clothing item:', error)
     throw error
@@ -88,6 +102,7 @@ export function groupClothingByType(items: ClothingItem[]): { [key: string]: Clo
     return groups
   }, {} as { [key: string]: ClothingItem[] })
 }
+
 export interface ClosetItemSummary {
   id: string
   garmentType: ClothingItem['garmentType']
@@ -96,10 +111,7 @@ export interface ClosetItemSummary {
   dominantColors?: string[]
 }
 
-export function toClosetSummary(
-  items: ClothingItem[],
-  limit = 15,
-): ClosetItemSummary[] {
+export function toClosetSummary(items: ClothingItem[], limit = 15): ClosetItemSummary[] {
   return items.slice(0, limit).map((item) => ({
     id: item.id,
     garmentType: item.garmentType,
