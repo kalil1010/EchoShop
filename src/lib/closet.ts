@@ -18,10 +18,36 @@ export interface ClothingRow {
   created_at: string | null
   updated_at: string | null
 }
+type AiMatches = NonNullable<ClothingItem['aiMatches']>
+
+function isAiMatches(value: unknown): value is AiMatches {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as {
+    complementary?: unknown
+    analogous?: unknown
+    triadic?: unknown
+  }
+  return (
+    typeof candidate.complementary === 'string' &&
+    Array.isArray(candidate.analogous) &&
+    candidate.analogous.every((entry) => typeof entry === 'string') &&
+    Array.isArray(candidate.triadic) &&
+    candidate.triadic.every((entry) => typeof entry === 'string')
+  )
+}
 
 export function mapClothingRow(row: ClothingRow): ClothingItem {
   const storagePath = normaliseStoragePath(row.storage_path)
   const imageUrl = row.image_url || (storagePath ? getPublicStorageUrl(storagePath) : '')
+  const aiMatches = isAiMatches(row.ai_matches)
+    ? {
+        complementary: row.ai_matches.complementary,
+        analogous: [...row.ai_matches.analogous],
+        triadic: [...row.ai_matches.triadic],
+      }
+    : undefined
 
   return {
     id: row.id,
@@ -32,7 +58,7 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
     dominantColors: row.dominant_colors ?? [],
     primaryHex: row.primary_hex ?? undefined,
     colorNames: row.color_names ?? undefined,
-    aiMatches: row.ai_matches ?? undefined,
+    aiMatches,
     description: row.description ?? undefined,
     brand: row.brand ?? undefined,
     season: row.season ?? 'all',
@@ -46,7 +72,7 @@ export async function getUserClothing(userId: string): Promise<ClothingItem[]> {
 
   try {
     const { data, error } = await supabase
-      .from<ClothingRow>('clothing')
+      .from('clothing')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -55,8 +81,8 @@ export async function getUserClothing(userId: string): Promise<ClothingItem[]> {
       throw error
     }
 
-    if (!data) return []
-    return data.map(mapClothingRow)
+    const rows = (data ?? []) as ClothingRow[]
+    return rows.map(mapClothingRow)
   } catch (error) {
     console.error('Failed to fetch clothing items:', error)
     return []

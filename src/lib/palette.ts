@@ -41,7 +41,7 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
   }
 
   const { data, error } = await supabase
-    .from<PaletteInsert>('palettes')
+    .from('palettes')
     .upsert(row, { onConflict: 'id' })
     .select('id')
     .maybeSingle()
@@ -51,5 +51,6 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
     throw new Error(`Save failed (${error.code ?? 'unknown'}): ${error.message}`)
   }
 
-  return data?.id ?? paletteId
+  const record = (data ?? null) as { id: string } | null
+  return record?.id ?? paletteId
 }

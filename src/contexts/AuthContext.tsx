@@ -57,7 +57,7 @@ function mapAuthUser(user: User): AuthUser {
   const metadata = user.user_metadata || {}
   return {
     uid: user.id,
-    email: user.email,
+    email: user.email ?? null,
     displayName: (metadata.full_name as string | undefined) ?? (metadata.display_name as string | undefined) ?? null,
     photoURL: (metadata.avatar_url as string | undefined) ?? null,
     emailVerified: !!user.email_confirmed_at,
@@ -132,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const loadUserProfile = async (authUser: AuthUser) => {
       try {
         const { data, error } = await supabase
-          .from<ProfileRow>('profiles')
+          .from('profiles')
           .select('*')
           .eq('id', authUser.uid)
           .maybeSingle()
@@ -141,9 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw error
         }
 
-        if (data) {
+        const profileData = (data ?? null) as ProfileRow | null
+
+        if (profileData) {
           if (!isMounted) return
-          setUserProfile(mapProfileRow(data, authUser))
+          setUserProfile(mapProfileRow(profileData, authUser))
         } else {
           const bootstrap = buildBootstrapProfile(authUser)
           const row: Partial<ProfileRow> = {
@@ -151,7 +153,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: authUser.email,
             display_name: bootstrap.displayName ?? null,
             photo_url: bootstrap.photoURL ?? null,
-      photo_path: bootstrap.photoPath ?? null,
             photo_path: bootstrap.photoPath ?? null,
             favorite_colors: bootstrap.favoriteColors,
             favorite_styles: bootstrap.favoriteStyles,
@@ -244,7 +245,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       display_name: bootstrap.displayName ?? null,
       photo_url: bootstrap.photoURL ?? null,
       photo_path: bootstrap.photoPath ?? null,
-            photo_path: bootstrap.photoPath ?? null,
       favorite_colors: bootstrap.favoriteColors,
       favorite_styles: bootstrap.favoriteStyles,
       created_at: bootstrap.createdAt.toISOString(),
