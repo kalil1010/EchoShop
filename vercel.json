@@ -9,17 +9,19 @@
     }
   },
   "env": {
-    "NEXT_PUBLIC_FIREBASE_API_KEY": "@firebase_api_key",
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN": "@firebase_auth_domain",
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID": "@firebase_project_id",
-    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET": "@firebase_storage_bucket",
-    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "@firebase_messaging_sender_id",
-    "NEXT_PUBLIC_FIREBASE_APP_ID": "@firebase_app_id",
-    "FIREBASE_ADMIN_PRIVATE_KEY": "@firebase_admin_private_key",
-    "FIREBASE_ADMIN_CLIENT_EMAIL": "@firebase_admin_client_email",
-    "FIREBASE_ADMIN_PROJECT_ID": "@firebase_admin_project_id",
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase_url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase_anon_key",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
+    "NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET": "@supabase_storage_bucket",
+    "NEXT_PUBLIC_SUPABASE_STORAGE_FOLDER": "@supabase_storage_folder",
     "MISTRAL_API_KEY": "@mistral_api_key",
     "NEXT_PUBLIC_OPENWEATHERMAP_API_KEY": "@openweathermap_api_key",
-    "NEXT_PUBLIC_IPINFO_API_KEY": "@ipinfo_api_key"
+    "NEXT_PUBLIC_IPINFO_API_KEY": "@ipinfo_api_key",
+    "MINIO_ENDPOINT": "@minio_endpoint",
+    "MINIO_PORT": "@minio_port",
+    "MINIO_ACCESS_KEY": "@minio_access_key",
+    "MINIO_SECRET_KEY": "@minio_secret_key",
+    "MINIO_BUCKET": "@minio_bucket",
+    "MINIO_USE_SSL": "@minio_use_ssl"
   }
 }

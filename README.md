@@ -1,6 +1,6 @@
 # AI Stylist - Personal Fashion Assistant
 
-A complete, full-stack AI-powered fashion assistant web application built with Next.js, TypeScript, Tailwind CSS, Firebase, and Mistral AI.
+A complete, full-stack AI-powered fashion assistant web application built with Next.js, TypeScript, Tailwind CSS, Supabase, and Mistral AI.
 
 ## Features
 
@@ -20,10 +20,9 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - Lucide React Icons
 
 ### Backend & Services
-- Firebase Authentication
-- Firestore Database
-- Firebase Storage
-- Genkit AI Orchestration
+- Supabase Auth
+- Supabase Database
+- Supabase Storage
 - Mistral AI for text generation
 - OpenWeatherMap API
 - IPinfo API for geolocation
@@ -33,7 +32,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Firebase project
+- Supabase project
 - Mistral AI API key
 - OpenWeatherMap API key
 - IPinfo API key
