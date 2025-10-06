@@ -1,53 +1,89 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { ClothingItem } from '@/types/clothing'
-import { getUserClothing, deleteClothingItem, groupClothingByType } from '@/lib/closet'
-import { ClosetItem } from './ClosetItem'
-import { ItemDetailModal } from './ItemDetailModal'
-import ImageUpload from './ImageUpload'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Shirt, Package, Loader2 } from 'lucide-react'
+
+import { ClosetItem } from '@/components/closet/ClosetItem'
+import ImageUpload from '@/components/closet/ImageUpload'
+import { ItemDetailModal } from '@/components/closet/ItemDetailModal'
 import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/components/ui/toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Shirt, Package, Loader2 } from 'lucide-react'
+import { getUserClothing, deleteClothingItem, groupClothingByType } from '@/lib/closet'
+import { isPermissionError } from '@/lib/security'
+import { ClothingItem } from '@/types/clothing'
 
 export function ClosetView() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [items, setItems] = useState<ClothingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [activeTab, setActiveTab] = useState('all')
 
-  useEffect(() => {
-    if (user) {
-      loadItems()
-    }
-  }, [user])
-
-  const loadItems = async () => {
-    if (!user) return
-
+  const loadItems = useCallback(async () => {
+    if (!user?.uid) return
     setLoading(true)
     try {
       const userItems = await getUserClothing(user.uid)
       setItems(userItems)
     } catch (error) {
-      console.error('Failed to load items:', error)
+      console.warn('Failed to load closet items:', error)
+      if (isPermissionError(error)) {
+        toast({
+          variant: 'error',
+          title: error.reason === 'auth' ? 'Authentication required' : 'Access denied',
+          description:
+            error.reason === 'auth'
+              ? 'Please sign in again to view your closet.'
+              : 'You can only view and manage your own closet items.',
+        })
+      } else {
+        toast({ variant: 'error', title: 'Unable to load closet', description: 'Please try again later.' })
+      }
+      setItems([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast, user?.uid])
+
+  useEffect(() => {
+    if (user?.uid) {
+      loadItems()
+    } else {
+      setItems([])
+      setLoading(false)
+    }
+  }, [loadItems, user?.uid])
 
   const handleDeleteItem = async (item: ClothingItem) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+    if (!user?.uid || item.userId !== user.uid) {
+      toast({ variant: 'destructive', title: 'Not authorized', description: 'You can only delete your own items.' })
+      return
+    }
+    const confirmed = window.confirm('Are you sure you want to delete this item?')
+    if (!confirmed) return
 
     try {
       await deleteClothingItem(item)
       setItems((prev) => prev.filter((i) => i.id !== item.id))
+      toast({ variant: 'success', title: 'Item removed' })
     } catch (error) {
       console.error('Failed to delete item:', error)
-      alert('Failed to delete item. Please try again.')
+      if (isPermissionError(error)) {
+        toast({
+          variant: 'destructive',
+          title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
+          description:
+            error.reason === 'auth'
+              ? 'Please sign in again to continue.'
+              : 'You cannot delete items that do not belong to you.',
+        })
+      } else {
+        toast({ variant: 'destructive', title: 'Failed to delete item', description: 'Please try again.' })
+      }
     }
   }
 
@@ -63,12 +99,10 @@ export function ClosetView() {
   const groupedItems = groupClothingByType(items)
   const garmentTypes = ['all', 'top', 'bottom', 'footwear', 'outerwear', 'accessory']
 
-  const getItemsForTab = (tab: string) => {
-    return tab === 'all' ? items : groupedItems[tab] || []
-  }
+  const getItemsForTab = (tab: string) => (tab === 'all' ? items : groupedItems[tab] || [])
 
   const getTabLabel = (type: string) => {
-    const labels = {
+    const labels: Record<string, string> = {
       all: 'All Items',
       top: 'Tops',
       bottom: 'Bottoms',
@@ -76,7 +110,7 @@ export function ClosetView() {
       outerwear: 'Outerwear',
       accessory: 'Accessories',
     }
-    return labels[type as keyof typeof labels] || type
+    return labels[type] ?? type
   }
 
   if (loading) {
@@ -97,9 +131,7 @@ export function ClosetView() {
               <Package className="mr-2 h-5 w-5" />
               My Closet ({items.length} items)
             </CardTitle>
-            <CardDescription>
-              Manage your clothing collection and view color analysis
-            </CardDescription>
+            <CardDescription>Manage your clothing collection and view color analysis</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -120,6 +152,7 @@ export function ClosetView() {
                         item={item}
                         onDelete={handleDeleteItem}
                         onView={handleViewItem}
+                        canManage={item.userId === user?.uid}
                       />
                     ))}
                   </div>
@@ -148,11 +181,7 @@ export function ClosetView() {
         <ImageUpload onItemAdded={handleItemAdded} />
       </div>
 
-      <ItemDetailModal
-        item={selectedItem}
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-      />
+      <ItemDetailModal item={selectedItem} isOpen={showModal} onClose={() => setShowModal(false)} />
     </div>
   )
 }

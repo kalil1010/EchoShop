@@ -1,4 +1,5 @@
-﻿import { getSupabaseClient, getSupabaseStorageConfig } from '@/lib/supabaseClient'
+import { getSupabaseClient, getSupabaseStorageConfig } from '@/lib/supabaseClient'
+import { mapSupabaseError, requireSessionUser } from '@/lib/security'
 
 export interface StoragePathOptions {
   userId: string
@@ -33,30 +34,41 @@ export function normaliseStoragePath(pathValue?: string | null): string | undefi
   return pathValue.replace(/^[\\/]+/, '')
 }
 
+interface UploadOptions {
+  contentType?: string
+  upsert?: boolean
+  cacheControl?: string
+  ownerId?: string
+}
+
 export async function uploadToStorage(
   storagePath: string,
   file: Blob | File,
-  options?: { contentType?: string; upsert?: boolean; cacheControl?: string }
+  options?: UploadOptions,
 ) {
   const supabase = getSupabaseClient()
+  await requireSessionUser(supabase, options?.ownerId)
+
   const { bucket } = getSupabaseStorageConfig()
   const { error } = await supabase.storage.from(bucket).upload(storagePath, file, {
     cacheControl: options?.cacheControl ?? '3600',
     upsert: options?.upsert ?? true,
     contentType: options?.contentType,
   })
-  if (error) throw error
+  if (error) throw mapSupabaseError(error)
   return {
     storagePath,
     publicUrl: getPublicStorageUrl(storagePath),
   }
 }
 
-export async function removeFromStorage(storagePath: string) {
+export async function removeFromStorage(storagePath: string, options?: { ownerId?: string }) {
   const supabase = getSupabaseClient()
+  await requireSessionUser(supabase, options?.ownerId)
+
   const { bucket } = getSupabaseStorageConfig()
   const pathValue = normaliseStoragePath(storagePath)
   if (!pathValue) return
   const { error } = await supabase.storage.from(bucket).remove([pathValue])
-  if (error) throw error
+  if (error) throw mapSupabaseError(error)
 }

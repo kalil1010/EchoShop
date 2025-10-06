@@ -5,7 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/components/ui/toast'
 import { getUserClothing, toClosetSummary, type ClosetItemSummary } from '@/lib/closet'
+import { isPermissionError } from '@/lib/security'
 import { sendStylistMessage } from '@/lib/api'
 import { MessageCircle, Sparkles, ImagePlus, X } from 'lucide-react'
 import { analyzeImageColors } from '@/lib/imageAnalysis'
@@ -20,6 +22,7 @@ interface Message {
 
 export function StylistChat() {
   const { user, userProfile } = useAuth()
+  const { toast } = useToast()
   const [closetItems, setClosetItems] = useState<ClosetItemSummary[]>([])
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -55,7 +58,21 @@ export function StylistChat() {
         if (active) setClosetItems(toClosetSummary(items, 20))
       } catch (error) {
         console.warn('Failed to load closet summary for chat:', error)
-        if (active) setClosetItems([])
+        if (active) {
+          if (isPermissionError(error)) {
+            toast({
+              variant: 'destructive',
+              title: error.reason === 'auth' ? 'Session expired' : 'Access denied',
+              description:
+                error.reason === 'auth'
+                  ? 'Please sign in again to sync your closet with chat.'
+                  : 'We could not access your closet for chat context.',
+            })
+          } else {
+            toast({ variant: 'error', title: 'Closet unavailable', description: 'Continuing chat without closet context.' })
+          }
+          setClosetItems([])
+        }
       }
     }
 
@@ -96,6 +113,7 @@ export function StylistChat() {
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
       console.error('Failed to send message:', error)
+      toast({ variant: 'destructive', title: 'Message failed', description: 'Please try sending your message again.' })
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",

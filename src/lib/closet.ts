@@ -1,5 +1,12 @@
-﻿import { getSupabaseClient } from '@/lib/supabaseClient'
-import { buildStoragePath, getPublicStorageUrl, getStorageBucket, normaliseStoragePath, uploadToStorage } from '@/lib/storage'
+import { getSupabaseClient } from '@/lib/supabaseClient'
+import {
+  buildStoragePath,
+  getPublicStorageUrl,
+  getStorageBucket,
+  normaliseStoragePath,
+  uploadToStorage,
+} from '@/lib/storage'
+import { mapSupabaseError, requireSessionUser } from '@/lib/security'
 import { ClothingItem } from '@/types/clothing'
 
 export interface ClothingRow {
@@ -19,6 +26,7 @@ export interface ClothingRow {
   created_at: string | null
   updated_at: string | null
 }
+
 type AiMatches = NonNullable<ClothingItem['aiMatches']>
 
 function isAiMatches(value: unknown): value is AiMatches {
@@ -68,54 +76,67 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
   }
 }
 
-export async function getUserClothing(userId: string): Promise<ClothingItem[]> {
+export async function getUserClothing(requestedUserId: string): Promise<ClothingItem[]> {
   const supabase = getSupabaseClient()
+  const sessionUserId = await requireSessionUser(supabase, requestedUserId)
 
-  try {
-    const { data, error } = await supabase
-      .from('clothing')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .from('clothing')
+    .select('*')
+    .eq('user_id', sessionUserId)
+    .order('created_at', { ascending: false })
 
-    if (error) {
-      throw error
-    }
-
-    const rows = (data ?? []) as ClothingRow[]
-    return rows.map(mapClothingRow)
-  } catch (error) {
-    console.error('Failed to fetch clothing items:', error)
-    return []
+  if (error) {
+    throw mapSupabaseError(error)
   }
+
+  const rows = (data ?? []) as ClothingRow[]
+  return rows.map(mapClothingRow)
 }
 
-export async function uploadClothingImage(userId: string, file: File): Promise<{ storagePath: string; publicUrl: string }> {
+export async function uploadClothingImage(
+  userId: string,
+  file: File,
+): Promise<{ storagePath: string; publicUrl: string }> {
+  const supabase = getSupabaseClient()
+  await requireSessionUser(supabase, userId)
+
   const storagePath = buildStoragePath({ userId, originalName: file.name })
-  const { publicUrl } = await uploadToStorage(storagePath, file, {
-    contentType: file.type || 'image/webp',
-    upsert: false,
-    cacheControl: '3600',
-  })
+  const { publicUrl } = await uploadToStorage(
+    storagePath,
+    file,
+    {
+      contentType: file.type || 'image/webp',
+      upsert: false,
+      cacheControl: '3600',
+      ownerId: userId,
+    },
+  )
+
   return { storagePath, publicUrl }
 }
 
 export async function deleteClothingItem(item: ClothingItem): Promise<void> {
   const supabase = getSupabaseClient()
+  const sessionUserId = await requireSessionUser(supabase, item.userId)
   const bucket = getStorageBucket()
 
-  try {
-    const { error } = await supabase.from('clothing').delete().eq('id', item.id).eq('user_id', item.userId)
-    if (error) throw error
+  const { error } = await supabase
+    .from('clothing')
+    .delete()
+    .eq('id', item.id)
+    .eq('user_id', sessionUserId)
 
-    const storagePath = normaliseStoragePath(item.storagePath) || null
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage.from(bucket).remove([storagePath])
-      if (storageError) throw storageError
+  if (error) {
+    throw mapSupabaseError(error)
+  }
+
+  const storagePath = normaliseStoragePath(item.storagePath) || null
+  if (storagePath) {
+    const { error: storageError } = await supabase.storage.from(bucket).remove([storagePath])
+    if (storageError) {
+      throw mapSupabaseError(storageError)
     }
-  } catch (error) {
-    console.error('Failed to delete clothing item:', error)
-    throw error
   }
 }
 

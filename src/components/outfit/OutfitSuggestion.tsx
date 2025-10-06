@@ -5,8 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { MultiSelectChips } from '@/components/ui/multi-select-chips'
 import { WeatherCard } from '@/components/weather/WeatherCard'
+import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { getUserClothing, toClosetSummary, type ClosetItemSummary } from '@/lib/closet'
+import { isPermissionError } from '@/lib/security'
 import { getOutfitSuggestion, OutfitSuggestionResponse, OutfitPieceRecommendation } from '@/lib/api'
 import { WeatherData } from '@/lib/weather'
 import { Shirt, Zap, Sparkles } from 'lucide-react'
@@ -45,6 +47,7 @@ const formatColorLabel = (value?: string) => {
 
 export function OutfitSuggestion() {
   const { user, userProfile } = useAuth()
+  const { toast } = useToast()
   const [occasion, setOccasion] = useState('')
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([])
   const [weather, setWeather] = useState<WeatherData | null>(null)
@@ -70,6 +73,18 @@ export function OutfitSuggestion() {
       } catch (error) {
         console.warn('Failed to load closet summary for suggestions:', error)
         if (active) {
+          if (isPermissionError(error)) {
+            toast({
+              variant: 'destructive',
+              title: error.reason === 'auth' ? 'Session expired' : 'Access denied',
+              description:
+                error.reason === 'auth'
+                  ? 'Please sign in again to use your closet items.'
+                  : 'We could not access your closet for outfit suggestions.',
+            })
+          } else {
+            toast({ variant: 'error', title: 'Failed to load closet items', description: 'We will continue without closet context.' })
+          }
           setClosetItems([])
         }
       }
@@ -85,7 +100,7 @@ export function OutfitSuggestion() {
   const handleGetSuggestion = async () => {
     const occasionText = selectedOccasions[0] || ''
     if (!occasionText || !weather) {
-      alert('Please enter an occasion and ensure weather data is loaded')
+      toast({ variant: 'destructive', title: 'Missing details', description: 'Add an occasion and confirm weather data before requesting an outfit.' })
       return
     }
 
@@ -102,7 +117,7 @@ export function OutfitSuggestion() {
       setSuggestion(result)
     } catch (error) {
       console.error('Failed to get outfit suggestion:', error)
-      alert('Failed to get outfit suggestion. Please try again.')
+      toast({ variant: 'destructive', title: 'Suggestion failed', description: 'Please try again in a moment.' })
     } finally {
       setLoading(false)
     }

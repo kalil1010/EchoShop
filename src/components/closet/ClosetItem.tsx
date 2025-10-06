@@ -1,27 +1,34 @@
-'use client';
+'use client'
 
-import React, { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ClothingItem } from '@/types/clothing';
-import { getColorName } from '@/lib/imageAnalysis';
-import { Trash2, Eye } from 'lucide-react';
+import React, { useState } from 'react'
+import { Trash2, Eye } from 'lucide-react'
+
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ClothingItem } from '@/types/clothing'
+import { getColorName } from '@/lib/imageAnalysis'
 
 export interface ClosetItemProps {
-  item: ClothingItem;
-  onDelete: (item: ClothingItem) => void;
-  onView: (item: ClothingItem) => void;
+  item: ClothingItem
+  onDelete: (item: ClothingItem) => void
+  onView: (item: ClothingItem) => void
+  canManage?: boolean
 }
 
-export function ClosetItem({ item, onDelete, onView }: ClosetItemProps) {
-  const [imageLoaded, setImageLoaded] = useState(false);
+export function ClosetItem({ item, onDelete, onView, canManage = true }: ClosetItemProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+
+  const handleDelete = () => {
+    if (!canManage) return
+    onDelete(item)
+  }
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="aspect-square relative bg-gray-100">
         {!imageLoaded && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="animate-pulse bg-gray-200 w-full h-full"></div>
+            <div className="animate-pulse bg-gray-200 w-full h-full" />
           </div>
         )}
         <img
@@ -53,14 +60,16 @@ export function ClosetItem({ item, onDelete, onView }: ClosetItemProps) {
               <Button variant="ghost" size="sm" onClick={() => onView(item)}>
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(item)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {canManage && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 
@@ -72,7 +81,7 @@ export function ClosetItem({ item, onDelete, onView }: ClosetItemProps) {
 
           <div className="flex flex-wrap items-center gap-2">
             {item.dominantColors.slice(0, 3).map((color, index) => (
-              <div key={index} className="inline-flex items-center gap-1">
+              <div key={color + index} className="inline-flex items-center gap-1">
                 <span
                   className="w-4 h-4 rounded-full border border-gray-300"
                   style={{ backgroundColor: color }}
@@ -88,7 +97,7 @@ export function ClosetItem({ item, onDelete, onView }: ClosetItemProps) {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
-export default ClosetItem;
+export default ClosetItem

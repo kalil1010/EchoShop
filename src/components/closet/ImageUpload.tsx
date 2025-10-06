@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast'
 import { ClothingItem } from '@/types/clothing'
 import { useAuth } from '@/contexts/AuthContext'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { isPermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
 import { type ClothingRow, mapClothingRow, uploadClothingImage } from '@/lib/closet'
 import { savePaletteForUser } from '@/lib/palette'
 
@@ -148,7 +149,14 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   }
 
   const handleUpload = async () => {
-    if (!selectedFile || !user || !analysis) return
+    if (!analysis || !selectedFile) {
+      toast({ variant: 'error', title: 'Upload incomplete', description: 'Select an image and run analysis before uploading.' })
+      return
+    }
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Sign in required', description: 'Please sign in to add items to your closet.' })
+      return
+    }
     if (!supabase) {
       toast({ variant: 'error', title: 'Supabase not configured', description: 'Please add Supabase environment variables.' })
       return
@@ -159,6 +167,8 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       const { storagePath, publicUrl } = await uploadClothingImage(user.uid, selectedFile)
       const nowIso = new Date().toISOString()
       const resolvedGarmentType = (garmentType || 'top') as ClothingItem['garmentType']
+      const safeDescription = description ? sanitizeText(description, { maxLength: 240 }) : ''
+
       const insertPayload = {
         user_id: user.uid,
         image_url: publicUrl,
@@ -169,7 +179,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
         primary_hex: aiPrimaryHex,
         color_names: aiColorNames,
         ai_matches: aiRichMatches,
-        description: description || null,
+        description: safeDescription || null,
         season: 'all',
         created_at: nowIso,
         updated_at: nowIso,
@@ -181,27 +191,39 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
         .select('*')
         .maybeSingle()
 
-      if (error) throw error
+      if (error) throw mapSupabaseError(error)
       if (!data) throw new Error('No data returned from Supabase')
 
       const newItem = mapClothingRow(data as ClothingRow)
 
       onItemAdded?.(newItem)
+      toast({ variant: 'success', title: 'Item added to closet' })
 
       setSelectedFile(null)
       setPreview(null)
       setAnalysis(null)
       setDescription('')
+      setPlan({})
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
     } catch (error) {
       console.error('Upload failed:', error)
-      toast({
-        variant: 'error',
-        title: 'Failed to upload item',
-        description: error instanceof Error ? error.message : 'Please try again.',
-      })
+      if (isPermissionError(error)) {
+        toast({
+          variant: 'destructive',
+          title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
+          description: error.reason === 'auth'
+            ? 'Please sign in again and retry.'
+            : 'You can only manage your own closet items.',
+        })
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to upload item',
+          description: error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
     } finally {
       setUploading(false)
     }
@@ -491,7 +513,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
               <Input
                 id="description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => setDescription(sanitizeText(e.target.value, { maxLength: 240 }))}
                 placeholder="e.g., Blue cotton t-shirt, Nike sneakers"
               />
             </div>
@@ -499,7 +521,8 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
             <Button
               onClick={handleUpload}
               className="w-full"
-              disabled={uploading}
+              disabled={uploading || !user}
+              title={!user ? 'Sign in to add items' : undefined}
             >
               {uploading ? (
                 <>
@@ -529,8 +552,18 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                       }
                     )
                     toast({ variant: 'success', title: 'Saved palette to profile' })
-                  } catch (e: any) {
-                    toast({ variant: 'error', title: 'Save failed', description: e?.message || 'Unable to save to Supabase' })
+                  } catch (error) {
+                    if (isPermissionError(error)) {
+                      toast({
+                        variant: 'destructive',
+                        title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
+                        description: error.reason === 'auth'
+                          ? 'Please sign in again before saving palettes.'
+                          : 'You can only save palettes to your own profile.',
+                      })
+                    } else {
+                      toast({ variant: 'error', title: 'Save failed', description: error instanceof Error ? error.message : 'Unable to save to Supabase' })
+                    }
                   }
                 }}
                 variant="outline"
@@ -547,5 +580,6 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 }
 
 export default ImageUpload
+
 
 

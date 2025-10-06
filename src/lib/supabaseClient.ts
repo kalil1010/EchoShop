@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export type SupabaseClientType = SupabaseClient
 
@@ -37,18 +37,6 @@ export function getSupabaseClient(): SupabaseClientType {
   }
 
   return browserClient
-}
-
-export function getSupabaseServiceRoleClient(): SupabaseClientType {
-  const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
-  const serviceRoleKey = requireEnv(process.env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
 }
 
 export function getSupabaseStorageConfig() {

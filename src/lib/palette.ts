@@ -1,4 +1,5 @@
-﻿import { getSupabaseClient } from '@/lib/supabaseClient'
+import { getSupabaseClient } from '@/lib/supabaseClient'
+import { mapSupabaseError, requireSessionUser, sanitizeText } from '@/lib/security'
 import { NewSavedPalette } from '@/types/palette'
 
 interface PaletteInsert {
@@ -15,32 +16,30 @@ interface PaletteInsert {
   updated_at: string
 }
 
+const toSafeName = (value: unknown, fallback: string): string => {
+  if (typeof value !== 'string') return fallback
+  const cleaned = sanitizeText(value, { maxLength: 120 })
+  return cleaned || fallback
+}
+
 export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: string): Promise<string> {
   const supabase = getSupabaseClient()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-
-  if (userError) {
-    throw new Error(`Unable to determine current user: ${userError.message}`)
-  }
-
-  const user = userData?.user
-  if (!user) {
-    throw new Error('User must be signed in to save a palette.')
-  }
+  const sessionUserId = await requireSessionUser(supabase)
 
   const now = new Date().toISOString()
+  const defaultName = `${payload.source === 'closet' ? 'Closet' : 'Analyzer'} palette ${now}`
+  const paletteName = toSafeName(payload.name, defaultName)
 
-  const ownerId = user.id
-
-  const baseName = typeof payload.name === 'string' ? payload.name.trim() : ''
-  const paletteName = (baseName ? baseName.slice(0, 120) : '') || `${payload.source === 'closet' ? 'Closet' : 'Analyzer'} palette ${new Date().toISOString()}`
+  const dominantHexes = Array.isArray(payload.dominantHexes)
+    ? payload.dominantHexes.filter((hex): hex is string => typeof hex === 'string' && hex.trim().length > 0).slice(0, 24)
+    : []
 
   const row: PaletteInsert = {
-    owner_id: ownerId,
+    owner_id: sessionUserId,
     name: paletteName,
     base_hex: payload.baseHex,
-    dominant_hexes: payload.dominantHexes,
-    colors: payload.dominantHexes,
+    dominant_hexes: dominantHexes,
+    colors: dominantHexes,
     rich_matches: payload.richMatches ?? null,
     plan: payload.plan ?? null,
     source: payload.source ?? null,
@@ -59,8 +58,7 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: s
     .maybeSingle()
 
   if (error) {
-    console.error('[palettes] save failed:', error)
-    throw new Error(`Save failed (${error.code ?? 'unknown'}): ${error.message}`)
+    throw mapSupabaseError(error)
   }
 
   const record = (data ?? null) as { id: string } | null

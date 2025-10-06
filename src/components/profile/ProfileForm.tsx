@@ -70,7 +70,7 @@ function normaliseDisplayName(value: unknown): string | undefined {
 }
 
 export function ProfileForm() {
-  const { userProfile, updateUserProfile } = useAuth()
+  const { user, userProfile, updateUserProfile } = useAuth()
   const { toast } = useToast()
 
   const supabase = useMemo(() => {
@@ -309,12 +309,16 @@ export function ProfileForm() {
       setPreviewUrl(previewObjectUrl)
 
       const storagePath = buildStoragePath({ userId: uid, originalName: 'profile.webp', folder: 'profiles' })
-      const result = await uploadToStorage(storagePath, resized, { contentType: 'image/webp', cacheControl: '3600', upsert: true })
+      const ownerId = user?.uid ?? userProfile?.uid
+      if (!ownerId) {
+        throw new Error('Unable to determine profile owner for upload.')
+      }
+      const result = await uploadToStorage(storagePath, resized, { contentType: 'image/webp', cacheControl: '3600', upsert: true, ownerId })
 
       const previousPath = formData.photoPath || userProfile?.photoPath
       if (previousPath && normaliseStoragePath(previousPath) !== normaliseStoragePath(storagePath)) {
         try {
-          await removeFromStorage(previousPath)
+          await removeFromStorage(previousPath, { ownerId })
         } catch (err) {
           console.warn('Failed to delete previous profile photo:', err)
         }
