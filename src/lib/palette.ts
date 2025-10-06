@@ -4,6 +4,7 @@ import { NewSavedPalette } from '@/types/palette'
 interface PaletteInsert {
   id?: string
   owner_id: string
+  name: string
   base_hex: string
   dominant_hexes: string[]
   rich_matches: unknown
@@ -30,8 +31,12 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: s
 
   const ownerId = user.id
 
+  const baseName = typeof payload.name === 'string' ? payload.name.trim() : ''
+  const paletteName = (baseName ? baseName.slice(0, 120) : '') || `${payload.source === 'closet' ? 'Closet' : 'Analyzer'} palette ${new Date().toISOString()}`
+
   const row: PaletteInsert = {
     owner_id: ownerId,
+    name: paletteName,
     base_hex: payload.baseHex,
     dominant_hexes: payload.dominantHexes,
     rich_matches: payload.richMatches ?? null,

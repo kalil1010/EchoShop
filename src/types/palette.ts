@@ -9,6 +9,7 @@ export interface OutfitColorPlan {
 export interface SavedPalette {
   id: string;
   ownerId: string;
+  name?: string;
   baseHex: string;
   dominantHexes: string[];
   richMatches: any;
