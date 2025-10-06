@@ -53,10 +53,17 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
   }
 }
 
+function extractUserId(rawId: string | null | undefined): string {
+  if (!rawId) return ''
+  const [base] = rawId.split('_')
+  return base
+}
+
 function mapAuthUser(user: User): AuthUser {
   const metadata = user.user_metadata || {}
+  const uid = extractUserId(user.id)
   return {
-    uid: user.id,
+    uid,
     email: user.email ?? null,
     displayName: (metadata.full_name as string | undefined) ?? (metadata.display_name as string | undefined) ?? null,
     photoURL: (metadata.avatar_url as string | undefined) ?? null,

@@ -28,9 +28,11 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
 
   const now = new Date().toISOString()
 
+  const ownerId = user.id.split('_')[0]
+
   const row: PaletteInsert = {
     id: paletteId,
-    owner_id: user.id,
+    owner_id: ownerId,
     base_hex: payload.baseHex,
     dominant_hexes: payload.dominantHexes,
     rich_matches: payload.richMatches ?? null,
