@@ -27,10 +27,12 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
     }
     const target = options?.redirectTo ?? `/auth?redirect=${encodeURIComponent(pathname || '/')}`
     redirected.current = true
-    router.replace(target).catch((error) => {
+    try {
+      router.replace(target)
+    } catch (error) {
       console.warn('Failed to redirect unauthenticated user:', error)
       redirected.current = false
-    })
+    }
   }, [loading, options?.redirectTo, pathname, router, user])
 
   return { user, loading, isAuthenticated: !!user }
