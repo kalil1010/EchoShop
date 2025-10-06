@@ -435,13 +435,16 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                         ))}
                         {/* Awesomeness meter */}
                         {(() => { const m = scorePlan(); return (
-                          <div className="col-span-full">
-                            <div className="flex items-center justify-between text-xs mb-1">
+                          <div className="col-span-full space-y-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                               <span className="font-medium">Awesomeness</span>
-                              <span>{m.score}% -- {m.label}</span>
+                              <span className="whitespace-nowrap">{m.score}% -- {m.label}</span>
                             </div>
-                            <div className="h-2 rounded bg-gray-200 overflow-hidden">
-                              <span>{m.score}% -- {m.label}</span>
+                            <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{ width: `${Math.max(0, Math.min(m.score, 100))}%`, backgroundColor: m.color }}
+                              />
                             </div>
                           </div>
                         )})()}
