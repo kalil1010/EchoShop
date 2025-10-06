@@ -30,6 +30,10 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
 
   const ownerId = user.id.split('_')[0]
 
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[palettes] owner id sanitised', { raw: user.id, ownerId })
+  }
+
   const row: PaletteInsert = {
     id: paletteId,
     owner_id: ownerId,
