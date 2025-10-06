@@ -7,6 +7,7 @@ interface PaletteInsert {
   name: string
   base_hex: string
   dominant_hexes: string[]
+  colors?: string[]
   rich_matches: unknown
   plan: unknown
   source: string | null
@@ -39,6 +40,7 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: s
     name: paletteName,
     base_hex: payload.baseHex,
     dominant_hexes: payload.dominantHexes,
+    colors: payload.dominantHexes,
     rich_matches: payload.richMatches ?? null,
     plan: payload.plan ?? null,
     source: payload.source ?? null,
