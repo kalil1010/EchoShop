@@ -7,7 +7,8 @@ export interface ClothingRow {
   user_id: string
   image_url: string | null
   storage_path: string | null
-  garment_type: ClothingItem['garmentType']
+  garment_type?: ClothingItem['garmentType']
+  clothing_type?: ClothingItem['garmentType']
   dominant_colors: string[] | null
   primary_hex: string | null
   color_names: string[] | null
@@ -54,7 +55,7 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
     userId: row.user_id,
     imageUrl,
     storagePath: storagePath ?? undefined,
-    garmentType: row.garment_type,
+    garmentType: row.garment_type ?? row.clothing_type ?? 'top',
     dominantColors: row.dominant_colors ?? [],
     primaryHex: row.primary_hex ?? undefined,
     colorNames: row.color_names ?? undefined,
