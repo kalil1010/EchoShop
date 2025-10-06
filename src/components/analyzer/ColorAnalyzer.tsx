@@ -214,7 +214,6 @@ export function ColorAnalyzer() {
     }
     try {
       const base = mainColors[0] || rich.base
-      const paletteId = `${user.uid}_${Date.now()}`
       await savePaletteForUser(
         {
           baseHex: base,
@@ -222,8 +221,7 @@ export function ColorAnalyzer() {
           richMatches: rich,
           plan,
           source: 'analyzer',
-        },
-        paletteId
+        }
       )
       toast({ variant: 'success', title: 'Saved to profile' })
     } catch (e: any) {

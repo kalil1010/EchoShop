@@ -502,7 +502,6 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
               <Button
                 onClick={async () => {
                   try {
-                    const paletteId = `${user.uid}_${Date.now()}`
                     await savePaletteForUser(
                       {
                         baseHex:
@@ -514,8 +513,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                         richMatches: aiRichMatches ?? {},
                         plan,
                         source: 'closet',
-                      },
-                      paletteId
+                      }
                     )
                     toast({ variant: 'success', title: 'Saved palette to profile' })
                   } catch (e: any) {

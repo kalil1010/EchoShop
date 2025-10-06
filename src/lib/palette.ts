@@ -2,7 +2,7 @@
 import { NewSavedPalette } from '@/types/palette'
 
 interface PaletteInsert {
-  id: string
+  id?: string
   owner_id: string
   base_hex: string
   dominant_hexes: string[]
@@ -13,7 +13,7 @@ interface PaletteInsert {
   updated_at: string
 }
 
-export async function savePaletteForUser(payload: NewSavedPalette, paletteId: string): Promise<string> {
+export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: string): Promise<string> {
   const supabase = getSupabaseClient()
   const { data: userData, error: userError } = await supabase.auth.getUser()
 
@@ -28,14 +28,9 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
 
   const now = new Date().toISOString()
 
-  const ownerId = user.id.split('_')[0]
-
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug('[palettes] owner id sanitised', { raw: user.id, ownerId })
-  }
+  const ownerId = user.id
 
   const row: PaletteInsert = {
-    id: paletteId,
     owner_id: ownerId,
     base_hex: payload.baseHex,
     dominant_hexes: payload.dominantHexes,
@@ -44,6 +39,10 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
     source: payload.source ?? null,
     created_at: now,
     updated_at: now,
+  }
+
+  if (paletteId) {
+    row.id = paletteId
   }
 
   const { data, error } = await supabase
@@ -58,5 +57,5 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId: st
   }
 
   const record = (data ?? null) as { id: string } | null
-  return record?.id ?? paletteId
+  return record?.id ?? row.id ?? ''
 }
