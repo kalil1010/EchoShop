@@ -51,6 +51,23 @@ function renderBasicMarkdown(md: string): string {
   return html.join('\n')
 }
 
+
+const HEX_COLOR_REGEX = /#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})(?![0-9a-fA-F])/g
+
+function expandHex(hex: string): string {
+  if (hex.length === 4) {
+    const [, r, g, b] = hex.split('')
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase()
+  }
+  return hex.toUpperCase()
+}
+
+function addColorSwatches(html: string): string {
+  return html.replace(HEX_COLOR_REGEX, (match) => {
+    const expanded = expandHex(match)
+    return `<span class="inline-flex items-center gap-1 align-middle"><span class="inline-block h-3 w-3 rounded-full border border-black/10 align-middle" style="background-color:${expanded}"></span><span>${expanded}</span></span>`
+  })
+}
 export function ChatMessage({ message, isUser, timestamp, imagePreviewUrl }: ChatMessageProps) {
   return (
     <div className={`flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
@@ -73,7 +90,7 @@ export function ChatMessage({ message, isUser, timestamp, imagePreviewUrl }: Cha
         ) : (
           <div
             className="text-sm leading-relaxed space-y-2 [&>p]:m-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mt-1 [&>li]:mt-1 [&>h1]:text-base [&>h1]:font-semibold [&>h1]:mt-0 [&>h1]:mb-1 [&>h2]:text-base [&>h2]:font-semibold [&>h2]:mt-0 [&>h2]:mb-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-0 [&>h3]:mb-1"
-            dangerouslySetInnerHTML={{ __html: renderBasicMarkdown(message) }}
+            dangerouslySetInnerHTML={{ __html: addColorSwatches(renderBasicMarkdown(message)) }}
           />
         )}
         <p className={`text-xs mt-1 ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
