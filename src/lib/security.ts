@@ -37,7 +37,7 @@ export function classifySupabaseError(error: unknown): PermissionReason | 'other
     if (Number(code) === 403) return 'forbidden'
     return 'auth'
   }
-  if (code && FORBIDDEN_CODES.has(code)) {
+  if (typeof code === 'string' && FORBIDDEN_CODES.has(code)) {
     return 'forbidden'
   }
   if (message.includes('permission denied') || message.includes('rls')) {
