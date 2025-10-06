@@ -92,4 +92,3 @@ export function sanitizeText(input: string, options?: { maxLength?: number; allo
 export function isPermissionError(error: unknown): error is PermissionError {
   return error instanceof PermissionError
 }
-'

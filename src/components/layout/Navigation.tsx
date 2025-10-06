@@ -96,7 +96,7 @@ export function Navigation() {
               </div>
             ) : (
               <Link href="/auth">
-                <Button disabled={loading}>{loading ? 'Checking…' : 'Sign In'}</Button>
+                <Button disabled={loading}>{loading ? 'Checking...' : 'Sign In'}</Button>
               </Link>
             )}
 
@@ -143,7 +143,7 @@ export function Navigation() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <User className="h-4 w-4" />
-                  <span>{loading ? 'Checking…' : 'Sign In'}</span>
+                  <span>{loading ? 'Checking...' : 'Sign In'}</span>
                 </Link>
               )}
             </div>
