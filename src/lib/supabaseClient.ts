@@ -1,11 +1,13 @@
-﻿import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export type SupabaseClientType = SupabaseClient
 
 let browserClient: SupabaseClientType | null = null
 
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]
+const PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+function requireEnv(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`)
   }
@@ -13,8 +15,8 @@ function getRequiredEnv(name: string): string {
 }
 
 function createSupabaseClient(): SupabaseClientType {
-  const url = getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL')
-  const anonKey = getRequiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
+  const anonKey = requireEnv(PUBLIC_SUPABASE_ANON_KEY, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
   return createClient(url, anonKey, {
     auth: {
@@ -38,8 +40,8 @@ export function getSupabaseClient(): SupabaseClientType {
 }
 
 export function getSupabaseServiceRoleClient(): SupabaseClientType {
-  const url = getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL')
-  const serviceRoleKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY')
+  const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
+  const serviceRoleKey = requireEnv(process.env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
 
   return createClient(url, serviceRoleKey, {
     auth: {
