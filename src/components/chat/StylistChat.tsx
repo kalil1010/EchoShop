@@ -61,7 +61,7 @@ export function StylistChat() {
         if (active) {
           if (isPermissionError(error)) {
             toast({
-              variant: 'destructive',
+              variant: 'error',
               title: error.reason === 'auth' ? 'Session expired' : 'Access denied',
               description:
                 error.reason === 'auth'
@@ -113,7 +113,7 @@ export function StylistChat() {
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
       console.error('Failed to send message:', error)
-      toast({ variant: 'destructive', title: 'Message failed', description: 'Please try sending your message again.' })
+      toast({ variant: 'error', title: 'Message failed', description: 'Please try sending your message again.' })
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
@@ -209,3 +209,4 @@ export function StylistChat() {
     </Card>
   )
 }
+

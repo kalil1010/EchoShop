@@ -60,7 +60,7 @@ export function ClosetView() {
 
   const handleDeleteItem = async (item: ClothingItem) => {
     if (!user?.uid || item.userId !== user.uid) {
-      toast({ variant: 'destructive', title: 'Not authorized', description: 'You can only delete your own items.' })
+      toast({ variant: 'error', title: 'Not authorized', description: 'You can only delete your own items.' })
       return
     }
     const confirmed = window.confirm('Are you sure you want to delete this item?')
@@ -74,7 +74,7 @@ export function ClosetView() {
       console.error('Failed to delete item:', error)
       if (isPermissionError(error)) {
         toast({
-          variant: 'destructive',
+          variant: 'error',
           title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
           description:
             error.reason === 'auth'
@@ -82,7 +82,7 @@ export function ClosetView() {
               : 'You cannot delete items that do not belong to you.',
         })
       } else {
-        toast({ variant: 'destructive', title: 'Failed to delete item', description: 'Please try again.' })
+        toast({ variant: 'error', title: 'Failed to delete item', description: 'Please try again.' })
       }
     }
   }
@@ -187,3 +187,4 @@ export function ClosetView() {
 }
 
 export default ClosetView
+

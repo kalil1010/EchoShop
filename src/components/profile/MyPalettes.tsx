@@ -56,7 +56,7 @@ export function MyPalettes() {
       console.warn('Failed to load palettes:', error)
       if (isPermissionError(error)) {
         toast({
-          variant: 'destructive',
+          variant: 'error',
           title: error.reason === 'auth' ? 'Session expired' : 'Access denied',
           description:
             error.reason === 'auth'
@@ -86,7 +86,7 @@ export function MyPalettes() {
       return
     }
     if (!user?.uid) {
-      toast({ variant: 'destructive', title: 'Sign in required', description: 'Please sign in before removing palettes.' })
+      toast({ variant: 'error', title: 'Sign in required', description: 'Please sign in before removing palettes.' })
       return
     }
     if (!window.confirm('Remove this saved palette?')) return
@@ -106,7 +106,7 @@ export function MyPalettes() {
       console.error('Failed to delete palette:', error)
       if (isPermissionError(error)) {
         toast({
-          variant: 'destructive',
+          variant: 'error',
           title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
           description:
             error.reason === 'auth'
@@ -114,7 +114,7 @@ export function MyPalettes() {
               : 'You can only delete palettes you created.',
         })
       } else {
-        toast({ variant: 'destructive', title: 'Failed to delete palette', description: 'Please try again.' })
+        toast({ variant: 'error', title: 'Failed to delete palette', description: 'Please try again.' })
       }
     }
   }
@@ -198,3 +198,4 @@ export function MyPalettes() {
 }
 
 export default MyPalettes
+

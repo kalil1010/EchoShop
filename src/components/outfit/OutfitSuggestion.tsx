@@ -75,7 +75,7 @@ export function OutfitSuggestion() {
         if (active) {
           if (isPermissionError(error)) {
             toast({
-              variant: 'destructive',
+              variant: 'error',
               title: error.reason === 'auth' ? 'Session expired' : 'Access denied',
               description:
                 error.reason === 'auth'
@@ -100,7 +100,7 @@ export function OutfitSuggestion() {
   const handleGetSuggestion = async () => {
     const occasionText = selectedOccasions[0] || ''
     if (!occasionText || !weather) {
-      toast({ variant: 'destructive', title: 'Missing details', description: 'Add an occasion and confirm weather data before requesting an outfit.' })
+      toast({ variant: 'error', title: 'Missing details', description: 'Add an occasion and confirm weather data before requesting an outfit.' })
       return
     }
 
@@ -117,7 +117,7 @@ export function OutfitSuggestion() {
       setSuggestion(result)
     } catch (error) {
       console.error('Failed to get outfit suggestion:', error)
-      toast({ variant: 'destructive', title: 'Suggestion failed', description: 'Please try again in a moment.' })
+      toast({ variant: 'error', title: 'Suggestion failed', description: 'Please try again in a moment.' })
     } finally {
       setLoading(false)
     }
@@ -299,3 +299,4 @@ export function OutfitSuggestion() {
     </div>
   )
 }
+

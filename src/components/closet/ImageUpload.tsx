@@ -154,7 +154,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       return
     }
     if (!user) {
-      toast({ variant: 'destructive', title: 'Sign in required', description: 'Please sign in to add items to your closet.' })
+      toast({ variant: 'error', title: 'Sign in required', description: 'Please sign in to add items to your closet.' })
       return
     }
     if (!supabase) {
@@ -211,7 +211,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       console.error('Upload failed:', error)
       if (isPermissionError(error)) {
         toast({
-          variant: 'destructive',
+          variant: 'error',
           title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
           description: error.reason === 'auth'
             ? 'Please sign in again and retry.'
@@ -219,7 +219,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
         })
       } else {
         toast({
-          variant: 'destructive',
+          variant: 'error',
           title: 'Failed to upload item',
           description: error instanceof Error ? error.message : 'Please try again.',
         })
@@ -555,7 +555,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                   } catch (error) {
                     if (isPermissionError(error)) {
                       toast({
-                        variant: 'destructive',
+                        variant: 'error',
                         title: error.reason === 'auth' ? 'Session expired' : 'Action not allowed',
                         description: error.reason === 'auth'
                           ? 'Please sign in again before saving palettes.'
@@ -580,6 +580,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 }
 
 export default ImageUpload
+
 
 
 
