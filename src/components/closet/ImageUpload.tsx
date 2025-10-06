@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +28,31 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       return null
     }
   }, [])
+
+  const moderateImage = useCallback(async (file: File) => {
+    const payload = new FormData()
+    payload.append('file', file)
+
+    const response = await fetch('/api/moderate-image', {
+      method: 'POST',
+      body: payload,
+    })
+
+    let body: any = null
+    try {
+      body = await response.json()
+    } catch (err) {
+      console.warn('Moderation response parse failed:', err)
+    }
+
+    if (!response.ok || !body?.ok) {
+      const reasons = Array.isArray(body?.reasons) ? body.reasons : []
+      const message = body?.error || 'Image failed moderation.'
+      const detail = reasons.length ? ` (${reasons.join(', ')})` : ''
+      throw new Error(`${message}${detail}`)
+    }
+  }, [])
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -164,6 +189,8 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 
     setUploading(true)
     try {
+      await moderateImage(selectedFile)
+
       const { storagePath, publicUrl } = await uploadClothingImage(user.uid, selectedFile)
       const nowIso = new Date().toISOString()
       const resolvedGarmentType = (garmentType || 'top') as ClothingItem['garmentType']

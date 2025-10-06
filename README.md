@@ -9,6 +9,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - **Interactive AI Stylist Chat**: Chat with your personal AI stylist for fashion advice and styling tips
 - **User Authentication & Profiles**: Secure user accounts with personalized style preferences
 - **Responsive Design**: Fully responsive design that works on desktop and mobile devices
+- **Image Moderation**: All clothing uploads are screened by Sightengine to block unsafe or NSFW imagery before storage
 
 ## Technology Stack
 
@@ -43,3 +44,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 ```bash
 git clone <repository-url>
 cd ai-stylist
+
+### Sightengine Moderation
+
+Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. The development template includes default credentials provided for this exercise.
