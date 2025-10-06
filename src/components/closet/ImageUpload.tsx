@@ -454,10 +454,19 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                             if (!aiRichMatches) return
                             const base = analysis?.dominantColors?.[0] || aiRichMatches.base
                             const list = (arr?: string[], n=3) => (arr||[]).filter(Boolean).slice(0,n)
+                            const neutrals = list(aiRichMatches.neutrals,4)
+                            const monoDeep = list((aiRichMatches.monochrome||[]).slice(0,4),3)
                             const bottoms = [aiRichMatches.complementary, ...list(aiRichMatches.analogous,2), ...list(aiRichMatches.triadic,2)].filter(Boolean)
-                            const outers = [...list(aiRichMatches.tetradic,3), ...list(aiRichMatches.analogous,2)]
-                            const shoes = [...list((aiRichMatches.monochrome||[]).slice(-3),3), ...list(aiRichMatches.triadic,2)]
-                            const accs = [...list(aiRichMatches.neutrals,4), ...list(aiRichMatches.analogous,1)]
+                            const outers = [...list(aiRichMatches.tetradic,3), ...list(aiRichMatches.analogous,2)].filter(Boolean)
+                            const shoes = [
+                              ...neutrals,
+                              ...monoDeep,
+                              '#1f2937',
+                              '#374151',
+                              '#111827',
+                              '#f5f5f5',
+                            ].filter(Boolean)
+                            const accs = [...neutrals, ...list(aiRichMatches.analogous,1)]
                             const toH = (hex: string) => { const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)!; let r=parseInt(m[1],16)/255,g=parseInt(m[2],16)/255,b=parseInt(m[3],16)/255; const max=Math.max(r,g,b),min=Math.min(r,g,b); let h=0,s=0,l=(max+min)/2; if(max!==min){ const d=max-min; s=l>0.5?d/(2-max-min):d/(max+min); switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4;break} h*=60 } return {h,s,l} }
                             const hd=(a:number,b:number)=>{const d=Math.abs(a-b);return Math.min(d,360-d)}
                             const baseH=toH(base)
