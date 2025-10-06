@@ -33,27 +33,37 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     const payload = new FormData()
     payload.append('file', file)
 
-    const response = await fetch('/api/moderate-image', {
-      method: 'POST',
-      body: payload,
-    })
-
-    let body: any = null
     try {
-      body = await response.json()
-    } catch (err) {
-      console.warn('Moderation response parse failed:', err)
-    }
+      const response = await fetch('/api/moderate-image', {
+        method: 'POST',
+        body: payload,
+      })
 
-    if (!response.ok || !body?.ok) {
-      const reasons = Array.isArray(body?.reasons) ? body.reasons : []
-      const message = body?.error || 'Image failed moderation.'
-      const detail = reasons.length ? ` (${reasons.join(', ')})` : ''
-      throw new Error(`${message}${detail}`)
+      let body: any = null
+      try {
+        body = await response.json()
+      } catch (err) {
+        console.warn('Moderation response parse failed:', err)
+      }
+
+      if (!response.ok || !body?.ok) {
+        const message = body?.error || 'Image blocked by our system. Please select a different one.'
+        const category = typeof body?.category === 'string' ? body.category : null
+        const reasons = Array.isArray(body?.reasons) ? body.reasons : []
+        if (reasons.length) {
+          console.warn('[moderation] blocked', reasons)
+        }
+        return { ok: false, message, category }
+      }
+
+      return { ok: true }
+    } catch (error) {
+      console.error('[moderation] request failed', error)
+      return { ok: false, message: 'Unable to verify the image. Please try again.', category: null }
     }
   }, [])
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -69,6 +79,8 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const assign = (hex: string) => updatePlan(activeSlot, hex)
   const [customColors, setCustomColors] = useState<string[]>([])
   const [customHex, setCustomHex] = useState<string>('#000000')
+  const [moderationMessage, setModerationMessage] = useState<string | null>(null)
+  const [moderationCategory, setModerationCategory] = useState<string | null>(null)
   // Awesomeness meter helpers
   const toHsl = (hex?: string) => {
     if (!hex) return null
@@ -129,11 +141,34 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const [aiPrimaryHex, setAiPrimaryHex] = useState<string | null>(null)
   const [aiColorNames, setAiColorNames] = useState<string[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
+  const handleChooseAnother = useCallback(() => {
+    setModerationMessage(null)
+    setModerationCategory(null)
+    setSelectedFile(null)
+    setPreview(null)
+    setAnalysis(null)
+    setAiMatches(null)
+    setAiRichMatches(null)
+    setPlan({})
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }, [])
+
+  const handleDismissModeration = useCallback(() => {
+    setModerationMessage(null)
+    setModerationCategory(null)
+  }, [])
+
+    const { toast } = useToast()
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    setModerationMessage(null)
+    setModerationCategory(null)
 
     setSelectedFile(file)
     setPreview(URL.createObjectURL(file))
@@ -187,9 +222,19 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       return
     }
 
+    setModerationMessage(null)
+    setModerationCategory(null)
     setUploading(true)
     try {
-      await moderateImage(selectedFile)
+      const moderation = await moderateImage(selectedFile)
+      if (!moderation.ok) {
+        const message = moderation.message || 'Image blocked by our system. Please select a different one.'
+        const note = message.includes('contact support') ? '' : ' If you believe this was a mistake, please contact support.'
+        setModerationMessage(`${message}${note}`)
+        setModerationCategory(moderation.category ?? null)
+        setUploading(false)
+        return
+      }
 
       const { storagePath, publicUrl } = await uploadClothingImage(user.uid, selectedFile)
       const nowIso = new Date().toISOString()
@@ -270,6 +315,22 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {moderationMessage && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4">
+            <div className="text-sm text-red-700">{moderationMessage}</div>
+            {moderationCategory && (
+              <div className="mt-2 text-xs text-red-600/80">Detected category: {moderationCategory}.</div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" onClick={handleChooseAnother} disabled={uploading}>
+                Choose another image
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleDismissModeration}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
           {preview ? (
             <div className="space-y-4">

@@ -8,62 +8,120 @@ const MODELS = 'nudity-2.1,weapon,type,gore-2.0,violence'
 const API_USER = process.env.SIGHTENGINE_API_USER || '1244056913'
 const API_SECRET = process.env.SIGHTENGINE_API_SECRET || 'DS4wrd3ujeein2N3s5qbYog8rketceYk'
 
-function collectReasons(data: any) {
-  const reasons: string[] = []
-  const threshold = 0.6
+type BlockResult = {
+  message: string
+  category: string
+  reasons: string[]
+}
 
-  const checkProb = (value: unknown, reason: string, customThreshold = threshold) => {
-    if (typeof value === 'number' && value >= customThreshold) {
-      reasons.push(`${reason} (${Math.round(value * 100)}%)`)
+type Evaluation = BlockResult | null
+
+const getProb = (value: unknown): number => {
+  if (typeof value === 'number') return value
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>
+    const prob = candidate.prob ?? candidate.probability ?? candidate.value
+    if (typeof prob === 'number') return prob
+  }
+  return 0
+}
+
+function evaluateModeration(data: any): Evaluation {
+  const triggered: Array<{ label: string; prob: number; message: string; category: string }> = []
+
+  const addTrigger = (
+    condition: boolean,
+    label: string,
+    prob: number,
+    message: string,
+    category: string,
+  ) => {
+    if (condition) {
+      triggered.push({ label, prob, message, category })
     }
   }
 
-  const checkProbProperty = (obj: unknown, key: string, label: string, customThreshold = threshold) => {
-    if (obj && typeof obj === 'object' && key in obj) {
-      const nested = (obj as Record<string, any>)[key]
-      if (nested && typeof nested === 'object' && typeof nested.prob === 'number') {
-        checkProb(nested.prob, label, customThreshold)
-      } else if (typeof nested === 'number') {
-        checkProb(nested, label, customThreshold)
-      }
-    }
+  const nudity = data?.nudity ?? {}
+  const rawProb = getProb((nudity as any).raw)
+  const eroticaProb = getProb((nudity as any).erotica)
+  const verySuggestiveProb = getProb((nudity as any).very_suggestive)
+  const suggestiveProb = getProb((nudity as any).suggestive)
+  const mildlySuggestiveProb = getProb((nudity as any).mildly_suggestive)
+
+  addTrigger(
+    rawProb >= 0.6,
+    'nudity.raw',
+    rawProb,
+    'Image blocked for inappropriate content. Please choose another.',
+    'nudity',
+  )
+  addTrigger(
+    eroticaProb >= 0.6,
+    'nudity.erotica',
+    eroticaProb,
+    'Image blocked for inappropriate content. Please choose another.',
+    'nudity',
+  )
+  addTrigger(
+    verySuggestiveProb >= 0.9,
+    'nudity.very_suggestive',
+    verySuggestiveProb,
+    'This photo seems very suggestive. Please choose a more appropriate image.',
+    'suggestive',
+  )
+  addTrigger(
+    suggestiveProb >= 0.99,
+    'nudity.suggestive',
+    suggestiveProb,
+    'This photo seems too suggestive. Please choose a different image.',
+    'suggestive',
+  )
+  addTrigger(
+    mildlySuggestiveProb >= 0.99,
+    'nudity.mildly_suggestive',
+    mildlySuggestiveProb,
+    'This photo seems too suggestive. Please choose a different image.',
+    'suggestive',
+  )
+
+  const goreProb = getProb(data?.gore)
+  addTrigger(
+    goreProb >= 0.5,
+    'gore',
+    goreProb,
+    'Image blocked due to gore. Please select a safe photo.',
+    'gore',
+  )
+
+  const violenceProb = getProb(data?.violence)
+  addTrigger(
+    violenceProb >= 0.5,
+    'violence',
+    violenceProb,
+    'Image blocked due to violence. Please select a safe photo.',
+    'violence',
+  )
+
+  const weaponProb = getProb(data?.weapon)
+  addTrigger(
+    weaponProb >= 0.5,
+    'weapon',
+    weaponProb,
+    'Image blocked due to weapon detection. Please select a safe photo.',
+    'weapon',
+  )
+
+  if (!triggered.length) {
+    return null
   }
 
-  const nudity = data?.nudity
-  if (nudity && typeof nudity === 'object') {
-    for (const [key, value] of Object.entries(nudity)) {
-      if (value && typeof value === 'object' && typeof (value as any).prob === 'number') {
-        checkProb((value as any).prob, `nudity:${key}`)
-      } else if (typeof value === 'number') {
-        checkProb(value, `nudity:${key}`)
-      }
-    }
+  const reasons = triggered.map((entry) => `${entry.label}:${(entry.prob * 100).toFixed(1)}%`)
+  const primary = triggered[0]
+  return {
+    message: primary.message,
+    category: primary.category,
+    reasons,
   }
-
-  const weapon = data?.weapon
-  if (weapon && typeof weapon === 'object') {
-    checkProb((weapon as any).prob, 'weapon')
-  }
-
-  const violence = data?.violence
-  if (violence && typeof violence === 'object') {
-    checkProb((violence as any).prob, 'violence')
-  }
-
-  const gore = data?.gore
-  if (gore && typeof gore === 'object') {
-    checkProb((gore as any).prob, 'gore')
-    checkProbProperty(gore, 'blood', 'gore:blood')
-    checkProbProperty(gore, 'wound', 'gore:wound')
-  }
-
-  const typeCheck = data?.type
-  if (typeCheck && typeof typeCheck === 'object') {
-    checkProbProperty(typeCheck, 'minor', 'type:minor')
-    checkProbProperty(typeCheck, 'graphic', 'type:graphic')
-  }
-
-  return reasons
 }
 
 export async function POST(request: Request) {
@@ -104,15 +162,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'Image moderation failed. Please try again.' }, { status: 502 })
     }
 
-    const reasons = collectReasons(data)
+    const evaluation = evaluateModeration(data)
 
-    if (reasons.length > 0) {
-      console.warn('[sightengine] Image rejected', { reasons })
+    if (evaluation) {
+      console.warn('[sightengine] Image rejected', {
+        category: evaluation.category,
+        reasons: evaluation.reasons,
+      })
+
       return NextResponse.json(
         {
           ok: false,
-          error: 'The image was blocked for inappropriate content. Please choose another.',
-          reasons,
+          error: evaluation.message,
+          category: evaluation.category,
+          reasons: evaluation.reasons,
         },
         { status: 400 },
       )
