@@ -157,13 +157,14 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     setUploading(true)
     try {
       const { storagePath, publicUrl } = await uploadClothingImage(user.uid, selectedFile)
-
       const nowIso = new Date().toISOString()
+      const resolvedGarmentType = (garmentType || 'top') as ClothingItem['garmentType']
       const insertPayload = {
         user_id: user.uid,
         image_url: publicUrl,
         storage_path: storagePath,
-        garment_type: garmentType as ClothingItem['garmentType'],
+        garment_type: resolvedGarmentType,
+        clothing_type: resolvedGarmentType,
         dominant_colors: analysis.dominantColors,
         primary_hex: aiPrimaryHex,
         color_names: aiColorNames,
