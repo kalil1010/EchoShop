@@ -1,6 +1,6 @@
-﻿'use client'
+'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -24,14 +24,52 @@ export function StylistChat() {
   const { user, userProfile } = useAuth()
   const { toast } = useToast()
   const [closetItems, setClosetItems] = useState<ClosetItemSummary[]>([])
-  const [messages, setMessages] = useState<Message[]>([
+
+  const firstName = useMemo(() => {
+    const source = userProfile?.displayName || user?.displayName || user?.email || ''
+    if (!source) return 'there'
+    const cleaned = source.includes('@') ? source.split('@')[0] : source
+    const trimmed = cleaned.trim()
+    if (!trimmed) return 'there'
+    return trimmed.split(/\s+/)[0]
+  }, [userProfile?.displayName, user?.displayName, user?.email])
+
+  const greetingText = useMemo(() => {
+    const isKnown = firstName && firstName.toLowerCase() !== 'there'
+    const base = isKnown ? firstName : 'there'
+    const normalized = isKnown ? base.charAt(0).toUpperCase() + base.slice(1) : 'there'
+    return `Hi ${normalized}! I'm ZMODA AI, your personal fashion assistant. I can help with outfit ideas, styling tips, color coordination, and closet questions. What would you like to explore today?`
+  }, [firstName])
+
+  const [messages, setMessages] = useState<Message[]>(() => ([
     {
-      id: '1',
-      content: "Hi! I'm ZMODA AI, your personal fashion assistant. I can help with outfit ideas, styling tips, color coordination, and closet questions. What would you like to explore today?",
+      id: 'assistant-welcome',
+      content: greetingText,
       isUser: false,
       timestamp: new Date(),
-    }
-  ])
+    },
+  ]))
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (!prev.length) {
+        return [{
+          id: 'assistant-welcome',
+          content: greetingText,
+          isUser: false,
+          timestamp: new Date(),
+        }]
+      }
+      const [first, ...rest] = prev
+      if (first.isUser) {
+        return prev
+      }
+      if (first.content === greetingText) {
+        return prev
+      }
+      return [{ ...first, content: greetingText, timestamp: new Date() }, ...rest]
+    })
+  }, [greetingText])
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -220,5 +258,6 @@ export function StylistChat() {
     </Card>
   )
 }
+
 
 
