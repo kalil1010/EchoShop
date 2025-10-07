@@ -34,7 +34,7 @@ export function Navigation() {
       { href: '/', label: 'Home', icon: Home },
       { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true },
       { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true },
-      { href: '/chat', label: 'Stylist Chat', icon: MessageCircle, requiresAuth: true },
+      { href: '/chat', label: 'ZMODA AI Chat', icon: MessageCircle, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
     ],
@@ -57,7 +57,7 @@ export function Navigation() {
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center space-x-2">
             <Sparkles className="h-8 w-8 text-purple-600" />
-            <span className="text-xl font-bold text-gray-900">AI Stylist</span>
+            <span className="text-xl font-bold text-gray-900">ZMODA AI</span>
           </Link>
 
           <div className="hidden md:flex items-center space-x-8">

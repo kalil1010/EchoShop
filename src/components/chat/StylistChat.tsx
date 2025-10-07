@@ -27,7 +27,7 @@ export function StylistChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hi! I'm your AI stylist assistant. I can help you with fashion advice, styling tips, outfit coordination, and answer any fashion-related questions you have. What would you like to know?",
+      content: "Hi! I'm ZMODA AI, your personal fashion assistant. I can help with outfit ideas, styling tips, color coordination, and closet questions. What would you like to explore today?",
       isUser: false,
       timestamp: new Date(),
     }
@@ -150,10 +150,10 @@ export function StylistChat() {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center">
           <MessageCircle className="mr-2 h-5 w-5" />
-          AI Stylist Chat
+          ZMODA AI Chat
         </CardTitle>
         <CardDescription>
-          Get personalized fashion advice and styling tips
+          Get personalized fashion advice and styling tips from ZMODA AI
         </CardDescription>
       </CardHeader>
       
@@ -175,7 +175,7 @@ export function StylistChat() {
           {loading && (
             <div className="flex items-center space-x-2 text-gray-500">
               <Sparkles className="h-4 w-4 animate-pulse" />
-              <span className="text-sm">AI Stylist is thinking...</span>
+              <span className="text-sm">ZMODA AI is thinking...</span>
             </div>
           )}
           <div ref={messagesEndRef} />

@@ -47,7 +47,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       <CardHeader>
         <CardTitle>Create Account</CardTitle>
         <CardDescription>
-          Join AI Stylist to get personalized fashion recommendations.
+          Join ZMODA AI to get personalized fashion recommendations.
         </CardDescription>
       </CardHeader>
       <CardContent>

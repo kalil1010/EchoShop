@@ -32,8 +32,8 @@ export default function Home() {
     },
     {
       icon: MessageCircle,
-      title: 'AI Stylist Chat',
-      description: 'Chat with your personal AI stylist for fashion advice and styling tips.',
+      title: 'ZMODA AI Chat',
+      description: 'Chat with ZMODA AI for fashion advice and styling tips.',
       href: '/chat',
     },
     {
@@ -74,10 +74,10 @@ export default function Home() {
       <div className='mb-12 text-center'>
         <div className='mb-4 flex items-center justify-center'>
           <Sparkles className='mr-2 h-12 w-12 text-purple-600' />
-          <h1 className='text-4xl font-bold text-gray-900 md:text-6xl'>AI Stylist</h1>
+          <h1 className='text-4xl font-bold text-gray-900 md:text-6xl'>ZMODA AI</h1>
         </div>
         <p className='mx-auto mb-8 max-w-3xl text-xl text-gray-600 md:text-2xl'>
-          Your personal fashion assistant powered by AI. Get personalized outfit recommendations, organize your closet,
+          ZMODA AI is your personal fashion assistant powered by AI. Get personalized outfit recommendations, organize your closet,
           and receive expert styling advice.
         </p>
 
@@ -142,7 +142,7 @@ export default function Home() {
       </div>
 
       <div className='mb-12 rounded-lg bg-gray-50 p-8'>
-        <h2 className='mb-8 text-center text-3xl font-bold'>Why Choose AI Stylist?</h2>
+        <h2 className='mb-8 text-center text-3xl font-bold'>Why Choose ZMODA AI?</h2>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
           {benefits.map((benefit, index) => (
             <div key={index} className='flex items-center space-x-3'>
@@ -157,7 +157,7 @@ export default function Home() {
         <div className='rounded-lg bg-purple-600 p-8 text-center text-white'>
           <h2 className='mb-4 text-3xl font-bold'>Ready to Transform Your Style?</h2>
           <p className='mb-6 text-xl opacity-90'>
-            Join thousands of users who have discovered their perfect style with AI Stylist.
+            Join thousands of users who have discovered their perfect style with ZMODA AI.
           </p>
           <Link href='/auth'>
             <Button size='lg' variant='secondary'>

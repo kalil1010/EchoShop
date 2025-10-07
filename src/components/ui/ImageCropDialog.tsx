@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 
@@ -17,6 +17,8 @@ interface ImageCropDialogProps {
   onComplete: (file: File, previewUrl: string) => void
 }
 
+type AspectPreset = { label: string; value: number | 'free' }
+
 function toCropAreaPixels(area: Area | null): CropAreaPixels | null {
   if (!area) return null
   return {
@@ -32,18 +34,39 @@ export function ImageCropDialog({ open, imageSrc, originalFile, aspect, title = 
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropAreaPixels | null>(null)
   const [processing, setProcessing] = useState(false)
+  const [selectedAspect, setSelectedAspect] = useState<number | undefined>(aspect)
+  const aspectPresets = useMemo<AspectPreset[]>(() => {
+    if (typeof aspect === 'number') {
+      return []
+    }
+    return [
+      { label: 'Free', value: 'free' },
+      { label: 'Square', value: 1 },
+      { label: '4:5 Portrait', value: 4 / 5 },
+      { label: '3:4 Portrait', value: 3 / 4 },
+      { label: '16:9 Landscape', value: 16 / 9 },
+    ]
+  }, [aspect])
+  const effectiveAspect = typeof aspect === 'number' ? aspect : selectedAspect
 
   useEffect(() => {
     if (open) {
       setCrop({ x: 0, y: 0 })
       setZoom(1)
       setCroppedAreaPixels(null)
+      setSelectedAspect(typeof aspect === 'number' ? aspect : undefined)
     }
-  }, [open, imageSrc])
+  }, [open, imageSrc, aspect])
 
   const handleCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setCroppedAreaPixels(toCropAreaPixels(areaPixels))
   }, [])
+  const handleAspectChange = useCallback((value: number | 'free') => {
+    setSelectedAspect(value === 'free' ? undefined : value)
+    setZoom(1)
+    setCroppedAreaPixels(null)
+  }, [])
+
 
   const handleConfirm = useCallback(async () => {
     if (!imageSrc || !originalFile) return
@@ -85,7 +108,7 @@ export function ImageCropDialog({ open, imageSrc, originalFile, aspect, title = 
             image={imageSrc}
             crop={crop}
             zoom={zoom}
-            aspect={aspect}
+            aspect={effectiveAspect ?? undefined}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={handleCropComplete}
@@ -94,6 +117,26 @@ export function ImageCropDialog({ open, imageSrc, originalFile, aspect, title = 
           />
         </div>
         <div className="flex flex-col gap-4 px-4 py-4">
+          {aspectPresets.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-gray-600">Aspect ratio</span>
+              <div className="flex flex-wrap gap-2">
+                {aspectPresets.map((option) => {
+                  const isActive = option.value === 'free' ? !selectedAspect : selectedAspect === option.value
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => handleAspectChange(option.value)}
+                      className={`rounded border px-3 py-1 text-xs font-medium transition-colors ${isActive ? 'border-purple-500 bg-purple-50 text-purple-600' : 'border-gray-300 text-gray-600 hover:border-purple-400 hover:text-purple-600'}`}
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <label className="text-sm text-gray-600" htmlFor="crop-zoom">
             Zoom
           </label>

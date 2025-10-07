@@ -29,7 +29,7 @@ export default function ChatPage() {
           <CardContent className="p-6 text-center space-y-3">
             <h2 className="text-xl font-semibold">Sign In Required</h2>
             <p className="text-gray-600">
-              Please sign in to chat with your AI stylist.
+              Please sign in to chat with ZMODA AI.
             </p>
             <Link href="/auth">
               <Button>Go to Sign In</Button>
@@ -43,9 +43,9 @@ export default function ChatPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Stylist Chat</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">ZMODA AI Chat</h1>
         <p className="text-gray-600">
-          Chat with your personal AI stylist for fashion advice and styling tips
+          Chat with ZMODA AI for fashion advice and styling tips
         </p>
       </div>
 
