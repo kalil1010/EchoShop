@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import '../styles/globals.css'
+import 'react-image-crop/dist/ReactCrop.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Navigation } from '@/components/layout/Navigation'
 import { ToastProvider } from '@/components/ui/toast'
