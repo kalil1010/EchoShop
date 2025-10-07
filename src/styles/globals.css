@@ -77,6 +77,8 @@
 /* ReactCrop overrides for consistent cross-device appearance */
 .ReactCrop {
   max-height: 100%;
+  width: 100%;
+  position: relative;
 }
 .ReactCrop__image {
   max-height: 100%;
@@ -85,23 +87,33 @@
 .ReactCrop__crop-selection {
   border: 2px solid #7c3aed;
   border-radius: 1rem;
-  box-shadow: 0 12px 30px -10px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 18px 32px -18px rgba(124, 58, 237, 0.45);
+  background-color: transparent;
+  box-sizing: border-box;
 }
 .ReactCrop__crop-selection::after {
   border-radius: inherit;
 }
 .ReactCrop__drag-handle {
-  width: 16px;
-  height: 16px;
-  background-color: #ffffff;
-  border: 2px solid #7c3aed;
+  width: 18px !important;
+  height: 18px !important;
+  margin: -9px 0 0 -9px !important;
   border-radius: 9999px;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  border: 2px solid #7c3aed;
+  background-color: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.35);
 }
-.ReactCrop__drag-bar {
-  background-color: rgba(124, 58, 237, 0.08);
+.ReactCrop__drag-handle::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 2px solid rgba(124, 58, 237, 0.35);
+}
+.ReactCrop__drag-line::before {
+  background-color: rgba(124, 58, 237, 0.15);
 }
 .ReactCrop__disabled .ReactCrop__crop-selection {
-  border-color: rgba(148, 163, 184, 0.8);
+  border-color: rgba(148, 163, 184, 0.6);
   box-shadow: none;
 }
