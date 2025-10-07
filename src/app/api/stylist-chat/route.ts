@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { summariseClosetForPrompt } from '@/lib/closet'
@@ -14,6 +14,22 @@ const ClosetItemSchema = z.object({
   dominantColors: z.array(z.string()).optional(),
 })
 
+const PayloadSchema = z.object({
+  message: z.string().min(1),
+  context: z.string().optional(),
+  userProfile: z
+    .object({
+      gender: z.string().optional(),
+      age: z.number().optional(),
+      favoriteColors: z.array(z.string()).optional(),
+      favoriteStyles: z.array(z.string()).optional(),
+    })
+    .optional(),
+  closetItems: ClosetItemSchema.array().optional(),
+  imageColors: z.array(z.string()).optional(),
+  mode: z.enum(['assistant', 'stylist']).optional(),
+})
+
 const normalizeGender = (value?: string | null): GenderTarget | undefined => {
   if (!value) return undefined
   const lowered = value.toLowerCase()
@@ -25,13 +41,17 @@ const normalizeGender = (value?: string | null): GenderTarget | undefined => {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    if (!body.message) {
-      return NextResponse.json({ error: 'Missing required field: message' }, { status: 400 })
+    const json = await request.json()
+    const parsed = PayloadSchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
+    const body = parsed.data
+    const mode = body.mode ?? 'stylist'
+
     const targetGender = normalizeGender(body.userProfile?.gender)
-    const closetItems = Array.isArray(body.closetItems) ? ClosetItemSchema.array().parse(body.closetItems) : []
+    const closetItems = Array.isArray(body.closetItems) ? body.closetItems : []
     const closetSummary = summariseClosetForPrompt(closetItems)
     const onlinePieces = await getOnlinePieces(targetGender, undefined)
     const onlineSummary = summarisePiecesForPrompt(onlinePieces, 12)
@@ -46,7 +66,7 @@ ${closetSummary.join('\n')}`
 ${onlineSummary.join('\n')}`
       : 'Online Store Highlights: None available.'
 
-    const systemPrompt = `You are a friendly fashion stylist AI in Concise Mode. Keep answers short, clear, and enjoyable to read.
+    const stylistSystemPrompt = `You are a friendly fashion stylist AI in Concise Mode. Keep answers short, clear, and enjoyable to read.
 
 Formatting rules (strict):
 - Use simple Markdown only (no tables).
@@ -71,6 +91,12 @@ When asked for an outfit, return exactly these sections (omit any that don’t a
 
 Personalize to the user's profile and any provided image colors. Be helpful and upbeat, but never verbose.`
 
+    const assistantSystemPrompt = `You are the ZMODA AI onboarding assistant. Be brief, encouraging, and always guide the user to specific features. Prioritise:
+1. Explaining the four core features (Outfit Builder, Digital Closet, Color Analyzer, AI Chat).
+2. Letting the user know how to replay the guided tour or open the floating assistant.
+3. Providing actionable next steps (e.g., “Tap Add to Closet to upload your first item”).
+Remain friendly, use at most 6 short lines, and avoid deep fashion analysis.`
+
     const prompt = `User message: ${body.message}
 
 ${body.context ? `Context: ${body.context}` : ''}
@@ -88,8 +114,16 @@ ${onlineBlock}
 
 Please provide a helpful and personalised response that references these sources when giving outfit advice.`
 
-    const response = await callMistralAI(prompt, systemPrompt, { temperature: 0.5, maxTokens: 600 })
-    return NextResponse.json({ response })
+    const systemPrompt = mode === 'assistant' ? assistantSystemPrompt : stylistSystemPrompt
+    const maxTokens = mode === 'assistant' ? 250 : 600
+
+    const reply = await callMistralAI(prompt, systemPrompt, { temperature: 0.5, maxTokens })
+
+    return NextResponse.json({
+      response: reply,
+      reply,
+      meta: mode === 'assistant' ? { source: 'assistant' } : undefined,
+    })
   } catch (error) {
     console.error('Stylist chat error:', error)
     return NextResponse.json({ error: 'Failed to generate chat response' }, { status: 500 })
