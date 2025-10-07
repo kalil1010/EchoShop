@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import type { ClosetItemSummary } from '@/lib/closet'
 
@@ -87,3 +87,4 @@ export async function getOutfitSuggestion(
   }
   return res.json()
 }
+

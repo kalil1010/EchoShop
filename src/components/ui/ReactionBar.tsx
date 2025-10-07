@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ThumbsUp, ThumbsDown, Heart, Bookmark } from 'lucide-react'
@@ -116,3 +116,4 @@ export function ReactionBar({ featureSlug, className }: { featureSlug: string; c
     </div>
   )
 }
+

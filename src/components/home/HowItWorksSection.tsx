@@ -1,4 +1,4 @@
-'use client'
+ï»¿'use client'
 
 import { ClipboardList, Image as ImageIcon, Sparkles, Wand2 } from 'lucide-react'
 
@@ -11,7 +11,7 @@ const STEPS = [
   {
     icon: ImageIcon,
     title: 'Upload or sync closet items',
-    description: 'Snap a photo or import from your camera roll—ZMODA extracts colors instantly.',
+    description: 'Snap a photo or import from your camera rollâ€”ZMODA extracts colors instantly.',
   },
   {
     icon: Wand2,
@@ -23,7 +23,7 @@ const STEPS = [
 export function HowItWorksSection() {
   return (
     <section className='mt-16 rounded-3xl border border-slate-100 bg-white/90 p-8 shadow-sm backdrop-blur'>
-      <h2 className='text-2xl font-bold text-slate-900 md:text-3xl'>How ZMODA Works — in 3 Simple Steps</h2>
+      <h2 className='text-2xl font-bold text-slate-900 md:text-3xl'>How ZMODA Works â€” in 3 Simple Steps</h2>
       <p className='mt-2 max-w-2xl text-sm text-slate-600'>From organizing your closet to styling outfits, the experience is designed to be quick, visual, and fun.</p>
       <div className='mt-8 grid gap-6 md:grid-cols-3'>
         {STEPS.map((step) => (
@@ -41,3 +41,4 @@ export function HowItWorksSection() {
     </section>
   )
 }
+

@@ -1,4 +1,4 @@
-interface TourStateResponse {
+﻿interface TourStateResponse {
   status: 'not_started' | 'in_progress' | 'completed'
   slug: string
   updated_at?: string
@@ -36,3 +36,4 @@ export async function updateTourState(
     throw error
   }
 }
+

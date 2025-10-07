@@ -1,4 +1,4 @@
-# ZMODA AI UX/UI Revamp Plan
+ï»¿# ZMODA AI UX/UI Revamp Plan
 
 ## Goals
 - Make first-time experience welcoming and self-explanatory.
@@ -25,8 +25,8 @@
 ```
 Step 1 Overlay
 +------------------------------------------+
-¦  ?? Welcome to ZMODA AI!                 ¦
-¦  [Start tour] (primary CTA)             ¦
+Â¦  ?? Welcome to ZMODA AI!                 Â¦
+Â¦  [Start tour] (primary CTA)             Â¦
 +------------------------------------------+
 ```
 - Use `OnboardingProvider` context mounted in `_app`.
@@ -38,18 +38,18 @@ Step 1 Overlay
 ### 2. Homepage Layout (Desktop Wireframe)
 ```
 +---------------------------------------------------------------+
-¦ NAV: Logo | Explore | Closet | Analyzer | Help | Profile | ? ¦
-+---------------------------------------------------------------¦
-¦ HERO: "Style smarter" copy + 4 clickable feature cards        ¦
-¦  [Outfit Builder] [Digital Closet] [Color Analyzer] [AI Chat] ¦
-¦  Each card: icon, 2-line copy, CTA chip (Try now ?)           ¦
-+---------------------------------------------------------------¦
-¦ How ZMODA    ¦ Nearby New Arrivals (carousel)                 ¦
-¦ Works (3     ¦                                                ¦
-¦ illustrated  ¦                                                ¦
-¦ steps)       ¦                                                ¦
-+---------------------------------------------------------------¦
-¦ Weather Snapshot | Trending Fits | FAQ/How-to + video         ¦
+Â¦ NAV: Logo | Explore | Closet | Analyzer | Help | Profile | ? Â¦
++---------------------------------------------------------------Â¦
+Â¦ HERO: "Style smarter" copy + 4 clickable feature cards        Â¦
+Â¦  [Outfit Builder] [Digital Closet] [Color Analyzer] [AI Chat] Â¦
+Â¦  Each card: icon, 2-line copy, CTA chip (Try now ?)           Â¦
++---------------------------------------------------------------Â¦
+Â¦ How ZMODA    Â¦ Nearby New Arrivals (carousel)                 Â¦
+Â¦ Works (3     Â¦                                                Â¦
+Â¦ illustrated  Â¦                                                Â¦
+Â¦ steps)       Â¦                                                Â¦
++---------------------------------------------------------------Â¦
+Â¦ Weather Snapshot | Trending Fits | FAQ/How-to + video         Â¦
 +---------------------------------------------------------------+
 ```
 - Mobile collapses feature cards into horizontal scroll, steps stack vertically.
@@ -66,7 +66,7 @@ Step 1 Overlay
 ### 5. Feature Page Enhancements
 | Page | Additions |
 | --- | --- |
-| My Closet | Left sidebar checklist (“1. Upload item ? 2. Add notes ? 3. Save palette”). Confetti animation on successful upload. |
+| My Closet | Left sidebar checklist (â€œ1. Upload item ? 2. Add notes ? 3. Save paletteâ€). Confetti animation on successful upload. |
 | Color Analyzer | Tip callouts on right panel, quick color theory explainer. |
 | Outfit | Stepper progress UI (Occasion ? Colors ? Result) with progress map. |
 
@@ -109,8 +109,9 @@ Step 1 Overlay
 ## Open Questions
 - Confirm Supabase table availability for feedback storage.
 - Decide on animation library (Framer Motion vs CSS).  
-- Is video asset budget available for “How it works” clips?
+- Is video asset budget available for â€œHow it worksâ€ clips?
 
 ---
 Prepared by: Codex (GPT-5)  
 Date: $(Get-Date -Format 'yyyy-MM-dd')
+

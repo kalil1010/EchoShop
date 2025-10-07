@@ -1,4 +1,4 @@
-'use client'
+ï»¿'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -39,7 +39,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     {
       id: 'hero-chat',
       title: 'Chat with your stylist',
-      description: 'Ask ZMODA AI anything—from outfit help to onboarding tips—right from the floating assistant.',
+      description: 'Ask ZMODA AI anythingâ€”from outfit help to onboarding tipsâ€”right from the floating assistant.',
       target: '[data-tour="hero-feature-chat"]',
     },
   ]), [])
@@ -92,3 +92,4 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     </OnboardingContextProvider>
   )
 }
+

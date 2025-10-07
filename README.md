@@ -1,4 +1,4 @@
-# AI Stylist - Personal Fashion Assistant
+﻿# AI Stylist - Personal Fashion Assistant
 
 A complete, full-stack AI-powered fashion assistant web application built with Next.js, TypeScript, Tailwind CSS, Supabase, and Mistral AI.
 
@@ -58,3 +58,4 @@ Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.en
 
 - Interactive onboarding, floating assistant, feedback reactions, and help section are now available.
 - See `docs/ui-redesign-plan.md` and `docs/ui-redesign/changelog.md` for implementation details.
+

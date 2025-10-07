@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import type { ComponentType, ReactNode } from 'react'
@@ -48,3 +48,4 @@ export function FeatureCard({ icon: Icon, title, description, href, cta = 'Explo
     </Link>
   )
 }
+

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -120,3 +120,4 @@ export function OnboardingContextProvider({ children, steps, initialStatus, onSt
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>
 }
+

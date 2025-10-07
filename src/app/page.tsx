@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import type { ComponentType } from 'react'
@@ -118,7 +118,7 @@ export default function Home() {
             <Sparkles className='h-3 w-3' /> New onboarding experience
           </span>
           <h1 className='mt-4 text-4xl font-bold text-slate-900 md:text-5xl'>Style smarter with ZMODA AI.</h1>
-          <p className='mt-4 max-w-xl text-base text-slate-600'>Discover outfits you love, organise your wardrobe, and master colour theory�all guided by an assistant that learns your vibe.</p>
+          <p className='mt-4 max-w-xl text-base text-slate-600'>Discover outfits you love, organise your wardrobe, and master colour theory—all guided by an assistant that learns your vibe.</p>
           <div className='mt-6 flex flex-wrap items-center gap-3'>
             {!user ? (
               <>
@@ -230,3 +230,4 @@ export default function Home() {
     </div>
   )
 }
+

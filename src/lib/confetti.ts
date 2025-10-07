@@ -1,4 +1,4 @@
-export async function fireConfetti(options?: { particleCount?: number; spread?: number; origin?: { x?: number; y?: number } }) {
+﻿export async function fireConfetti(options?: { particleCount?: number; spread?: number; origin?: { x?: number; y?: number } }) {
   if (typeof window === 'undefined') return
   const confetti = (await import('canvas-confetti')).default
   confetti({
@@ -9,3 +9,4 @@ export async function fireConfetti(options?: { particleCount?: number; spread?: 
     scalar: 0.9,
   })
 }
+

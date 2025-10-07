@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { ColorAnalyzer } from '@/components/analyzer/ColorAnalyzer'
 import { ReactionBar } from '@/components/ui/ReactionBar'
@@ -28,4 +28,5 @@ export default function AnalyzerPage() {
     </div>
   )
 }
+
 
