@@ -18,8 +18,11 @@ interface ImageCropDialogProps {
 
 type AspectPreset = { label: string; value: number | 'free' }
 
-const MIN_SELECTION_PX = 40
-const PADDING_RATIO = 0.08
+const MIN_SELECTION_PX = 80
+const PADDING_RATIO = 0.14
+const CROP_CONTAINER_MAX_WIDTH = 520
+const CROP_CONTAINER_MAX_HEIGHT = 600
+const CROP_CONTAINER_MIN_HEIGHT = 320
 
 function clampCropValue(value: number, min: number, max: number) {
   if (Number.isNaN(value)) return min
@@ -191,25 +194,35 @@ export function ImageCropDialog({ open, imageSrc, originalFile, aspect, title = 
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <p className="text-xs text-gray-500">Drag the corner handles to define your crop. Use the presets for quick ratios or stay in Free mode for full control.</p>
         </div>
-        <div className="relative flex h-[60vh] max-h-[480px] items-center justify-center bg-black/80">
-          <ReactCrop
-            crop={crop}
-            onChange={handleCropChange}
-            aspect={selectedAspect}
-            minWidth={MIN_SELECTION_PX}
-            minHeight={MIN_SELECTION_PX}
-            keepSelection
-            ruleOfThirds
+        <div
+          className="relative flex w-full items-center justify-center bg-black/80 px-4 py-6"
+          style={{ height: `clamp(${CROP_CONTAINER_MIN_HEIGHT}px, 60vh, ${CROP_CONTAINER_MAX_HEIGHT}px)` }}
+        >
+          <div
+            className="relative mx-auto w-full overflow-hidden"
+            style={{ maxWidth: CROP_CONTAINER_MAX_WIDTH, height: '100%' }}
           >
-            <img
-              ref={imgRef}
-              src={imageSrc}
-              alt="Image to crop"
-              onLoad={handleImageLoad}
-              className="max-h-full max-w-full select-none"
-              style={{ touchAction: 'none' }}
-            />
-          </ReactCrop>
+            <ReactCrop
+              crop={crop}
+              onChange={handleCropChange}
+              aspect={selectedAspect}
+              minWidth={MIN_SELECTION_PX}
+              minHeight={MIN_SELECTION_PX}
+              keepSelection
+              ruleOfThirds
+              className="flex h-full w-full items-center justify-center"
+              style={{ width: '100%', height: '100%' }}
+            >
+              <img
+                ref={imgRef}
+                src={imageSrc}
+                alt="Image to crop"
+                onLoad={handleImageLoad}
+                className="h-full w-full max-h-full max-w-full select-none object-contain"
+                style={{ touchAction: 'none' }}
+              />
+            </ReactCrop>
+          </div>
         </div>
         <div className="flex flex-col gap-4 px-4 py-4">
           {aspectPresets.length > 0 && (
