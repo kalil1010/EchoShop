@@ -14,10 +14,13 @@ export interface StylistMessagePayload {
   closetItems?: ClosetItemSummary[]
   imageColors?: string[]
   imageDescription?: string
+  mode?: 'assistant' | 'stylist'
 }
 
 export interface StylistMessageResponse {
-  response: string
+  response?: string
+  reply?: string
+  meta?: Record<string, unknown>
 }
 
 export interface OutfitSuggestionPayload {

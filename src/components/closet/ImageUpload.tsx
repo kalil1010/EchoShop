@@ -14,6 +14,7 @@ import { isPermissionError, mapSupabaseError, sanitizeText } from '@/lib/securit
 import { type ClothingRow, mapClothingRow, uploadClothingImage } from '@/lib/closet'
 import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 import { savePaletteForUser } from '@/lib/palette'
+import { fireConfetti } from '@/lib/confetti'
 
 interface ImageUploadProps {
   onItemAdded?: (item: ClothingItem) => void
@@ -328,6 +329,7 @@ const { toast } = useToast()
 
       onItemAdded?.(newItem)
       toast({ variant: 'success', title: 'Item added to closet' })
+      void fireConfetti({ particleCount: 140, origin: { y: 0.85 } })
 
       setSelectedFile(null)
       updatePreview(null)

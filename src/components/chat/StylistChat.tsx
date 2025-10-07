@@ -109,9 +109,10 @@ export function StylistChat() {
         closetItems: closetItems.length > 0 ? closetItems : undefined,
       })
 
+      const messageText = response.reply ?? response.response ?? ''
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response.response,
+        content: messageText,
         isUser: false,
         timestamp: new Date(),
       }

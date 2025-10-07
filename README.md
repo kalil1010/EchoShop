@@ -44,7 +44,17 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 ```bash
 git clone <repository-url>
 cd ai-stylist
+npm install
+```
+
+2. Copy `.env.example` to `.env.local` and fill in credentials.
+3. Run `npm run dev` to start the development server.
 
 ### Sightengine Moderation
 
 Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. The development template includes default credentials provided for this exercise.
+
+## UX Revamp Notes
+
+- Interactive onboarding, floating assistant, feedback reactions, and help section are now available.
+- See `docs/ui-redesign-plan.md` and `docs/ui-redesign/changelog.md` for implementation details.

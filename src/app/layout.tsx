@@ -5,6 +5,8 @@ import 'react-image-crop/dist/ReactCrop.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Navigation } from '@/components/layout/Navigation'
 import { ToastProvider } from '@/components/ui/toast'
+import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider'
+import { FloatingAssistant } from '@/components/chat/FloatingAssistant'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,10 +26,13 @@ export default function RootLayout({
         <div className="min-h-screen bg-background">
           <ToastProvider>
             <AuthProvider>
-              <Navigation />
-              <main className="pb-8">
-                {children}
-              </main>
+              <OnboardingProvider>
+                <Navigation />
+                <main className="pb-8">
+                  {children}
+                </main>
+                <FloatingAssistant />
+              </OnboardingProvider>
             </AuthProvider>
           </ToastProvider>
         </div>
