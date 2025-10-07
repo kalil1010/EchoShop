@@ -74,3 +74,34 @@
     @apply bg-background text-foreground;
   }
 }
+/* ReactCrop overrides for consistent cross-device appearance */
+.ReactCrop {
+  max-height: 100%;
+}
+.ReactCrop__image {
+  max-height: 100%;
+  object-fit: contain;
+}
+.ReactCrop__crop-selection {
+  border: 2px solid #7c3aed;
+  border-radius: 1rem;
+  box-shadow: 0 12px 30px -10px rgba(124, 58, 237, 0.35);
+}
+.ReactCrop__crop-selection::after {
+  border-radius: inherit;
+}
+.ReactCrop__drag-handle {
+  width: 16px;
+  height: 16px;
+  background-color: #ffffff;
+  border: 2px solid #7c3aed;
+  border-radius: 9999px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+}
+.ReactCrop__drag-bar {
+  background-color: rgba(124, 58, 237, 0.08);
+}
+.ReactCrop__disabled .ReactCrop__crop-selection {
+  border-color: rgba(148, 163, 184, 0.8);
+  box-shadow: none;
+}
