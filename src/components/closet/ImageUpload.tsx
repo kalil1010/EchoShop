@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { isPermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
 import { type ClothingRow, mapClothingRow, uploadClothingImage } from '@/lib/closet'
+import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 import { savePaletteForUser } from '@/lib/palette'
 
 interface ImageUploadProps {
@@ -141,41 +142,72 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [aiPrimaryHex, setAiPrimaryHex] = useState<string | null>(null)
   const [aiColorNames, setAiColorNames] = useState<string[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+const cropFileRef = useRef<File | null>(null)
+  const [cropSource, setCropSource] = useState<string | null>(null)
+  const [isCropOpen, setIsCropOpen] = useState(false)
+  const updatePreview = useCallback((next: string | null) => {
+    setPreview((current) => {
+      if (current && current !== next) {
+        URL.revokeObjectURL(current)
+      }
+      return next
+    })
+  }, [])
+  const clearCropSource = useCallback(() => {
+    setCropSource((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return null
+    })
+    cropFileRef.current = null
+    setIsCropOpen(false)
+  }, [])
+  const handleCropCancel = useCallback(() => {
+    clearCropSource()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [clearCropSource])
   const handleChooseAnother = useCallback(() => {
     setModerationMessage(null)
     setModerationCategory(null)
     setSelectedFile(null)
-    setPreview(null)
+    updatePreview(null)
     setAnalysis(null)
     setAiMatches(null)
     setAiRichMatches(null)
+    setAiPrimaryHex(null)
+    setAiColorNames(null)
+    setSelectedBaseColor(null)
+    setCustomColors([])
     setPlan({})
+    clearCropSource()
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
       fileInputRef.current.click()
     }
-  }, [])
+  }, [clearCropSource, updatePreview])
 
   const handleDismissModeration = useCallback(() => {
     setModerationMessage(null)
     setModerationCategory(null)
   }, [])
 
-    const { toast } = useToast()
+const { toast } = useToast()
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
+  const analyzeSelectedImage = useCallback(async (file: File) => {
     setModerationMessage(null)
     setModerationCategory(null)
-
     setSelectedFile(file)
-    setPreview(URL.createObjectURL(file))
+    setPlan({})
+    setCustomColors([])
+    setAiMatches(null)
+    setAiRichMatches(null)
+    setAiPrimaryHex(null)
+    setAiColorNames(null)
+    setSelectedBaseColor(null)
     setAnalyzing(true)
 
     try {
-      // AI-only analysis: read data URL and call server
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
@@ -183,7 +215,6 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         reader.readAsDataURL(file)
       })
 
-      // Compute rough colors locally to constrain AI drift
       const rough = await analyzeImageColors(file, 'enhanced')
       const res = await fetch('/api/analyze-image', {
         method: 'POST',
@@ -206,7 +237,34 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
     } finally {
       setAnalyzing(false)
     }
-  }
+  }, [toast])
+
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        variant: 'error',
+        title: 'Image too large',
+        description: 'Please choose an image smaller than 10MB.',
+      })
+      event.target.value = ''
+      return
+    }
+    clearCropSource()
+    cropFileRef.current = file
+    setCropSource(URL.createObjectURL(file))
+    setIsCropOpen(true)
+  }, [clearCropSource, toast])
+
+  const handleCropComplete = useCallback((croppedFile: File, previewUrl: string) => {
+    clearCropSource()
+    updatePreview(previewUrl)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    void analyzeSelectedImage(croppedFile)
+  }, [analyzeSelectedImage, clearCropSource, updatePreview])
 
   const handleUpload = async () => {
     if (!analysis || !selectedFile) {
@@ -272,7 +330,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
       toast({ variant: 'success', title: 'Item added to closet' })
 
       setSelectedFile(null)
-      setPreview(null)
+      updatePreview(null)
       setAnalysis(null)
       setDescription('')
       setPlan({})
@@ -304,7 +362,16 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
   // no re-analysis toggle; always use enhanced
 
   return (
-    <Card>
+    <>
+      <ImageCropDialog
+        open={isCropOpen && !!cropSource && !!cropFileRef.current}
+        imageSrc={cropSource}
+        originalFile={cropFileRef.current}
+        title="Crop clothing image"
+        onCancel={handleCropCancel}
+        onComplete={handleCropComplete}
+      />
+      <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
           <Upload className="mr-2 h-5 w-5" />
@@ -664,10 +731,17 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null)
         )}
       </CardContent>
     </Card>
+    </>
   )
 }
 
 export default ImageUpload
+
+
+
+
+
+
 
 
 

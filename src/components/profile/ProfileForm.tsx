@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { MultiSelectChips, type ChipOption } from '@/components/ui/multi-select-chips'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 import { useToast } from '@/components/ui/toast'
 import { COLOR_PALETTE, getHexForColorName, getNameForHex, normalizeHex } from '@/lib/colors'
 import { cn } from '@/lib/utils'
@@ -99,6 +100,23 @@ export function ProfileForm() {
   const [customColorPicker, setCustomColorPicker] = useState('#6b7280')
   const [customColorText, setCustomColorText] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const cropFileRef = useRef<File | null>(null)
+  const [cropSource, setCropSource] = useState<string | null>(null)
+  const [isCropOpen, setIsCropOpen] = useState(false)
+  const clearCropSource = useCallback(() => {
+    setCropSource((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return null
+    })
+    cropFileRef.current = null
+    setIsCropOpen(false)
+  }, [])
+  const handleCropCancel = useCallback(() => {
+    clearCropSource()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [clearCropSource])
 
   const paletteColors = useMemo(() => {
     const seen = new Set<string>()
@@ -339,6 +357,16 @@ export function ProfileForm() {
   }
 
 
+  const handleCropComplete = useCallback((croppedFile: File, previewUrl: string) => {
+    clearCropSource()
+    setPreviewUrl(previewUrl)
+    void handlePhotoSelected(croppedFile)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [clearCropSource, handlePhotoSelected])
+
+
   const handleRemovePhoto = async () => {
     if (!supabase || !userProfile?.uid) {
       toast({ variant: 'error', title: 'Unable to remove photo', description: 'You must be signed in.' })
@@ -367,7 +395,17 @@ export function ProfileForm() {
 
 
   return (
-    <Card className="mx-auto max-w-2xl">
+    <>
+      <ImageCropDialog
+        open={isCropOpen && !!cropSource && !!cropFileRef.current}
+        imageSrc={cropSource}
+        originalFile={cropFileRef.current}
+        aspect={1}
+        title="Crop profile photo"
+        onCancel={handleCropCancel}
+        onComplete={handleCropComplete}
+      />
+      <Card className="mx-auto max-w-2xl">
       <CardHeader>
         <CardTitle>User Profile</CardTitle>
         <CardDescription>Update your personal information and style preferences</CardDescription>
@@ -389,10 +427,11 @@ export function ProfileForm() {
                   className="hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0]
-                    if (file) {
-                      setPreviewUrl(URL.createObjectURL(file))
-                      void handlePhotoSelected(file)
-                    }
+                    if (!file) return
+                    clearCropSource()
+                    cropFileRef.current = file
+                    setCropSource(URL.createObjectURL(file))
+                    setIsCropOpen(true)
                   }}
                 />
                 <button
@@ -600,6 +639,7 @@ export function ProfileForm() {
         </form>
       </CardContent>
     </Card>
+    </>
   )
 }
 

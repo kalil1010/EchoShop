@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, Upload, Image as ImageIcon, Copy } from 'lucide-react'
@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { savePaletteForUser } from '@/lib/palette'
 import { analyzeImageColors } from '@/lib/imageAnalysis'
+import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 
 type Matches = { complementary: string; analogous: string[]; triadic: string[] }
 
@@ -17,6 +18,9 @@ export function ColorAnalyzer() {
   const [preview, setPreview] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const cropFileRef = useRef<File | null>(null)
+  const [cropSource, setCropSource] = useState<string | null>(null)
+  const [isCropOpen, setIsCropOpen] = useState(false)
   const [mainColors, setMainColors] = useState<string[]>([])
   const [colorNames, setColorNames] = useState<string[] | null>(null)
   const { toast } = useToast()
@@ -27,14 +31,42 @@ export function ColorAnalyzer() {
   const [customColors, setCustomColors] = useState<string[]>([])
   const [customHex, setCustomHex] = useState<string>('#000000')
 
+  const clearCropSource = useCallback(() => {
+    setCropSource((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return null
+    })
+    cropFileRef.current = null
+    setIsCropOpen(false)
+  }, [])
+
+  const handleCropCancel = useCallback(() => {
+    clearCropSource()
+    if (fileRef.current) {
+      fileRef.current.value = ''
+    }
+  }, [clearCropSource])
+
+  const handleCropComplete = useCallback((croppedFile: File, previewUrl: string) => {
+    clearCropSource()
+    setFile(croppedFile)
+    setPreview(previewUrl)
+    setError(null)
+    if (fileRef.current) {
+      fileRef.current.value = ''
+    }
+  }, [clearCropSource])
+
   const onChooseFile = () => fileRef.current?.click()
 
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
     setError(null)
-    setFile(f)
-    setPreview(URL.createObjectURL(f))
+    clearCropSource()
+    cropFileRef.current = f
+    setCropSource(URL.createObjectURL(f))
+    setIsCropOpen(true)
   }
 
   const toDataUrl = (f: File) => new Promise<string>((resolve, reject) => {
@@ -230,7 +262,16 @@ export function ColorAnalyzer() {
   }
 
   return (
-    <Card>
+    <>
+      <ImageCropDialog
+        open={isCropOpen && !!cropSource && !!cropFileRef.current}
+        imageSrc={cropSource}
+        originalFile={cropFileRef.current}
+        title="Crop clothing image"
+        onCancel={handleCropCancel}
+        onComplete={handleCropComplete}
+      />
+      <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
           <Upload className="mr-2 h-5 w-5" />
@@ -466,6 +507,7 @@ export function ColorAnalyzer() {
         )}
       </CardContent>
     </Card>
+    </>
   )
 }
 

@@ -34,11 +34,17 @@ export function StylistChat() {
   ])
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [attachedImage, setAttachedImage] = useState<{ preview: string; colors: string[] } | null>(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }
 
   useEffect(() => {
@@ -140,7 +146,7 @@ export function StylistChat() {
   }
 
   return (
-    <Card className="h-[600px] flex flex-col">
+    <Card className="flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center">
           <MessageCircle className="mr-2 h-5 w-5" />
@@ -151,8 +157,12 @@ export function StylistChat() {
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+      <CardContent className="flex flex-col gap-4 flex-1">
+        <div
+          ref={scrollContainerRef}
+          className="space-y-4 mb-4 pr-2"
+          style={{ minHeight: '12rem', maxHeight: '60vh', overflowY: 'auto' }}
+        >
           {messages.map((message) => (
             <ChatMessage
               key={message.id}
