@@ -134,7 +134,7 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
     <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
       <div className="grid grid-cols-1 md:grid-cols-5">
         <div
-          className="relative aspect-[4/3] overflow-hidden md:col-span-3 md:h-[420px]"
+          className="relative aspect-[4/3] overflow-hidden sm:h-auto md:col-span-3 md:h-[420px]"
           tabIndex={0}
           role="button"
           onClick={handleOpenFullImage}
@@ -201,7 +201,7 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
               <span>{active.store}</span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 p-6 sm:flex-nowrap">
             <div className="flex gap-2">
               <button
                 type="button"

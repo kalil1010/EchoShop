@@ -82,29 +82,29 @@ export default function Home() {
         </p>
 
         {!user ? (
-          <div className='space-x-4'>
+          <div className='flex flex-col items-center gap-3 sm:flex-row sm:justify-center'>
             <Link href='/auth'>
-              <Button size='lg' className='bg-purple-600 hover:bg-purple-700'>
+              <Button size='lg' className='w-full sm:w-auto bg-purple-600 hover:bg-purple-700'>
                 Get Started
                 <ArrowRight className='ml-2 h-5 w-5' />
               </Button>
             </Link>
             <Link href='/outfit'>
-              <Button variant='outline' size='lg'>
+              <Button variant='outline' size='lg' className='w-full sm:w-auto'>
                 Try Demo
               </Button>
             </Link>
           </div>
         ) : (
-          <div className='space-x-4'>
+          <div className='flex flex-col items-center gap-3 sm:flex-row sm:justify-center'>
             <Link href='/outfit'>
-              <Button size='lg' className='bg-purple-600 hover:bg-purple-700'>
+              <Button size='lg' className='w-full sm:w-auto bg-purple-600 hover:bg-purple-700'>
                 Get Outfit Suggestion
                 <Sparkles className='ml-2 h-5 w-5' />
               </Button>
             </Link>
             <Link href='/closet'>
-              <Button variant='outline' size='lg'>
+              <Button variant='outline' size='lg' className='w-full sm:w-auto'>
                 View My Closet
                 <Shirt className='ml-2 h-5 w-5' />
               </Button>
@@ -127,7 +127,11 @@ export default function Home() {
 
       <div className='mb-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4'>
         {features.map((feature, index) => (
-          <Link key={index} href={feature.href}>
+          <Link
+            key={index}
+            href={feature.href}
+            className='block h-full rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-500'
+          >
             <Card className='h-full cursor-pointer transition-shadow hover:shadow-lg'>
               <CardHeader>
                 <feature.icon className='mb-2 h-8 w-8 text-purple-600' />
@@ -141,7 +145,7 @@ export default function Home() {
         ))}
       </div>
 
-      <div className='mb-12 rounded-lg bg-gray-50 p-8'>
+      <div className='mb-12 rounded-lg bg-gray-50 p-6 sm:p-8'>
         <h2 className='mb-8 text-center text-3xl font-bold'>Why Choose ZMODA AI?</h2>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
           {benefits.map((benefit, index) => (
@@ -154,7 +158,7 @@ export default function Home() {
       </div>
 
       {!user && (
-        <div className='rounded-lg bg-purple-600 p-8 text-center text-white'>
+        <div className='space-y-4 rounded-lg bg-purple-600 p-6 text-center text-white sm:p-8'>
           <h2 className='mb-4 text-3xl font-bold'>Ready to Transform Your Style?</h2>
           <p className='mb-6 text-xl opacity-90'>
             Join thousands of users who have discovered their perfect style with ZMODA AI.
