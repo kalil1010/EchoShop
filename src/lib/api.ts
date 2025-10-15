@@ -81,6 +81,18 @@ export interface SaveAvatarPayload {
   prompt?: string
 }
 
+interface RequestOptions {
+  accessToken?: string | null
+}
+
+const buildAuthHeaders = (options?: RequestOptions) => {
+  const headers: Record<string, string> = {}
+  if (options?.accessToken) {
+    headers.Authorization = `Bearer ${options.accessToken}`
+  }
+  return headers
+}
+
 export async function sendStylistMessage(
   payload: StylistMessagePayload
 ): Promise<StylistMessageResponse> {
@@ -109,12 +121,18 @@ export async function getOutfitSuggestion(
   return res.json()
 }
 
-export async function generateImage(input: string | GenerateImagePayload): Promise<GeneratedImageResult> {
+export async function generateImage(
+  input: string | GenerateImagePayload,
+  options?: RequestOptions
+): Promise<GeneratedImageResult> {
   const body = typeof input === 'string' ? { prompt: input } : input
 
   const res = await fetch('/api/image-generator', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildAuthHeaders(options),
+    },
     body: JSON.stringify(body),
     credentials: 'include',
   })
@@ -142,10 +160,13 @@ export async function generateImage(input: string | GenerateImagePayload): Promi
   return { blob, fileId, contentType, avatarUrl, storagePath }
 }
 
-export async function fetchAvatarGallery(): Promise<AvatarRenderRecord[]> {
+export async function fetchAvatarGallery(options?: RequestOptions): Promise<AvatarRenderRecord[]> {
   const res = await fetch('/api/avatar-renders', {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      ...buildAuthHeaders(options),
+    },
     credentials: 'include',
   })
   if (!res.ok) {
@@ -155,10 +176,17 @@ export async function fetchAvatarGallery(): Promise<AvatarRenderRecord[]> {
   return Array.isArray(data.items) ? data.items : []
 }
 
-export async function saveAvatarToGallery(payload: SaveAvatarPayload): Promise<AvatarRenderRecord> {
+export async function saveAvatarToGallery(
+  payload: SaveAvatarPayload,
+  options?: RequestOptions
+): Promise<AvatarRenderRecord> {
   const res = await fetch('/api/avatar-renders', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...buildAuthHeaders(options),
+    },
     body: JSON.stringify(payload),
     credentials: 'include',
   })

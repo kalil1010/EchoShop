@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -141,7 +141,7 @@ export function OutfitSuggestion() {
     return () => {
       active = false
     }
-  }, [isAuthenticated, user?.uid])
+  }, [isAuthenticated, user?.uid, session?.access_token])
 
   const loadGallery = useCallback(async () => {
     if (!isAuthenticated || !user?.uid) {
@@ -153,13 +153,14 @@ export function OutfitSuggestion() {
     setGalleryError(null)
     console.debug('[avatar-gallery] fetching items', { userId: user.uid })
     try {
-      const items = await fetchAvatarGallery()
+      const items = await fetchAvatarGallery({ accessToken: session?.access_token })
       console.debug('[avatar-gallery] fetched', { count: items.length })
       setGallery(items)
     } catch (error) {
       console.error('Failed to load avatar gallery:', error)
-      const message = error instanceof Error ? error.message : 'Could not load saved avatars.'
-      setGalleryError(message)
+      const rawMessage = error instanceof Error ? error.message : 'Could not load saved avatars.'
+      const friendly = rawMessage.includes('401') ? 'Sign in to view your avatar gallery.' : rawMessage
+      setGalleryError(friendly)
     } finally {
       setGalleryLoading(false)
     }
@@ -206,17 +207,20 @@ export function OutfitSuggestion() {
             }
           : { occasion: occasionLabel }
 
-        const response = await generateImage({
-          purpose: 'avatar',
-          outfit,
-          profile: profileInput,
-          context: contextPayload,
-          metadata: {
-            source: 'outfit-suggestion',
-            userId: user?.uid ?? null,
-            location: weatherSnapshot?.location ?? null,
+        const response = await generateImage(
+          {
+            purpose: 'avatar',
+            outfit,
+            profile: profileInput,
+            context: contextPayload,
+            metadata: {
+              source: 'outfit-suggestion',
+              userId: user?.uid ?? null,
+              location: weatherSnapshot?.location ?? null,
+            },
           },
-        })
+          { accessToken: session?.access_token }
+        )
 
         const objectUrl = URL.createObjectURL(response.blob)
         avatarObjectUrlRef.current = objectUrl
@@ -303,7 +307,7 @@ export function OutfitSuggestion() {
   }, [userProfile])
 
   const canRefreshAvatar = Boolean(isAuthenticated && suggestion && weather && (occasion || selectedOccasions[0]))
-  const canSaveToGallery = Boolean(avatarPreview?.storagePath && !avatarSaving)
+  const canSaveToGallery = Boolean(isAuthenticated && avatarPreview?.storagePath && !avatarSaving)
   const fullImageUrl = avatarPreview?.persistentUrl ?? avatarPreview?.displayUrl ?? ''
 
   const handleAvatarRefresh = useCallback(() => {
@@ -362,10 +366,13 @@ export function OutfitSuggestion() {
       persistentUrl: avatarPreview.persistentUrl,
     })
     try {
-      const saved = await saveAvatarToGallery({
-        storagePath: avatarPreview.storagePath,
-        publicUrl: avatarPreview.persistentUrl ?? undefined,
-      })
+      const saved = await saveAvatarToGallery(
+        {
+          storagePath: avatarPreview.storagePath,
+          publicUrl: avatarPreview.persistentUrl ?? undefined,
+        },
+        { accessToken: session?.access_token }
+      )
       setGallery((prev) => {
         const withoutExisting = prev.filter((item) => item.storagePath !== saved.storagePath)
         return [saved, ...withoutExisting]
@@ -378,15 +385,16 @@ export function OutfitSuggestion() {
       })
     } catch (error) {
       console.error('Save avatar failed:', error)
+      const rawMessage = error instanceof Error ? error.message : 'Please try again shortly.'
       toast({
         variant: 'error',
         title: 'Could not save avatar',
-        description: error instanceof Error ? error.message : 'Please try again shortly.',
+        description: rawMessage.includes('401') ? 'Sign in to save avatars.' : rawMessage,
       })
     } finally {
       setAvatarSaving(false)
     }
-  }, [avatarPreview, toast, isAuthenticated])
+  }, [avatarPreview, toast, isAuthenticated, session?.access_token])
 
   const renderOutfitItem = (label: string, item: OutfitPieceRecommendation | undefined) => {
     if (!item) return null
@@ -584,7 +592,7 @@ export function OutfitSuggestion() {
                 )}
                 {!avatarPreview.storagePath && (
                   <p className="text-xs text-amber-600">
-                    Storage upload pendingâ€”refresh the avatar to persist it for gallery saving.
+                    Storage upload pending—refresh the avatar to persist it for gallery saving.
                   </p>
                 )}
               </div>
@@ -639,7 +647,7 @@ export function OutfitSuggestion() {
             )}
 
             {galleryLoading && gallery.length === 0 && (
-              <p className="text-xs text-slate-500">Loading your saved avatars…</p>
+              <p className="text-xs text-slate-500">Loading your saved avatars...</p>
             )}
 
             {!galleryLoading && !galleryError && gallery.length === 0 && (
@@ -749,12 +757,4 @@ export function OutfitSuggestion() {
     </div>
   )
 }
-
-
-
-
-
-
-
-
 

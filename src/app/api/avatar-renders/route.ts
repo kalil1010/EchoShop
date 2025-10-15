@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
+import type { User } from '@supabase/supabase-js'
 
 const SavePayloadSchema = z.object({
   storagePath: z.string().min(1, 'storagePath required'),
@@ -18,21 +19,66 @@ const mapRecord = (row: any) => ({
   createdAt: (row.created_at as string) ?? new Date().toISOString(),
 })
 
-export async function GET() {
+type AuthSource = 'cookie' | 'bearer' | null
+
+type AuthResolution = {
+  user: User | null
+  source: AuthSource
+}
+
+const extractBearerToken = (request: NextRequest): string | null => {
+  const header = request.headers.get('authorization')
+  if (!header) return null
+  if (!header.toLowerCase().startsWith('bearer ')) return null
+  const token = header.slice(7).trim()
+  return token.length ? token : null
+}
+
+const getAuthenticatedUser = async (request: NextRequest): Promise<AuthResolution> => {
   try {
     const routeClient = createRouteClient()
     const {
       data: { user },
-      error: userError,
+      error,
     } = await routeClient.auth.getUser()
-
-    if (userError) {
-      console.warn('[avatar-gallery] auth error on GET', userError)
-      return NextResponse.json({ error: 'Authentication required', details: userError.message }, { status: 401 })
+    if (user) {
+      return { user, source: 'cookie' }
     }
+    if (error) {
+      console.warn('[avatar-gallery] cookie auth error', error)
+    }
+  } catch (err) {
+    console.warn('[avatar-gallery] cookie auth threw', err)
+  }
 
+  const token = extractBearerToken(request)
+  if (!token) {
+    return { user: null, source: null }
+  }
+
+  try {
+    const serviceClient = createServiceClient()
+    const { data, error } = await serviceClient.auth.getUser(token)
+    if (error) {
+      console.warn('[avatar-gallery] bearer validation failed', error)
+      return { user: null, source: null }
+    }
+    if (data?.user) {
+      return { user: data.user, source: 'bearer' }
+    }
+  } catch (err) {
+    console.warn('[avatar-gallery] bearer auth threw', err)
+  }
+
+  return { user: null, source: null }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { user, source } = await getAuthenticatedUser(request)
     if (!user) {
-      return NextResponse.json({ items: [] }, { status: 200 })
+      console.warn('[avatar-gallery] GET unauthorized', { source, hasAuthHeader: Boolean(extractBearerToken(request)) })
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const serviceClient = createServiceClient()
@@ -71,16 +117,12 @@ export async function POST(request: NextRequest) {
 
     const payload = parsed.data
 
-    const routeClient = createRouteClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await routeClient.auth.getUser()
+    const { user, source } = await getAuthenticatedUser(request)
 
-    if (userError || !user) {
-      console.warn('[avatar-gallery] auth error on POST', userError)
+    if (!user) {
+      console.warn('[avatar-gallery] auth error on POST', { source, hasAuthHeader: Boolean(extractBearerToken(request)) })
       return NextResponse.json(
-        { error: 'Authentication required', details: userError?.message ?? 'No active session' },
+        { error: 'Authentication required', details: 'No active session' },
         { status: 401 }
       )
     }

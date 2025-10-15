@@ -8,6 +8,7 @@ import { generateImageFromPrompt } from '@/lib/mistralImage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import type { OutfitSuggestionResponse } from '@/types/outfit'
+import type { User } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
@@ -80,35 +81,79 @@ const toExtension = (contentType: string): string => {
   return 'png'
 }
 
+const extractBearerToken = (request: NextRequest): string | null => {
+  const header = request.headers.get('authorization')
+  if (!header) return null
+  if (!header.toLowerCase().startsWith('bearer ')) return null
+  const token = header.slice(7).trim()
+  return token.length ? token : null
+}
+
+type AuthSource = 'cookie' | 'bearer' | null
+
+type AuthResolution = {
+  user: User | null
+  source: AuthSource
+}
+
+const resolveAuthenticatedUser = async (request: NextRequest): Promise<AuthResolution> => {
+  try {
+    const routeClient = createRouteClient()
+    const {
+      data: { user },
+      error,
+    } = await routeClient.auth.getUser()
+    if (user) return { user, source: 'cookie' }
+    if (error) console.warn('[avatar] cookie auth error', error)
+  } catch (err) {
+    console.warn('[avatar] cookie auth threw', err)
+  }
+
+  const token = extractBearerToken(request)
+  if (!token) return { user: null, source: null }
+
+  try {
+    const serviceClient = createServiceClient()
+    const { data, error } = await serviceClient.auth.getUser(token)
+    if (error) {
+      console.warn('[avatar] bearer validation failed', error)
+      return { user: null, source: null }
+    }
+    if (data?.user) return { user: data.user, source: 'bearer' }
+  } catch (err) {
+    console.warn('[avatar] bearer auth threw', err)
+  }
+
+  return { user: null, source: null }
+}
+
 const persistAvatarRender = async (params: {
   arrayBuffer: ArrayBuffer
   contentType: string
   prompt: string
   purpose: string
+  userId?: string | null
 }): Promise<{ avatarUrl?: string; storagePath?: string }> => {
+  const userId = params.userId
+  if (!userId) {
+    console.warn('[avatar] persist skipped: no authenticated user')
+    return {}
+  }
+
   try {
-    const routeClient = createRouteClient()
-    const {
-      data: { user },
-    } = await routeClient.auth.getUser()
-
-    if (!user) {
-      console.warn('[avatar] persist skipped: no authenticated user')
-      return {}
-    }
-
     const { bucket, folder } = getSupabaseStorageConfig()
     const extension = toExtension(params.contentType)
     const timestamp = Date.now()
     const randomSuffix = Math.random().toString(36).slice(2, 8)
-    const safeUserId = user.id.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'user'
+    const safeUserId = userId.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'user'
     const segments = [folder, 'avatars', safeUserId, `${timestamp}-${randomSuffix}.${extension}`].filter(Boolean)
     const storagePath = segments.join('/')
 
-    const blob = new Blob([params.arrayBuffer], { type: params.contentType })
-    const upload = await routeClient.storage
+    const fileBuffer = Buffer.from(params.arrayBuffer)
+    const serviceClient = createServiceClient()
+    const upload = await serviceClient.storage
       .from(bucket)
-      .upload(storagePath, blob, { upsert: true, contentType: params.contentType, cacheControl: '3600' })
+      .upload(storagePath, fileBuffer, { upsert: true, contentType: params.contentType, cacheControl: '3600' })
 
     if (upload.error) {
       console.warn('[avatar] storage upload failed', {
@@ -119,14 +164,13 @@ const persistAvatarRender = async (params: {
       return {}
     }
 
-    const { data: publicUrlData } = routeClient.storage.from(bucket).getPublicUrl(storagePath)
+    const { data: publicUrlData } = serviceClient.storage.from(bucket).getPublicUrl(storagePath)
     const avatarUrl = publicUrlData?.publicUrl
 
     try {
-      const serviceClient = createServiceClient()
       await serviceClient.from('avatar_renders').upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           prompt: params.prompt,
           purpose: params.purpose,
           storage_path: storagePath,
@@ -180,6 +224,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create prompt for image generation' }, { status: 400 })
     }
 
+    const { user, source } = await resolveAuthenticatedUser(request)
+    const hasBearer = Boolean(extractBearerToken(request))
+    console.debug('[avatar] auth context', { userId: user?.id ?? null, source, hasBearer })
+
     const { arrayBuffer, contentType, fileId } = await generateImageFromPrompt(promptText)
 
     const buffer = Buffer.from(arrayBuffer)
@@ -200,6 +248,7 @@ export async function POST(request: NextRequest) {
       contentType,
       prompt: promptText,
       purpose,
+      userId: user?.id,
     })
 
     if (persistence.avatarUrl) {
@@ -220,3 +269,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
