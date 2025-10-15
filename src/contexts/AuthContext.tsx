@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { AuthUser, UserProfile } from '@/types/user'
@@ -10,6 +10,7 @@ interface AuthContextType {
   user: AuthUser | null
   userProfile: UserProfile | null
   loading: boolean
+  session: Session | null
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => Promise<void>
@@ -125,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [session, setSession] = useState<Session | null>(null)
 
   const isSupabaseEnabled = !!supabase
 
@@ -182,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadInitialSession = async () => {
       const { data } = await supabase.auth.getSession()
+      setSession(data.session ?? null)
       const sessionUser = data.session?.user
 
       if (!isMounted) return
@@ -201,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
       if (!isMounted) return
+      setSession(session ?? null)
       const sessionUser = session?.user
       if (sessionUser) {
         const mapped = mapAuthUser(sessionUser)
@@ -270,6 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) throw new Error('Supabase is not properly configured')
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    setSession(null)
   }
 
   const updateUserProfile = async (profileUpdates: Partial<UserProfile>) => {
@@ -311,6 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     userProfile,
     loading,
+    session,
     signIn,
     signUp,
     logout,

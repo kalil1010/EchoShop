@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,7 +54,7 @@ const formatColorLabel = (value?: string) => {
 
 
 export function OutfitSuggestion() {
-  const { user, userProfile } = useAuth()
+  const { user, userProfile, session } = useAuth()
   const { toast } = useToast()
   const [occasion, setOccasion] = useState('')
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([])
@@ -77,6 +77,7 @@ export function OutfitSuggestion() {
   const [gallery, setGallery] = useState<AvatarRenderRecord[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
+  const isAuthenticated = Boolean(user && session)
 
   useEffect(() => {
     console.debug('[avatar] auth state snapshot', {
@@ -84,8 +85,9 @@ export function OutfitSuggestion() {
       email: user?.email,
       profileReady: Boolean(userProfile),
       profileGender: userProfile?.gender,
+      sessionPresent: Boolean(session),
     })
-  }, [user?.uid, user?.email, userProfile])
+  }, [user?.uid, user?.email, userProfile, session?.access_token])
 
   const clearAvatarObjectUrl = useCallback(() => {
     if (avatarObjectUrlRef.current) {
@@ -104,7 +106,7 @@ export function OutfitSuggestion() {
     let active = true
 
     const loadCloset = async () => {
-      if (!user?.uid) {
+      if (!isAuthenticated || !user?.uid) {
         if (active) {
           setClosetItems([])
         }
@@ -139,10 +141,11 @@ export function OutfitSuggestion() {
     return () => {
       active = false
     }
-  }, [user?.uid])
+  }, [isAuthenticated, user?.uid])
 
   const loadGallery = useCallback(async () => {
-    if (!user?.uid) {
+    if (!isAuthenticated || !user?.uid) {
+      console.debug('[avatar-gallery] skipped load - unauthenticated')
       setGallery([])
       return
     }
@@ -160,7 +163,7 @@ export function OutfitSuggestion() {
     } finally {
       setGalleryLoading(false)
     }
-  }, [user?.uid])
+  }, [isAuthenticated, user?.uid])
 
   useEffect(() => {
     void loadGallery()
@@ -169,6 +172,14 @@ export function OutfitSuggestion() {
   const triggerAvatarGeneration = useCallback(
     async (outfit: OutfitSuggestionResponse, occasionLabel: string, weatherSnapshot: WeatherData | null) => {
       if (!occasionLabel) return
+
+      if (!isAuthenticated) {
+        console.debug('[avatar] generation skipped - unauthenticated')
+        setAvatarError('Sign in to generate a personalized avatar.')
+        setAvatarPreview(null)
+        setAvatarLoading(false)
+        return
+      }
 
       setAvatarLoading(true)
       setAvatarError(null)
@@ -239,7 +250,7 @@ export function OutfitSuggestion() {
         setAvatarLoading(false)
       }
     },
-    [clearAvatarObjectUrl, toast, user?.uid, userProfile]
+    [clearAvatarObjectUrl, toast, user?.uid, userProfile, isAuthenticated]
   )
 
 
@@ -291,7 +302,7 @@ export function OutfitSuggestion() {
     return !userProfile.height || !userProfile.weight || !userProfile.gender
   }, [userProfile])
 
-  const canRefreshAvatar = Boolean(suggestion && weather && (occasion || selectedOccasions[0]))
+  const canRefreshAvatar = Boolean(isAuthenticated && suggestion && weather && (occasion || selectedOccasions[0]))
   const canSaveToGallery = Boolean(avatarPreview?.storagePath && !avatarSaving)
   const fullImageUrl = avatarPreview?.persistentUrl ?? avatarPreview?.displayUrl ?? ''
 
@@ -319,6 +330,15 @@ export function OutfitSuggestion() {
   }, [avatarPreview, fullImageUrl])
 
   const handleSaveToGallery = useCallback(async () => {
+    if (!isAuthenticated) {
+      toast({
+        variant: 'warning',
+        title: 'Sign in required',
+        description: 'Sign in to save avatars to your gallery.',
+      })
+      return
+    }
+
     if (!avatarPreview) {
       toast({
         variant: 'warning',
@@ -366,7 +386,7 @@ export function OutfitSuggestion() {
     } finally {
       setAvatarSaving(false)
     }
-  }, [avatarPreview, toast])
+  }, [avatarPreview, toast, isAuthenticated])
 
   const renderOutfitItem = (label: string, item: OutfitPieceRecommendation | undefined) => {
     if (!item) return null
@@ -490,6 +510,12 @@ export function OutfitSuggestion() {
             </Button>
           </div>
 
+          {!isAuthenticated && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Sign in to generate, download, or save personalized avatars.
+            </div>
+          )}
+
           {avatarLoading && (
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
               <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
@@ -558,7 +584,7 @@ export function OutfitSuggestion() {
                 )}
                 {!avatarPreview.storagePath && (
                   <p className="text-xs text-amber-600">
-                    Storage upload pending—refresh the avatar to persist it for gallery saving.
+                    Storage upload pendingâ€”refresh the avatar to persist it for gallery saving.
                   </p>
                 )}
               </div>
@@ -567,7 +593,9 @@ export function OutfitSuggestion() {
 
           {!avatarPreview && !avatarLoading && !avatarError && (
             <p className="mt-4 text-sm text-slate-600">
-              Generate an avatar to visualize the outfit on a body that mirrors your saved height, weight, and gender.
+              {isAuthenticated
+                ? 'Generate an avatar to visualize the outfit on a body that mirrors your saved height, weight, and gender.'
+                : 'Sign in to generate a personalized avatar for this outfit.'}
             </p>
           )}
 
@@ -592,7 +620,7 @@ export function OutfitSuggestion() {
                 variant="ghost"
                 size="sm"
                 onClick={() => void loadGallery()}
-                disabled={galleryLoading}
+                disabled={galleryLoading || !isAuthenticated}
               >
                 {galleryLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -616,7 +644,10 @@ export function OutfitSuggestion() {
 
             {!galleryLoading && !galleryError && gallery.length === 0 && (
               <p className="text-xs text-slate-500">
-                Save favorite looks to build your personal gallery.
+                {isAuthenticated
+                  ? 'Save favorite looks to build your personal gallery.'
+                  : 'Sign in to see your saved avatars.'
+                }
               </p>
             )}
 
@@ -718,4 +749,12 @@ export function OutfitSuggestion() {
     </div>
   )
 }
+
+
+
+
+
+
+
+
 
