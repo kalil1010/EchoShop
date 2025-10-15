@@ -16,6 +16,8 @@ interface GeneratedImageItem {
   fileId: string | null
   contentType: string
   createdAt: Date
+  persistentUrl?: string
+  storagePath?: string
 }
 
 const promptPresets = [
@@ -57,7 +59,7 @@ export function ImageGenerator() {
       return 'Describe the vibe, outfit details, lighting, or camera style you want to see.'
     }
     if (prompt.length < 12) {
-      return 'Add a bit more detail for best results—think fabrics, colors, or setting.'
+      return 'Add a bit more detail for best results - think fabrics, colors, or setting.'
     }
     return 'Great! Press generate to bring it to life.'
   }, [prompt])
@@ -75,7 +77,10 @@ export function ImageGenerator() {
 
     setIsGenerating(true)
     try {
-      const response = await generateImage(cleanedPrompt)
+      const response = await generateImage({
+        prompt: cleanedPrompt,
+        purpose: 'concept',
+      })
       const objectUrl = URL.createObjectURL(response.blob)
       urlRegistry.current.add(objectUrl)
 
@@ -87,6 +92,8 @@ export function ImageGenerator() {
           fileId: response.fileId,
           contentType: response.contentType,
           createdAt: new Date(),
+          persistentUrl: response.avatarUrl,
+          storagePath: response.storagePath,
         }
 
         const next = [entry, ...prev]
@@ -147,7 +154,7 @@ export function ImageGenerator() {
             Fashion Image Lab
           </CardTitle>
           <CardDescription>
-            Use the dedicated Mistral image agent to turn your ideas into high-quality outfit visuals. Prompts stay on the server—API keys never touch the browser.
+            Use the dedicated Mistral image agent to turn your ideas into high-quality outfit visuals. Prompts stay on the server so API keys never touch the browser.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -200,18 +207,30 @@ export function ImageGenerator() {
               <Card key={item.id} className="overflow-hidden border-slate-200">
                 <div className="relative aspect-square bg-slate-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.url} alt={item.prompt} className="h-full w-full object-cover" />
+                  <img src={item.persistentUrl ?? item.url} alt={item.prompt} className="h-full w-full object-cover" />
                 </div>
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium text-slate-800">Prompt</p>
                     <p className="text-sm text-slate-600">{item.prompt}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-                    <span>{item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {item.fileId && (
-                      <span className="truncate text-right" title={item.fileId}>
-                        File ID: {item.fileId}
+                  <div className="flex flex-col gap-1 text-xs text-slate-500">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      {item.fileId && (
+                        <span className="truncate text-right" title={item.fileId}>
+                          File ID: {item.fileId}
+                        </span>
+                      )}
+                    </div>
+                    {item.storagePath && (
+                      <span className="truncate" title={item.storagePath}>
+                        Stored at: {item.storagePath}
+                      </span>
+                    )}
+                    {item.persistentUrl && (
+                      <span className="truncate" title={item.persistentUrl}>
+                        Public URL ready
                       </span>
                     )}
                   </div>

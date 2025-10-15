@@ -1,6 +1,7 @@
-﻿'use client'
+'use client'
 
 import type { ClosetItemSummary } from '@/lib/closet'
+import type { OutfitPieceRecommendation, OutfitSource, OutfitSuggestionResponse } from '@/types/outfit'
 
 export interface StylistMessagePayload {
   message: string
@@ -41,29 +42,36 @@ export interface OutfitSuggestionPayload {
   closetItems?: ClosetItemSummary[]
 }
 
-export type OutfitSource = 'closet' | 'online'
-
-export interface OutfitPieceRecommendation {
-  summary: string
-  color?: string
-  source?: OutfitSource
-  sourceUrl?: string
-  onlinePieceId?: string
-}
-
-export interface OutfitSuggestionResponse {
-  top: OutfitPieceRecommendation
-  bottom: OutfitPieceRecommendation
-  footwear: OutfitPieceRecommendation
-  accessories: OutfitPieceRecommendation[]
-  outerwear?: OutfitPieceRecommendation
-  styleNotes: string
-}
-
 export interface GeneratedImageResult {
   blob: Blob
   fileId: string | null
   contentType: string
+  avatarUrl?: string
+  storagePath?: string
+}
+
+export interface GenerateImageProfileInput {
+  gender?: string
+  heightCm?: number
+  weightKg?: number
+  photoUrl?: string
+  displayName?: string
+}
+
+export interface GenerateImageContextInput {
+  occasion?: string
+  location?: string
+  temperatureC?: number
+  condition?: string
+}
+
+export interface GenerateImagePayload {
+  prompt?: string
+  purpose?: 'concept' | 'avatar'
+  outfit?: OutfitSuggestionResponse
+  profile?: GenerateImageProfileInput
+  context?: GenerateImageContextInput
+  metadata?: Record<string, unknown>
 }
 
 export async function sendStylistMessage(
@@ -94,11 +102,13 @@ export async function getOutfitSuggestion(
   return res.json()
 }
 
-export async function generateImage(prompt: string): Promise<GeneratedImageResult> {
+export async function generateImage(input: string | GenerateImagePayload): Promise<GeneratedImageResult> {
+  const body = typeof input === 'string' ? { prompt: input } : input
+
   const res = await fetch('/api/image-generator', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -118,7 +128,10 @@ export async function generateImage(prompt: string): Promise<GeneratedImageResul
   const fileId = res.headers.get('X-Mistral-File-Id')
   const headerContentType = res.headers.get('Content-Type')
   const contentType = headerContentType ?? (blob.type || 'image/png')
+  const avatarUrl = res.headers.get('X-Avatar-Url') ?? undefined
+  const storagePath = res.headers.get('X-Avatar-Storage-Path') ?? undefined
 
-  return { blob, fileId, contentType }
+  return { blob, fileId, contentType, avatarUrl, storagePath }
 }
 
+export type { OutfitPieceRecommendation, OutfitSource, OutfitSuggestionResponse }
