@@ -12,6 +12,7 @@ import {
   X,
   Home,
   Palette,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +36,7 @@ export function Navigation() {
       { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true },
       { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true },
       { href: '/chat', label: 'ZMODA AI Chat', icon: MessageCircle, requiresAuth: true },
+      { href: '/image-generator', label: 'Image Lab', icon: ImageIcon, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
     ],

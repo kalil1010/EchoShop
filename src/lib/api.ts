@@ -60,6 +60,12 @@ export interface OutfitSuggestionResponse {
   styleNotes: string
 }
 
+export interface GeneratedImageResult {
+  blob: Blob
+  fileId: string | null
+  contentType: string
+}
+
 export async function sendStylistMessage(
   payload: StylistMessagePayload
 ): Promise<StylistMessageResponse> {
@@ -86,5 +92,33 @@ export async function getOutfitSuggestion(
     throw new Error(`Outfit suggestion failed: ${res.status}`)
   }
   return res.json()
+}
+
+export async function generateImage(prompt: string): Promise<GeneratedImageResult> {
+  const res = await fetch('/api/image-generator', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  })
+
+  if (!res.ok) {
+    let message = `Image generation failed: ${res.status}`
+    try {
+      const errorBody = await res.json()
+      if (errorBody?.error) {
+        message = typeof errorBody.error === 'string' ? errorBody.error : message
+      }
+    } catch {
+      // ignore JSON parse errors and use default message
+    }
+    throw new Error(message)
+  }
+
+  const blob = await res.blob()
+  const fileId = res.headers.get('X-Mistral-File-Id')
+  const headerContentType = res.headers.get('Content-Type')
+  const contentType = headerContentType ?? (blob.type || 'image/png')
+
+  return { blob, fileId, contentType }
 }
 

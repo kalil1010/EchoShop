@@ -7,6 +7,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - **Weather-Based Outfit Suggestions**: Get AI-powered outfit recommendations based on current weather conditions and your personal style preferences
 - **Digital Closet Management**: Upload photos of your clothing items with automatic color analysis and organization
 - **Interactive AI Stylist Chat**: Chat with your personal AI stylist for fashion advice and styling tips
+- **AI Fashion Image Generator**: Create concept visuals securely via the Mistral image agent without exposing API credentials
 - **User Authentication & Profiles**: Secure user accounts with personalized style preferences
 - **Responsive Design**: Fully responsive design that works on desktop and mobile devices
 - **Image Moderation**: All clothing uploads are screened by Sightengine to block unsafe or NSFW imagery before storage
@@ -35,6 +36,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - Node.js 18+ and npm
 - Supabase project
 - Mistral AI API key
+- Mistral image agent key & agent ID
 - OpenWeatherMap API key
 - IPinfo API key
 
@@ -53,6 +55,15 @@ npm install
 ### Sightengine Moderation
 
 Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. The development template includes default credentials provided for this exercise.
+
+### Mistral Image Generation
+
+Configure the following environment variables (managed in Railway for production):
+
+- `MISTRAL_IMAGE_API_KEY` – dedicated key for the image-generation agent
+- `MISTRAL_AGENT_ID` – agent identifier for the image workflow
+
+These stay strictly on the server; the frontend never reads or exposes them.
 
 ## UX Revamp Notes
 
