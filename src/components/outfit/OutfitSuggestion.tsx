@@ -9,9 +9,17 @@ import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { getUserClothing, toClosetSummary, type ClosetItemSummary } from '@/lib/closet'
 import { isPermissionError } from '@/lib/security'
-import { generateImage, getOutfitSuggestion, OutfitPieceRecommendation, OutfitSuggestionResponse } from '@/lib/api'
+import {
+  fetchAvatarGallery,
+  generateImage,
+  getOutfitSuggestion,
+  OutfitPieceRecommendation,
+  OutfitSuggestionResponse,
+  saveAvatarToGallery,
+} from '@/lib/api'
 import { WeatherData } from '@/lib/weather'
-import { AlertTriangle, Image as ImageIcon, Loader2, Shirt, Sparkles, Zap } from 'lucide-react'
+import { AlertTriangle, BookmarkPlus, Download, Image as ImageIcon, Loader2, Shirt, Sparkles, Zap } from 'lucide-react'
+import type { AvatarRenderRecord } from '@/types/avatar'
 const COLOR_SWATCH_MAP: Record<string, string> = {
   black: '#111827',
   charcoal: '#374151',
@@ -65,6 +73,10 @@ export function OutfitSuggestion() {
     generatedAt: Date
   } | null>(null)
   const avatarObjectUrlRef = useRef<string | null>(null)
+  const [avatarSaving, setAvatarSaving] = useState(false)
+  const [gallery, setGallery] = useState<AvatarRenderRecord[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
+  const [galleryError, setGalleryError] = useState<string | null>(null)
 
   const clearAvatarObjectUrl = useCallback(() => {
     if (avatarObjectUrlRef.current) {
@@ -119,6 +131,29 @@ export function OutfitSuggestion() {
       active = false
     }
   }, [user?.uid])
+
+  const loadGallery = useCallback(async () => {
+    if (!user?.uid) {
+      setGallery([])
+      return
+    }
+    setGalleryLoading(true)
+    setGalleryError(null)
+    try {
+      const items = await fetchAvatarGallery()
+      setGallery(items)
+    } catch (error) {
+      console.error('Failed to load avatar gallery:', error)
+      const message = error instanceof Error ? error.message : 'Could not load saved avatars.'
+      setGalleryError(message)
+    } finally {
+      setGalleryLoading(false)
+    }
+  }, [user?.uid])
+
+  useEffect(() => {
+    void loadGallery()
+  }, [loadGallery])
 
   const triggerAvatarGeneration = useCallback(
     async (outfit: OutfitSuggestionResponse, occasionLabel: string, weatherSnapshot: WeatherData | null) => {
@@ -247,6 +282,68 @@ export function OutfitSuggestion() {
     if (!occ) return
     void triggerAvatarGeneration(suggestion, occ, weather)
   }, [occasion, selectedOccasions, suggestion, triggerAvatarGeneration, weather])
+
+  const handleDownloadAvatar = useCallback(() => {
+    if (!avatarPreview) return
+    const downloadUrl = avatarPreview.persistentUrl ?? avatarPreview.objectUrl
+    const extension = downloadUrl.toLowerCase().includes('.webp')
+      ? 'webp'
+      : downloadUrl.toLowerCase().includes('.jpg') || downloadUrl.toLowerCase().includes('.jpeg')
+      ? 'jpg'
+      : 'png'
+    const anchor = document.createElement('a')
+    anchor.href = downloadUrl
+    anchor.download = `zmoda-avatar-${Date.now()}.${extension}`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+  }, [avatarPreview])
+
+  const handleSaveToGallery = useCallback(async () => {
+    if (!avatarPreview) {
+      toast({
+        variant: 'warning',
+        title: 'Avatar not ready',
+        description: 'Generate an avatar before saving it to your gallery.',
+      })
+      return
+    }
+    if (!avatarPreview.storagePath) {
+      toast({
+        variant: 'warning',
+        title: 'Storage pending',
+        description: 'Please regenerate the avatar to capture a storable version.',
+      })
+      return
+    }
+
+    setAvatarSaving(true)
+    try {
+      const saved = await saveAvatarToGallery({
+        storagePath: avatarPreview.storagePath,
+        publicUrl: avatarPreview.persistentUrl ?? undefined,
+      })
+      setGallery((prev) => {
+        const withoutExisting = prev.filter((item) => item.storagePath !== saved.storagePath)
+        return [saved, ...withoutExisting]
+      })
+      setGalleryError(null)
+      toast({
+        variant: 'success',
+        title: 'Saved to gallery',
+        description: 'Find this look anytime in your avatar gallery.',
+      })
+    } catch (error) {
+      console.error('Save avatar failed:', error)
+      toast({
+        variant: 'error',
+        title: 'Could not save avatar',
+        description: error instanceof Error ? error.message : 'Please try again shortly.',
+      })
+    } finally {
+      setAvatarSaving(false)
+    }
+  }, [avatarPreview, toast])
 
   const renderOutfitItem = (label: string, item: OutfitPieceRecommendation | undefined) => {
     if (!item) return null
@@ -380,18 +477,37 @@ export function OutfitSuggestion() {
           {avatarPreview && !avatarLoading && (
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <img
-                  src={avatarPreview.displayUrl}
-                  alt="Personalized outfit avatar"
-                  className="h-64 w-64 object-cover"
-                />
+                <a
+                  href={avatarPreview.persistentUrl ?? avatarPreview.displayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <img
+                    src={avatarPreview.displayUrl}
+                    alt="Personalized outfit avatar"
+                    className="h-64 w-64 object-cover transition-transform duration-150 hover:scale-[1.02]"
+                  />
+                </a>
               </div>
-              <div className="space-y-2 text-sm text-slate-600">
+              <div className="space-y-3 text-sm text-slate-600">
                 <p className="font-medium text-slate-800">Personalized to your profile</p>
                 <p>Generated at {avatarPreview.generatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</p>
-                <p className="text-xs text-slate-500">
-                  Face references are approximated today. We will blend your uploaded photo automatically once Mistral enables image conditioning.
-                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" className="gap-2" onClick={handleDownloadAvatar}>
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    onClick={handleSaveToGallery}
+                    disabled={avatarSaving || !avatarPreview.storagePath}
+                  >
+                    {avatarSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}
+                    {avatarSaving ? 'Saving...' : 'Save to gallery'}
+                  </Button>
+                </div>
                 {avatarPreview.persistentUrl && (
                   <a
                     href={avatarPreview.persistentUrl}
@@ -399,7 +515,7 @@ export function OutfitSuggestion() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center text-sm font-medium text-purple-600 hover:text-purple-700"
                   >
-                    Open stored image
+                    Open full image
                   </a>
                 )}
                 {avatarPreview.storagePath && (
@@ -413,7 +529,7 @@ export function OutfitSuggestion() {
 
           {!avatarPreview && !avatarLoading && !avatarError && (
             <p className="mt-4 text-sm text-slate-600">
-              Generate an avatar to visualise the outfit on a body that mirrors your saved height, weight, and gender.
+              Generate an avatar to visualize the outfit on a body that mirrors your saved height, weight, and gender.
             </p>
           )}
 
@@ -429,6 +545,76 @@ export function OutfitSuggestion() {
               Tip: Add your height, weight, and gender in your profile to make avatars more accurate.
             </p>
           )}
+
+          <div className="mt-6 space-y-3 border-t border-slate-200 pt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-800">Saved avatar gallery</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void loadGallery()}
+                disabled={galleryLoading}
+              >
+                {galleryLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                )}
+                <span className="ml-2 text-xs font-medium text-slate-600">Refresh</span>
+              </Button>
+            </div>
+
+            {galleryError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5" />
+                <span>{galleryError}</span>
+              </div>
+            )}
+
+            {galleryLoading && gallery.length === 0 && (
+              <p className="text-xs text-slate-500">Loading your saved avatars…</p>
+            )}
+
+            {!galleryLoading && !galleryError && gallery.length === 0 && (
+              <p className="text-xs text-slate-500">
+                Save favorite looks to build your personal gallery.
+              </p>
+            )}
+
+            {gallery.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                {gallery.map((item) => {
+                  const thumbnail = item.publicUrl
+                  const created = new Date(item.createdAt)
+                  return (
+                    <a
+                      key={item.storagePath}
+                      href={thumbnail ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      {thumbnail ? (
+                        <img
+                          src={thumbnail}
+                          alt="Saved avatar"
+                          className="h-32 w-full object-cover transition duration-150 group-hover:scale-[1.02]"
+                        />
+                      ) : (
+                        <div className="flex h-32 w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
+                          Preview not available
+                        </div>
+                      )}
+                      <div className="border-t border-slate-100 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
+                        {created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

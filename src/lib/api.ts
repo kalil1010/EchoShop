@@ -1,6 +1,7 @@
 'use client'
 
 import type { ClosetItemSummary } from '@/lib/closet'
+import type { AvatarRenderRecord } from '@/types/avatar'
 import type { OutfitPieceRecommendation, OutfitSource, OutfitSuggestionResponse } from '@/types/outfit'
 
 export interface StylistMessagePayload {
@@ -74,6 +75,12 @@ export interface GenerateImagePayload {
   metadata?: Record<string, unknown>
 }
 
+export interface SaveAvatarPayload {
+  storagePath: string
+  publicUrl?: string
+  prompt?: string
+}
+
 export async function sendStylistMessage(
   payload: StylistMessagePayload
 ): Promise<StylistMessageResponse> {
@@ -132,6 +139,40 @@ export async function generateImage(input: string | GenerateImagePayload): Promi
   const storagePath = res.headers.get('X-Avatar-Storage-Path') ?? undefined
 
   return { blob, fileId, contentType, avatarUrl, storagePath }
+}
+
+export async function fetchAvatarGallery(): Promise<AvatarRenderRecord[]> {
+  const res = await fetch('/api/avatar-renders', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to load avatar gallery: ${res.status}`)
+  }
+  const data = (await res.json()) as { items?: AvatarRenderRecord[] }
+  return Array.isArray(data.items) ? data.items : []
+}
+
+export async function saveAvatarToGallery(payload: SaveAvatarPayload): Promise<AvatarRenderRecord> {
+  const res = await fetch('/api/avatar-renders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    let message = `Failed to save avatar: ${res.status}`
+    try {
+      const body = await res.json()
+      if (body?.error) {
+        message = typeof body.error === 'string' ? body.error : message
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message)
+  }
+  const data = (await res.json()) as { item: AvatarRenderRecord }
+  return data.item
 }
 
 export type { OutfitPieceRecommendation, OutfitSource, OutfitSuggestionResponse }
