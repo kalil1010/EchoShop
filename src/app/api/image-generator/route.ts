@@ -32,14 +32,19 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(arrayBuffer)
 
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Content-Length': buffer.byteLength.toString(),
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    }
+
+    if (fileId) {
+      headers['X-Mistral-File-Id'] = fileId
+    }
+
     return new NextResponse(buffer, {
       status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': buffer.byteLength.toString(),
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'X-Mistral-File-Id': fileId,
-      },
+      headers,
     })
   } catch (error) {
     console.error('Image generation failed:', error)

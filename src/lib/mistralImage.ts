@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+
 const MISTRAL_BASE_URL = 'https://api.mistral.ai'
 
 interface ConversationResponse {
@@ -6,14 +8,21 @@ interface ConversationResponse {
     content?: Array<{
       type?: string
       file_id?: string
+      mime_type?: string
+      data?: string
+      url?: string
+      id?: string
+      name?: string
+      [key: string]: unknown
     }>
+    [key: string]: unknown
   }>
 }
 
 export interface GeneratedImageResult {
   arrayBuffer: ArrayBuffer
   contentType: string
-  fileId: string
+  fileId: string | null
 }
 
 export async function generateImageFromPrompt(prompt: string): Promise<GeneratedImageResult> {
@@ -51,17 +60,16 @@ export async function generateImageFromPrompt(prompt: string): Promise<Generated
   const data = (await conversationResponse.json()) as ConversationResponse
   const outputs = Array.isArray(data.outputs) ? data.outputs : []
 
-  let fileId: string | undefined
-  for (const output of outputs) {
-    if (!output || typeof output !== 'object') continue
-    const content = Array.isArray(output.content) ? output.content : []
-    for (const chunk of content) {
-      if (chunk?.type === 'tool_file' && typeof chunk.file_id === 'string') {
-        fileId = chunk.file_id
-        break
-      }
-    }
-    if (fileId) break
+  const fileId = findFirstFileId(outputs)
+  const inlineImage = fileId ? undefined : findInlineImage(outputs)
+
+  if (!fileId && !inlineImage) {
+    throw new Error('Mistral response did not include a file_id or inline image data')
+  }
+
+  if (inlineImage) {
+    const buffer = decodeBase64(inlineImage.data)
+    return { arrayBuffer: buffer, contentType: inlineImage.mimeType ?? 'image/png', fileId: null }
   }
 
   if (!fileId) {
@@ -86,4 +94,61 @@ export async function generateImageFromPrompt(prompt: string): Promise<Generated
   const arrayBuffer = await imageResponse.arrayBuffer()
 
   return { arrayBuffer, contentType, fileId }
+}
+
+type UnknownRecord = Record<string, unknown>
+
+const findFirstFileId = (root: unknown): string | undefined => {
+  const match = deepFind(root, (node) => typeof node?.file_id === 'string')
+  return match?.file_id as string | undefined
+}
+
+const findInlineImage = (root: unknown): { data: string; mimeType?: string } | undefined => {
+  const match = deepFind(
+    root,
+    (node) =>
+      typeof node?.data === 'string' &&
+      (typeof node?.mime_type === 'string' || typeof node?.content_type === 'string')
+  )
+
+  if (!match) return undefined
+
+  const mimeType =
+    (match.mime_type as string | undefined) ?? (match.content_type as string | undefined) ?? undefined
+
+  return { data: match.data as string, mimeType }
+}
+
+const deepFind = (
+  root: unknown,
+  predicate: (candidate: UnknownRecord) => boolean
+): UnknownRecord | undefined => {
+  const stack: unknown[] = [root]
+  const seen = new Set<unknown>()
+
+  while (stack.length) {
+    const current = stack.pop()
+    if (!current || typeof current !== 'object') continue
+    if (seen.has(current)) continue
+    seen.add(current)
+
+    if (!Array.isArray(current) && predicate(current as UnknownRecord)) {
+      return current as UnknownRecord
+    }
+
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+    } else {
+      for (const value of Object.values(current as UnknownRecord)) {
+        stack.push(value)
+      }
+    }
+  }
+
+  return undefined
+}
+
+const decodeBase64 = (data: string): ArrayBuffer => {
+  const buffer = Buffer.from(data, 'base64')
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
 }
