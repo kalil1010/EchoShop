@@ -27,7 +27,8 @@ export async function GET() {
     } = await routeClient.auth.getUser()
 
     if (userError) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      console.warn('[avatar-gallery] auth error on GET', userError)
+      return NextResponse.json({ error: 'Authentication required', details: userError.message }, { status: 401 })
     }
 
     if (!user) {
@@ -43,16 +44,16 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Failed to fetch avatar renders:', error)
-      return NextResponse.json({ error: 'Failed to load gallery' }, { status: 500 })
+      console.error('[avatar-gallery] failed to fetch avatar renders:', error)
+      return NextResponse.json({ error: 'Failed to load gallery', details: error.message }, { status: 500 })
     }
 
     return NextResponse.json({
       items: Array.isArray(data) ? data.map(mapRecord) : [],
     })
   } catch (error) {
-    console.error('Avatar gallery GET failed:', error)
-    return NextResponse.json({ error: 'Failed to load gallery' }, { status: 500 })
+    console.error('[avatar-gallery] GET handler failed:', error)
+    return NextResponse.json({ error: 'Failed to load gallery', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }
 
@@ -77,7 +78,11 @@ export async function POST(request: NextRequest) {
     } = await routeClient.auth.getUser()
 
     if (userError || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      console.warn('[avatar-gallery] auth error on POST', userError)
+      return NextResponse.json(
+        { error: 'Authentication required', details: userError?.message ?? 'No active session' },
+        { status: 401 }
+      )
     }
 
     const serviceClient = createServiceClient()
@@ -90,7 +95,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      console.warn('Failed to read existing avatar render:', fetchError)
+      console.warn('[avatar-gallery] failed to read existing avatar render:', fetchError)
     }
 
     const prompt = payload.prompt ?? (existing?.prompt as string | undefined) ?? 'Saved outfit avatar'
@@ -110,8 +115,8 @@ export async function POST(request: NextRequest) {
       .upsert(upsertPayload, { onConflict: 'user_id,storage_path' })
 
     if (upsertError) {
-      console.error('Failed to save avatar render:', upsertError)
-      return NextResponse.json({ error: 'Failed to save avatar' }, { status: 500 })
+      console.error('[avatar-gallery] failed to save avatar render:', upsertError)
+      return NextResponse.json({ error: 'Failed to save avatar', details: upsertError.message }, { status: 500 })
     }
 
     const { data, error } = await serviceClient
@@ -122,13 +127,13 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (error || !data) {
-      console.error('Failed to load saved avatar render:', error)
-      return NextResponse.json({ error: 'Failed to save avatar' }, { status: 500 })
+      console.error('[avatar-gallery] failed to load saved avatar render:', error)
+      return NextResponse.json({ error: 'Failed to save avatar', details: error?.message }, { status: 500 })
     }
 
     return NextResponse.json({ item: mapRecord(data) }, { status: 200 })
   } catch (error) {
-    console.error('Avatar gallery POST failed:', error)
-    return NextResponse.json({ error: 'Failed to save avatar' }, { status: 500 })
+    console.error('[avatar-gallery] POST handler failed:', error)
+    return NextResponse.json({ error: 'Failed to save avatar', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

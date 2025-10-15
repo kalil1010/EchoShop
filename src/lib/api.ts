@@ -116,6 +116,7 @@ export async function generateImage(input: string | GenerateImagePayload): Promi
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
 
   if (!res.ok) {
@@ -145,6 +146,7 @@ export async function fetchAvatarGallery(): Promise<AvatarRenderRecord[]> {
   const res = await fetch('/api/avatar-renders', {
     method: 'GET',
     headers: { Accept: 'application/json' },
+    credentials: 'include',
   })
   if (!res.ok) {
     throw new Error(`Failed to load avatar gallery: ${res.status}`)
@@ -158,6 +160,7 @@ export async function saveAvatarToGallery(payload: SaveAvatarPayload): Promise<A
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   })
   if (!res.ok) {
     let message = `Failed to save avatar: ${res.status}`

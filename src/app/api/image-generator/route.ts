@@ -93,6 +93,7 @@ const persistAvatarRender = async (params: {
     } = await routeClient.auth.getUser()
 
     if (!user) {
+      console.warn('[avatar] persist skipped: no authenticated user')
       return {}
     }
 
@@ -110,7 +111,11 @@ const persistAvatarRender = async (params: {
       .upload(storagePath, blob, { upsert: true, contentType: params.contentType, cacheControl: '3600' })
 
     if (upload.error) {
-      console.warn('Failed to upload avatar render to storage:', upload.error)
+      console.warn('[avatar] storage upload failed', {
+        error: upload.error,
+        bucket,
+        storagePath,
+      })
       return {}
     }
 
@@ -131,7 +136,7 @@ const persistAvatarRender = async (params: {
         { onConflict: 'user_id,storage_path' }
       )
     } catch (dbError) {
-      console.warn('Failed to record avatar render metadata:', dbError)
+      console.warn('[avatar] failed to record metadata', dbError)
     }
 
     return { avatarUrl: avatarUrl ?? undefined, storagePath }

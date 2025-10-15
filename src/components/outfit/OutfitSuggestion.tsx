@@ -78,6 +78,15 @@ export function OutfitSuggestion() {
   const [galleryLoading, setGalleryLoading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
 
+  useEffect(() => {
+    console.debug('[avatar] auth state snapshot', {
+      userId: user?.uid,
+      email: user?.email,
+      profileReady: Boolean(userProfile),
+      profileGender: userProfile?.gender,
+    })
+  }, [user?.uid, user?.email, userProfile])
+
   const clearAvatarObjectUrl = useCallback(() => {
     if (avatarObjectUrlRef.current) {
       URL.revokeObjectURL(avatarObjectUrlRef.current)
@@ -139,8 +148,10 @@ export function OutfitSuggestion() {
     }
     setGalleryLoading(true)
     setGalleryError(null)
+    console.debug('[avatar-gallery] fetching items', { userId: user.uid })
     try {
       const items = await fetchAvatarGallery()
+      console.debug('[avatar-gallery] fetched', { count: items.length })
       setGallery(items)
     } catch (error) {
       console.error('Failed to load avatar gallery:', error)
@@ -199,6 +210,12 @@ export function OutfitSuggestion() {
         const objectUrl = URL.createObjectURL(response.blob)
         avatarObjectUrlRef.current = objectUrl
         const displayUrl = response.avatarUrl ?? objectUrl
+
+        console.debug('[avatar] generated', {
+          fileId: response.fileId,
+          avatarUrl: response.avatarUrl,
+          storagePath: response.storagePath,
+        })
 
         setAvatarPreview({
           displayUrl,
@@ -275,6 +292,8 @@ export function OutfitSuggestion() {
   }, [userProfile])
 
   const canRefreshAvatar = Boolean(suggestion && weather && (occasion || selectedOccasions[0]))
+  const canSaveToGallery = Boolean(avatarPreview?.storagePath && !avatarSaving)
+  const fullImageUrl = avatarPreview?.persistentUrl ?? avatarPreview?.displayUrl ?? ''
 
   const handleAvatarRefresh = useCallback(() => {
     if (!suggestion || !weather) return
@@ -285,7 +304,7 @@ export function OutfitSuggestion() {
 
   const handleDownloadAvatar = useCallback(() => {
     if (!avatarPreview) return
-    const downloadUrl = avatarPreview.persistentUrl ?? avatarPreview.objectUrl
+    const downloadUrl = fullImageUrl || avatarPreview.objectUrl
     const extension = downloadUrl.toLowerCase().includes('.webp')
       ? 'webp'
       : downloadUrl.toLowerCase().includes('.jpg') || downloadUrl.toLowerCase().includes('.jpeg')
@@ -297,7 +316,7 @@ export function OutfitSuggestion() {
     document.body.appendChild(anchor)
     anchor.click()
     document.body.removeChild(anchor)
-  }, [avatarPreview])
+  }, [avatarPreview, fullImageUrl])
 
   const handleSaveToGallery = useCallback(async () => {
     if (!avatarPreview) {
@@ -318,6 +337,10 @@ export function OutfitSuggestion() {
     }
 
     setAvatarSaving(true)
+    console.debug('[avatar-gallery] saving request', {
+      storagePath: avatarPreview.storagePath,
+      persistentUrl: avatarPreview.persistentUrl,
+    })
     try {
       const saved = await saveAvatarToGallery({
         storagePath: avatarPreview.storagePath,
@@ -478,10 +501,20 @@ export function OutfitSuggestion() {
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <a
-                  href={avatarPreview.persistentUrl ?? avatarPreview.displayUrl}
+                  href={fullImageUrl || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block"
+                  className={`block ${fullImageUrl ? 'cursor-zoom-in' : 'cursor-not-allowed opacity-70'}`}
+                  onClick={(event) => {
+                    if (!fullImageUrl) {
+                      event.preventDefault()
+                      toast({
+                        variant: 'warning',
+                        title: 'Image not stored yet',
+                        description: 'Regenerate the avatar to create a shareable link.',
+                      })
+                    }
+                  }}
                 >
                   <img
                     src={avatarPreview.displayUrl}
@@ -494,7 +527,7 @@ export function OutfitSuggestion() {
                 <p className="font-medium text-slate-800">Personalized to your profile</p>
                 <p>Generated at {avatarPreview.generatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" className="gap-2" onClick={handleDownloadAvatar}>
+                  <Button type="button" variant="secondary" className="gap-2" onClick={handleDownloadAvatar} disabled={!avatarPreview}>
                     <Download className="h-4 w-4" />
                     Download
                   </Button>
@@ -502,7 +535,7 @@ export function OutfitSuggestion() {
                     type="button"
                     className="gap-2"
                     onClick={handleSaveToGallery}
-                    disabled={avatarSaving || !avatarPreview.storagePath}
+                    disabled={!canSaveToGallery}
                   >
                     {avatarSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}
                     {avatarSaving ? 'Saving...' : 'Save to gallery'}
@@ -521,6 +554,11 @@ export function OutfitSuggestion() {
                 {avatarPreview.storagePath && (
                   <p className="text-xs text-slate-400" title={avatarPreview.storagePath}>
                     Storage path: {avatarPreview.storagePath}
+                  </p>
+                )}
+                {!avatarPreview.storagePath && (
+                  <p className="text-xs text-amber-600">
+                    Storage upload pending—refresh the avatar to persist it for gallery saving.
                   </p>
                 )}
               </div>
