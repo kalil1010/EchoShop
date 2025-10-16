@@ -54,12 +54,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 export function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-28 right-4 z-[120] flex flex-col gap-2 sm:bottom-24">
       {toasts.map((t) => (
         <div
           key={t.id}
           className={cn(
-            'w-80 rounded-md border p-3 shadow bg-card text-card-foreground',
+            'pointer-events-auto w-80 max-w-[90vw] rounded-md border bg-card p-3 text-card-foreground shadow',
             t.variant === 'success' && 'border-green-200 bg-green-50 text-green-800',
             t.variant === 'error' && 'border-red-200 bg-red-50 text-red-800',
             t.variant === 'warning' && 'border-yellow-200 bg-yellow-50 text-yellow-800'
@@ -83,4 +83,3 @@ export function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismis
     </div>
   )
 }
-
