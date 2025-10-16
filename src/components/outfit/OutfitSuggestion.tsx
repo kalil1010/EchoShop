@@ -310,6 +310,31 @@ export function OutfitSuggestion() {
   const canSaveToGallery = Boolean(isAuthenticated && avatarPreview?.storagePath && !avatarSaving)
   const fullImageUrl = avatarPreview?.persistentUrl ?? avatarPreview?.displayUrl ?? ''
 
+  const openImageInNewTab = useCallback(
+    (url?: string | null, fallbackMessage?: string) => {
+      if (!url) {
+        if (fallbackMessage) {
+          toast({
+            variant: 'warning',
+            title: 'Image unavailable',
+            description: fallbackMessage,
+          })
+        }
+        return
+      }
+
+      const popup = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!popup) {
+        toast({
+          variant: 'warning',
+          title: 'Pop-up blocked',
+          description: 'Allow pop-ups or open the link manually to view the image.',
+        })
+      }
+    },
+    [toast]
+  )
+
   const handleAvatarRefresh = useCallback(() => {
     if (!suggestion || !weather) return
     const occ = occasion || selectedOccasions[0] || ''
@@ -534,28 +559,22 @@ export function OutfitSuggestion() {
           {avatarPreview && !avatarLoading && (
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <a
-                  href={fullImageUrl || undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`block ${fullImageUrl ? 'cursor-zoom-in' : 'cursor-not-allowed opacity-70'}`}
-                  onClick={(event) => {
-                    if (!fullImageUrl) {
-                      event.preventDefault()
-                      toast({
-                        variant: 'warning',
-                        title: 'Image not stored yet',
-                        description: 'Regenerate the avatar to create a shareable link.',
-                      })
-                    }
-                  }}
+                <button
+                  type="button"
+                  onClick={() =>
+                    openImageInNewTab(
+                      avatarPreview.persistentUrl ?? avatarPreview.displayUrl,
+                      'Regenerate the avatar to create a shareable link.'
+                    )
+                  }
+                  className={`block w-full ${fullImageUrl ? 'cursor-zoom-in' : 'cursor-not-allowed opacity-70'}`}
                 >
                   <img
                     src={avatarPreview.displayUrl}
                     alt="Personalized outfit avatar"
                     className="h-64 w-64 object-cover transition-transform duration-150 hover:scale-[1.02]"
                   />
-                </a>
+                </button>
               </div>
               <div className="space-y-3 text-sm text-slate-600">
                 <p className="font-medium text-slate-800">Personalized to your profile</p>
@@ -592,7 +611,7 @@ export function OutfitSuggestion() {
                 )}
                 {!avatarPreview.storagePath && (
                   <p className="text-xs text-amber-600">
-                    Storage upload pending—refresh the avatar to persist it for gallery saving.
+                    Storage upload pending - refresh the avatar to persist it for gallery saving.
                   </p>
                 )}
               </div>
@@ -665,11 +684,10 @@ export function OutfitSuggestion() {
                   const thumbnail = item.publicUrl
                   const created = new Date(item.createdAt)
                   return (
-                    <a
+                    <button
                       key={item.storagePath}
-                      href={thumbnail ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      type="button"
+                      onClick={() => openImageInNewTab(thumbnail, 'This avatar is not publicly accessible yet.')}
                       className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                     >
                       {thumbnail ? (
@@ -686,7 +704,7 @@ export function OutfitSuggestion() {
                       <div className="border-t border-slate-100 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
                         {created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </div>
-                    </a>
+                    </button>
                   )
                 })}
               </div>
@@ -757,4 +775,6 @@ export function OutfitSuggestion() {
     </div>
   )
 }
+
+
 

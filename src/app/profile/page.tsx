@@ -7,6 +7,7 @@ import { ProfileForm } from '@/components/profile/ProfileForm'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AvatarGallerySection } from '@/components/profile/AvatarGallerySection'
 
 export default function ProfilePage() {
   const { user, loading, isAuthenticated } = useRequireAuth()
@@ -43,6 +44,7 @@ export default function ProfilePage() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
       <ProfileForm />
+      <AvatarGallerySection />
       <MyPalettes />
     </div>
   )
