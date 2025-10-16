@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 export function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   return (
-    <div className="pointer-events-none fixed bottom-28 right-4 z-[120] flex flex-col gap-2 sm:bottom-24">
+    <div className="pointer-events-none fixed right-4 top-24 z-[120] flex flex-col gap-2 sm:top-20">
       {toasts.map((t) => (
         <div
           key={t.id}
