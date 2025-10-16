@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -81,9 +81,7 @@ export function AvatarGallerySection() {
           )}
 
           {!loading && !error && items.length === 0 && (
-            <p className="text-sm text-slate-500">
-              Save an outfit avatar from the suggestions page to see it here.
-            </p>
+            <p className="text-sm text-slate-500">Save an outfit avatar from the suggestions page to see it here.</p>
           )}
 
           {items.length > 0 && (
@@ -104,7 +102,7 @@ export function AvatarGallerySection() {
                         return
                       }
                       setLightboxImage(item.publicUrl)
-                      setLightboxCaption(`Saved avatar - ${created.toLocaleString()}`)
+                      setLightboxCaption(`Saved avatar — ${created.toLocaleString()}`)
                     }}
                     className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                   >
@@ -142,3 +140,4 @@ export function AvatarGallerySection() {
     </>
   )
 }
+

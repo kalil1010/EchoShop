@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -560,7 +560,7 @@ export function OutfitSuggestion() {
                   onClick={() =>
                     openLightbox(
                       avatarPreview.persistentUrl ?? avatarPreview.displayUrl,
-                      `Generated avatar â€” ${new Date(avatarPreview.generatedAt).toLocaleString()}`,
+                      `Generated avatar ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ${new Date(avatarPreview.generatedAt).toLocaleString()}`,
                       'Regenerate the avatar to create a shareable link.'
                     )
                   }
@@ -686,11 +686,11 @@ export function OutfitSuggestion() {
                       type="button"
                       onClick={() =>
                         openLightbox(
+                        openLightbox(
                           thumbnail,
-                          `Saved avatar â€” ${created.toLocaleString()}`,
+                          `Saved avatar — ${created.toLocaleString()}`,
                           'This avatar is not publicly accessible yet.'
                         )
-                      }
                       className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                     >
                       {thumbnail ? (

@@ -89,6 +89,28 @@ const extractBearerToken = (request: NextRequest): string | null => {
   return token.length ? token : null
 }
 
+const normaliseMistralError = (error: unknown) => {
+  const detail =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : JSON.stringify(error)
+
+  const payload = {
+    status: 500,
+    userMessage: 'Mistral could not generate an image. Please try again.',
+    detail,
+  }
+
+  if (detail.includes('"code":3000') || detail.toLowerCase().includes('failed to generate response')) {
+    payload.status = 502
+    payload.userMessage = 'Mistral could not generate an image right now. Please retry in a few moments or adjust your prompt.'
+  }
+
+  return payload
+}
+
 const isAuthSessionMissingError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
   const candidate = error as { name?: unknown; message?: unknown }
@@ -272,9 +294,8 @@ export async function POST(request: NextRequest) {
       headers,
     })
   } catch (error) {
-    console.error('Image generation failed:', error)
-    const message = error instanceof Error ? error.message : 'Unexpected error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const parsed = normaliseMistralError(error)
+    console.error('Image generation failed:', parsed.detail)
+    return NextResponse.json({ error: parsed.userMessage, details: parsed.detail }, { status: parsed.status })
   }
 }
-
