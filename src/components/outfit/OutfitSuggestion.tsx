@@ -20,6 +20,7 @@ import {
 import { WeatherData } from '@/lib/weather'
 import { AlertTriangle, BookmarkPlus, Download, Image as ImageIcon, Loader2, Shirt, Sparkles, Zap } from 'lucide-react'
 import type { AvatarRenderRecord } from '@/types/avatar'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 const COLOR_SWATCH_MAP: Record<string, string> = {
   black: '#111827',
   charcoal: '#374151',
@@ -78,6 +79,8 @@ export function OutfitSuggestion() {
   const [galleryLoading, setGalleryLoading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
   const isAuthenticated = Boolean(user && session)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [lightboxCaption, setLightboxCaption] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     console.debug('[avatar] auth state snapshot', {
@@ -310,8 +313,8 @@ export function OutfitSuggestion() {
   const canSaveToGallery = Boolean(isAuthenticated && avatarPreview?.storagePath && !avatarSaving)
   const fullImageUrl = avatarPreview?.persistentUrl ?? avatarPreview?.displayUrl ?? ''
 
-  const openImageInNewTab = useCallback(
-    (url?: string | null, fallbackMessage?: string) => {
+  const openLightbox = useCallback(
+    (url?: string | null, caption?: string, fallbackMessage?: string) => {
       if (!url) {
         if (fallbackMessage) {
           toast({
@@ -322,15 +325,8 @@ export function OutfitSuggestion() {
         }
         return
       }
-
-      const popup = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!popup) {
-        toast({
-          variant: 'warning',
-          title: 'Pop-up blocked',
-          description: 'Allow pop-ups or open the link manually to view the image.',
-        })
-      }
+      setLightboxImage(url)
+      setLightboxCaption(caption)
     },
     [toast]
   )
@@ -562,8 +558,9 @@ export function OutfitSuggestion() {
                 <button
                   type="button"
                   onClick={() =>
-                    openImageInNewTab(
+                    openLightbox(
                       avatarPreview.persistentUrl ?? avatarPreview.displayUrl,
+                      `Generated avatar â€” ${new Date(avatarPreview.generatedAt).toLocaleString()}`,
                       'Regenerate the avatar to create a shareable link.'
                     )
                   }
@@ -687,7 +684,13 @@ export function OutfitSuggestion() {
                     <button
                       key={item.storagePath}
                       type="button"
-                      onClick={() => openImageInNewTab(thumbnail, 'This avatar is not publicly accessible yet.')}
+                      onClick={() =>
+                        openLightbox(
+                          thumbnail,
+                          `Saved avatar â€” ${created.toLocaleString()}`,
+                          'This avatar is not publicly accessible yet.'
+                        )
+                      }
                       className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                     >
                       {thumbnail ? (
@@ -772,6 +775,15 @@ export function OutfitSuggestion() {
           </CardContent>
         </Card>
       )}
+      <ImageLightbox
+        open={Boolean(lightboxImage)}
+        imageUrl={lightboxImage}
+        caption={lightboxCaption}
+        onClose={() => {
+          setLightboxImage(null)
+          setLightboxCaption(undefined)
+        }}
+      />
     </div>
   )
 }
