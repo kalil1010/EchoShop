@@ -686,11 +686,11 @@ export function OutfitSuggestion() {
                       type="button"
                       onClick={() =>
                         openLightbox(
-                        openLightbox(
                           thumbnail,
-                          `Saved avatar — ${created.toLocaleString()}`,
+                          `Saved avatar - ${created.toLocaleString()}`,
                           'This avatar is not publicly accessible yet.'
                         )
+                      }
                       className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                     >
                       {thumbnail ? (
