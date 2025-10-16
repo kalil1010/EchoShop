@@ -89,6 +89,14 @@ const extractBearerToken = (request: NextRequest): string | null => {
   return token.length ? token : null
 }
 
+const isAuthSessionMissingError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { name?: unknown; message?: unknown }
+  const name = typeof candidate.name === 'string' ? candidate.name : ''
+  const message = typeof candidate.message === 'string' ? candidate.message : ''
+  return name === 'AuthSessionMissingError' || message.toLowerCase().includes('auth session missing')
+}
+
 type AuthSource = 'cookie' | 'bearer' | null
 
 type AuthResolution = {
@@ -104,9 +112,9 @@ const resolveAuthenticatedUser = async (request: NextRequest): Promise<AuthResol
       error,
     } = await routeClient.auth.getUser()
     if (user) return { user, source: 'cookie' }
-    if (error) console.warn('[avatar] cookie auth error', error)
+    if (error && !isAuthSessionMissingError(error)) console.warn('[avatar] cookie auth error', error)
   } catch (err) {
-    console.warn('[avatar] cookie auth threw', err)
+    if (!isAuthSessionMissingError(err)) console.warn('[avatar] cookie auth threw', err)
   }
 
   const token = extractBearerToken(request)
