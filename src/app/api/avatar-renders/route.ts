@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
+import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import type { User } from '@supabase/supabase-js'
 
@@ -10,6 +11,9 @@ const SavePayloadSchema = z.object({
   prompt: z.string().optional(),
 })
 
+const DeletePayloadSchema = z.object({
+  storagePath: z.string().min(1, 'storagePath required'),
+})
 const mapRecord = (row: any) => ({
   userId: row.user_id as string,
   storagePath: row.storage_path as string,
@@ -187,5 +191,65 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[avatar-gallery] POST handler failed:', error)
     return NextResponse.json({ error: 'Failed to save avatar', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => null)
+    const parsed = DeletePayloadSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid payload', details: parsed.error.flatten() },
+        { status: 400 },
+      )
+    }
+
+    const { storagePath } = parsed.data
+    const { user, source } = await getAuthenticatedUser(request)
+
+    if (!user) {
+      console.warn('[avatar-gallery] DELETE unauthorized', { source, hasAuthHeader: Boolean(extractBearerToken(request)) })
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    const serviceClient = createServiceClient()
+
+    const { error } = await serviceClient
+      .from('avatar_renders')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('storage_path', storagePath)
+
+    if (error) {
+      console.error('[avatar-gallery] failed to delete avatar render:', error)
+      return NextResponse.json({ error: 'Failed to delete avatar', details: error.message }, { status: 500 })
+    }
+
+    try {
+      const { bucket } = getSupabaseStorageConfig()
+      if (bucket) {
+        const { data: remaining, error: remainingError } = await serviceClient
+          .from('avatar_renders')
+          .select('storage_path')
+          .eq('storage_path', storagePath)
+          .limit(1)
+
+        if (!remainingError && (!remaining || remaining.length === 0)) {
+          await serviceClient.storage.from(bucket).remove([storagePath])
+        }
+      }
+    } catch (storageError) {
+      console.warn('[avatar-gallery] storage removal skipped', storageError)
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('[avatar-gallery] DELETE handler failed:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete avatar', details: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
 }

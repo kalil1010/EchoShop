@@ -8,6 +8,8 @@ gender?: 'male' | 'female' | 'other'
 age?: number
 height?: number // in cm
 weight?: number // in kg
+bodyShape?: string
+footSize?: string
 favoriteColors?: string[]
 favoriteStyles?: string[]
 createdAt: Date

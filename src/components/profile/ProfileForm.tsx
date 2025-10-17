@@ -16,6 +16,7 @@ import { COLOR_PALETTE, getHexForColorName, getNameForHex, normalizeHex } from '
 import { cn } from '@/lib/utils'
 import { buildStoragePath, normaliseStoragePath, removeFromStorage, uploadToStorage } from '@/lib/storage'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { BodyShapeSelector, getBodyShapeOptionsForGender } from '@/components/profile/BodyShapeSelector'
 
 interface ProfileFormState {
   displayName?: string
@@ -23,6 +24,8 @@ interface ProfileFormState {
   age?: number
   height?: number
   weight?: number
+  bodyShape?: string
+  footSize?: string
   favoriteColors: string[]
   favoriteStyles: string[]
   photoURL?: string
@@ -42,6 +45,35 @@ const styleOptions: ChipOption[] = [
   'Chic',
 ].map((label) => ({ label, value: label.toLowerCase() }))
 
+const FOOT_SIZE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'EU-36', label: 'EU 36' },
+  { value: 'EU-37', label: 'EU 37' },
+  { value: 'EU-38', label: 'EU 38' },
+  { value: 'EU-39', label: 'EU 39' },
+  { value: 'EU-40', label: 'EU 40' },
+  { value: 'EU-41', label: 'EU 41' },
+  { value: 'EU-42', label: 'EU 42' },
+  { value: 'EU-43', label: 'EU 43' },
+  { value: 'EU-44', label: 'EU 44' },
+  { value: 'EU-45', label: 'EU 45' },
+  { value: 'EU-46', label: 'EU 46' },
+  { value: 'USW-5', label: 'US Women 5' },
+  { value: 'USW-6', label: 'US Women 6' },
+  { value: 'USW-7', label: 'US Women 7' },
+  { value: 'USW-8', label: 'US Women 8' },
+  { value: 'USW-9', label: 'US Women 9' },
+  { value: 'USW-10', label: 'US Women 10' },
+  { value: 'USW-11', label: 'US Women 11' },
+  { value: 'USW-12', label: 'US Women 12' },
+  { value: 'USM-6', label: 'US Men 6' },
+  { value: 'USM-7', label: 'US Men 7' },
+  { value: 'USM-8', label: 'US Men 8' },
+  { value: 'USM-9', label: 'US Men 9' },
+  { value: 'USM-10', label: 'US Men 10' },
+  { value: 'USM-11', label: 'US Men 11' },
+  { value: 'USM-12', label: 'US Men 12' },
+  { value: 'USM-13', label: 'US Men 13' },
+]
 const toHexFromInput = (value: string): string | null => {
   const normalizedDirect = normalizeHex(value)
   if (normalizedDirect) return normalizedDirect
@@ -89,6 +121,8 @@ export function ProfileForm() {
     age: undefined,
     height: undefined,
     weight: undefined,
+    bodyShape: undefined,
+    footSize: undefined,
     favoriteColors: [],
     favoriteStyles: [],
     photoURL: undefined,
@@ -147,6 +181,8 @@ export function ProfileForm() {
       age: userProfile.age ?? undefined,
       height: userProfile.height ?? undefined,
       weight: userProfile.weight ?? undefined,
+      bodyShape: userProfile.bodyShape ?? undefined,
+      footSize: userProfile.footSize ?? undefined,
       favoriteColors: prepareFavoriteColors(userProfile.favoriteColors),
       favoriteStyles: userProfile.favoriteStyles ?? [],
       photoURL: userProfile.photoURL ?? undefined,
@@ -210,8 +246,15 @@ export function ProfileForm() {
   const handleInputChange = (field: keyof ProfileFormState, value: unknown) => {
     setFormData((prev) => {
       if (field === 'gender') {
-        const next = typeof value === 'string' && value ? (value as UserProfile['gender']) : undefined
-        return { ...prev, gender: next }
+        const nextGender = typeof value === 'string' && value ? (value as UserProfile['gender']) : undefined
+        const availableShapes = getBodyShapeOptionsForGender(nextGender)
+        const currentShape = prev.bodyShape
+        const shapeIsValid = currentShape ? availableShapes.some((option) => option.id === currentShape) : true
+        return {
+          ...prev,
+          gender: nextGender,
+          bodyShape: shapeIsValid ? currentShape : undefined,
+        }
       }
 
       if (field === 'age' || field === 'height' || field === 'weight') {
@@ -220,6 +263,20 @@ export function ProfileForm() {
 
       if (field === 'displayName') {
         return { ...prev, displayName: typeof value === 'string' ? value : undefined }
+      }
+
+      if (field === 'bodyShape') {
+        return {
+          ...prev,
+          bodyShape: typeof value === 'string' && value ? value : undefined,
+        }
+      }
+
+      if (field === 'footSize') {
+        return {
+          ...prev,
+          footSize: typeof value === 'string' && value ? value : undefined,
+        }
       }
 
       if (field === 'favoriteStyles') {
@@ -244,12 +301,14 @@ export function ProfileForm() {
     )
   }, [formData.favoriteColors])
 
-  const buildUpdatePayload = (): Partial<UserProfile> => ({
+const buildUpdatePayload = (): Partial<UserProfile> => ({
     displayName: normaliseDisplayName(formData.displayName),
     gender: formData.gender || undefined,
     age: normaliseNumber(formData.age),
     height: normaliseNumber(formData.height),
     weight: normaliseNumber(formData.weight),
+    bodyShape: formData.bodyShape || undefined,
+    footSize: formData.footSize || undefined,
     favoriteColors: uniqueFavoriteColors,
     favoriteStyles: formData.favoriteStyles,
     photoURL: formData.photoURL || undefined,
@@ -524,6 +583,38 @@ export function ProfileForm() {
               onChange={(event) => handleInputChange('weight', event.target.value)}
               placeholder="Weight in kg"
             />
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Body Shape</label>
+            <BodyShapeSelector
+              gender={formData.gender || undefined}
+              value={formData.bodyShape}
+              onChange={(shape) => handleInputChange('bodyShape', shape || undefined)}
+            />
+            <p className="text-xs text-gray-500">
+              Choose the silhouette that best reflects your frame. Options adjust based on your selected gender.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="foot-size" className="text-sm font-medium">
+              Foot Size
+            </label>
+            <select
+              id="foot-size"
+              value={formData.footSize ?? ''}
+              onChange={(event) => handleInputChange('footSize', event.target.value || undefined)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Select your common shoe size</option>
+              {FOOT_SIZE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500">We use this to recommend better-fitting footwear.</p>
           </div>
 
           <div className="space-y-3">

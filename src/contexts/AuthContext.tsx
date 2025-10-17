@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
@@ -28,6 +28,8 @@ interface ProfileRow {
   age: number | null
   height: number | null
   weight: number | null
+  body_shape: string | null
+  foot_size: string | null
   favorite_colors: string[] | null
   favorite_styles: string[] | null
   created_at: string | null
@@ -49,6 +51,8 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     displayName: profile.displayName ?? undefined,
     photoURL: profile.photoURL ?? undefined,
     photoPath: profile.photoPath ?? undefined,
+    bodyShape: profile.bodyShape ?? undefined,
+    footSize: profile.footSize ?? undefined,
     favoriteColors: profile.favoriteColors ?? [],
     favoriteStyles: profile.favoriteStyles ?? [],
   }
@@ -83,6 +87,8 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     age: row.age ?? undefined,
     height: row.height ?? undefined,
     weight: row.weight ?? undefined,
+    bodyShape: row.body_shape ?? undefined,
+    footSize: row.foot_size ?? undefined,
     favoriteColors: row.favorite_colors ?? [],
     favoriteStyles: row.favorite_styles ?? [],
     createdAt: toDate(row.created_at),
@@ -98,6 +104,8 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     displayName: user.displayName ?? undefined,
     photoURL: user.photoURL ?? undefined,
     photoPath: undefined,
+    bodyShape: undefined,
+    footSize: undefined,
     favoriteColors: [],
     favoriteStyles: [],
     createdAt: now,
@@ -163,6 +171,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             display_name: bootstrap.displayName ?? null,
             photo_url: bootstrap.photoURL ?? null,
             photo_path: bootstrap.photoPath ?? null,
+            gender: bootstrap.gender ?? null,
+            age: bootstrap.age ?? null,
+            height: bootstrap.height ?? null,
+            weight: bootstrap.weight ?? null,
+            body_shape: bootstrap.bodyShape ?? null,
+            foot_size: bootstrap.footSize ?? null,
             favorite_colors: bootstrap.favoriteColors,
             favorite_styles: bootstrap.favoriteStyles,
             created_at: bootstrap.createdAt.toISOString(),
@@ -256,6 +270,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       display_name: bootstrap.displayName ?? null,
       photo_url: bootstrap.photoURL ?? null,
       photo_path: bootstrap.photoPath ?? null,
+      gender: bootstrap.gender ?? null,
+      age: bootstrap.age ?? null,
+      height: bootstrap.height ?? null,
+      weight: bootstrap.weight ?? null,
+      body_shape: bootstrap.bodyShape ?? null,
+      foot_size: bootstrap.footSize ?? null,
       favorite_colors: bootstrap.favoriteColors,
       favorite_styles: bootstrap.favoriteStyles,
       created_at: bootstrap.createdAt.toISOString(),
@@ -301,6 +321,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       age: merged.age ?? null,
       height: merged.height ?? null,
       weight: merged.weight ?? null,
+      body_shape: merged.bodyShape ?? null,
+      foot_size: merged.footSize ?? null,
       favorite_colors: merged.favoriteColors,
       favorite_styles: merged.favoriteStyles,
       updated_at: merged.updatedAt.toISOString(),

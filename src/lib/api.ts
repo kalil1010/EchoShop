@@ -207,4 +207,33 @@ export async function saveAvatarToGallery(
   return data.item
 }
 
+export async function deleteAvatarFromGallery(
+  storagePath: string,
+  options?: RequestOptions
+): Promise<void> {
+  const res = await fetch('/api/avatar-renders', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...buildAuthHeaders(options),
+    },
+    body: JSON.stringify({ storagePath }),
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    let message = `Failed to delete avatar: ${res.status}`
+    try {
+      const body = await res.json()
+      if (body?.error) {
+        message = typeof body.error === 'string' ? body.error : message
+      }
+    } catch {
+      // ignore JSON errors
+    }
+    throw new Error(message)
+  }
+}
+
 export type { OutfitPieceRecommendation, OutfitSource, OutfitSuggestionResponse }

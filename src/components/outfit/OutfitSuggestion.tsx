@@ -16,9 +16,10 @@ import {
   OutfitPieceRecommendation,
   OutfitSuggestionResponse,
   saveAvatarToGallery,
+  deleteAvatarFromGallery,
 } from '@/lib/api'
 import { WeatherData } from '@/lib/weather'
-import { AlertTriangle, BookmarkPlus, Download, Image as ImageIcon, Loader2, Shirt, Sparkles, Zap } from 'lucide-react'
+import { AlertTriangle, BookmarkPlus, Download, Image as ImageIcon, Loader2, Shirt, Sparkles, Trash2, Zap } from 'lucide-react'
 import type { AvatarRenderRecord } from '@/types/avatar'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 const COLOR_SWATCH_MAP: Record<string, string> = {
@@ -78,6 +79,7 @@ export function OutfitSuggestion() {
   const [gallery, setGallery] = useState<AvatarRenderRecord[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
+  const [galleryDeleting, setGalleryDeleting] = useState<string | null>(null)
   const isAuthenticated = Boolean(user && session)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxCaption, setLightboxCaption] = useState<string | undefined>(undefined)
@@ -168,6 +170,31 @@ export function OutfitSuggestion() {
       setGalleryLoading(false)
     }
   }, [isAuthenticated, user?.uid])
+
+  const handleDeleteGalleryItem = useCallback(
+    async (storagePath: string) => {
+      if (!storagePath) return
+      if (!window.confirm('Are you sure you want to delete this avatar?')) return
+
+      setGalleryDeleting(storagePath)
+      try {
+        await deleteAvatarFromGallery(storagePath, { accessToken: session?.access_token })
+        setGallery((current) => current.filter((record) => record.storagePath !== storagePath))
+        toast({ variant: 'success', title: 'Avatar removed' })
+      } catch (error) {
+        console.error('Failed to delete avatar from gallery:', error)
+        const message = error instanceof Error ? error.message : 'Failed to delete avatar.'
+        toast({
+          variant: 'error',
+          title: 'Avatar deletion failed',
+          description: message,
+        })
+      } finally {
+        setGalleryDeleting((current) => (current === storagePath ? null : current))
+      }
+    },
+    [session?.access_token, toast],
+  )
 
   useEffect(() => {
     void loadGallery()
@@ -680,34 +707,57 @@ export function OutfitSuggestion() {
                 {gallery.map((item) => {
                   const thumbnail = item.publicUrl
                   const created = new Date(item.createdAt)
+                  const isDeleting = galleryDeleting === item.storagePath
                   return (
-                    <button
-                      key={item.storagePath}
-                      type="button"
-                      onClick={() =>
-                        openLightbox(
-                          thumbnail,
-                          `Saved avatar - ${created.toLocaleString()}`,
-                          'This avatar is not publicly accessible yet.'
-                        )
-                      }
-                      className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      {thumbnail ? (
-                        <img
-                          src={thumbnail}
-                          alt="Saved avatar"
-                          className="h-32 w-full object-cover transition duration-150 group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="flex h-32 w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
-                          Preview not available
+                    <div key={item.storagePath} className="relative">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openLightbox(
+                            thumbnail,
+                            `Saved avatar - ${created.toLocaleString()}`,
+                            'This avatar is not publicly accessible yet.'
+                          )
+                        }
+                        disabled={isDeleting}
+                        className={`group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                          isDeleting ? 'cursor-not-allowed opacity-60' : ''
+                        }`}
+                      >
+                        {thumbnail ? (
+                          <img
+                            src={thumbnail}
+                            alt="Saved avatar"
+                            className="h-32 w-full object-cover transition duration-150 group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <div className="flex h-32 w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
+                            Preview not available
+                          </div>
+                        )}
+                        <div className="border-t border-slate-100 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
+                          {created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </div>
-                      )}
-                      <div className="border-t border-slate-100 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
-                        {created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </div>
-                    </button>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void handleDeleteGalleryItem(item.storagePath)
+                        }}
+                        disabled={isDeleting}
+                        className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed"
+                        aria-label="Delete avatar"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        <span className="sr-only">Delete avatar</span>
+                      </button>
+                    </div>
                   )
                 })}
               </div>
