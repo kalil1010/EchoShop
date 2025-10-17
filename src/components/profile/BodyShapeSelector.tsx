@@ -30,80 +30,90 @@ const BODY_SHAPE_OPTIONS: BodyShapeOption[] = [
   { id: 'oval', label: 'Oval', genders: ['male'] },
   { id: 'trapezoid', label: 'Trapezoid', genders: ['male'] },
   { id: 'hourglass', label: 'Hourglass', genders: ['female'] },
-  { id: 'pear', label: 'Pear (Triangle)', genders: ['female'] },
-  { id: 'apple', label: 'Apple (Round)', genders: ['female'] },
+  { id: 'pear', label: 'Pear', genders: ['female'] },
+  { id: 'apple', label: 'Apple', genders: ['female'] },
 ]
 
-const getFillColor = (selected: boolean) => (selected ? '#8b5cf6' : '#cbd5f5')
-const getStrokeColor = (selected: boolean) => (selected ? '#6d28d9' : '#475569')
+type SilhouetteMetrics = {
+  shoulder: number
+  waist: number
+  hip: number
+  headRadius: number
+  torsoLength: number
+}
+
+const SILHOUETTE_MAP: Record<BodyShapeId, SilhouetteMetrics> = {
+  rectangle: { shoulder: 12, waist: 11, hip: 12, headRadius: 6, torsoLength: 44 },
+  triangle: { shoulder: 9, waist: 11, hip: 15, headRadius: 6, torsoLength: 46 },
+  'inverted-triangle': { shoulder: 15, waist: 11, hip: 9, headRadius: 6, torsoLength: 44 },
+  oval: { shoulder: 13, waist: 15, hip: 13, headRadius: 6, torsoLength: 46 },
+  trapezoid: { shoulder: 15, waist: 11, hip: 10, headRadius: 6, torsoLength: 46 },
+  hourglass: { shoulder: 13, waist: 8, hip: 14, headRadius: 6, torsoLength: 44 },
+  pear: { shoulder: 10, waist: 9, hip: 15, headRadius: 6, torsoLength: 46 },
+  apple: { shoulder: 13, waist: 16, hip: 13, headRadius: 6, torsoLength: 44 },
+}
+
+const getFillColor = (selected: boolean) => (selected ? '#7c3aed' : '#c4d2f7')
+const getStrokeColor = (selected: boolean) => (selected ? '#5b21b6' : '#475569')
+
+const buildTorsoPath = ({ shoulder, waist, hip, torsoLength }: SilhouetteMetrics) => {
+  const neckY = 22
+  const waistY = neckY + torsoLength * 0.45
+  const hipY = neckY + torsoLength * 0.75
+  const hemY = neckY + torsoLength
+
+  return `
+    M ${40 - shoulder} ${neckY}
+    Q 40 ${neckY - 4} ${40 + shoulder} ${neckY}
+    C ${40 + shoulder} ${neckY + 8} ${40 + waist} ${waistY - 6} ${40 + waist} ${waistY}
+    C ${40 + waist} ${waistY + 8} ${40 + hip} ${hipY - 2} ${40 + hip} ${hipY}
+    Q ${40 + hip} ${hipY + 10} 40 ${hemY}
+    Q ${40 - hip} ${hipY + 10} ${40 - hip} ${hipY}
+    C ${40 - hip} ${hipY - 2} ${40 - waist} ${waistY + 8} ${40 - waist} ${waistY}
+    C ${40 - waist} ${waistY - 6} ${40 - shoulder} ${neckY + 8} ${40 - shoulder} ${neckY}
+    Z
+  `
+}
 
 const BodyShapeIllustration: React.FC<{ shape: BodyShapeId; selected: boolean }> = ({ shape, selected }) => {
   const fill = getFillColor(selected)
   const stroke = getStrokeColor(selected)
+  const metrics = SILHOUETTE_MAP[shape]
+  const torsoPath = buildTorsoPath(metrics)
 
-  switch (shape) {
-    case 'rectangle':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <rect x="24" y="12" width="32" height="56" rx="12" fill={fill} stroke={stroke} strokeWidth="2.5" />
-        </svg>
-      )
-    case 'triangle':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <polygon points="40,12 64,68 16,68" fill={fill} stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'inverted-triangle':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <polygon points="16,12 64,12 40,68" fill={fill} stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'oval':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <ellipse cx="40" cy="40" rx="18" ry="26" fill={fill} stroke={stroke} strokeWidth="2.5" />
-        </svg>
-      )
-    case 'trapezoid':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <polygon points="24,18 56,18 64,62 16,62" fill={fill} stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'hourglass':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <path
-            d="M24 16h32c0 12-12 18-12 24s12 12 12 24H24c0-12 12-18 12-24S24 28 24 16Z"
-            fill={fill}
-            stroke={stroke}
-            strokeWidth="2.5"
-          />
-        </svg>
-      )
-    case 'pear':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <path
-            d="M40 18c-3 0-6 3-7 8-9 2-15 10-15 20 0 12 9 22 22 22s22-10 22-22c0-10-6-18-15-20-1-5-4-8-7-8Z"
-            fill={fill}
-            stroke={stroke}
-            strokeWidth="2.5"
-          />
-        </svg>
-      )
-    case 'apple':
-      return (
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <circle cx="40" cy="42" r="22" fill={fill} stroke={stroke} strokeWidth="2.5" />
-          <path d="M39 16c3 4 8 4 12 0" stroke={stroke} strokeWidth="2" strokeLinecap="round" fill="none" />
-        </svg>
-      )
-    default:
-      return null
-  }
+  return (
+    <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
+      <defs>
+        <linearGradient id="bodyGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={selected ? '#a855f7' : '#dbe7ff'} />
+          <stop offset="100%" stopColor={selected ? '#7c3aed' : '#b6c6f2'} />
+        </linearGradient>
+      </defs>
+      <circle
+        cx="40"
+        cy="16"
+        r={metrics.headRadius}
+        fill="url(#bodyGradient)"
+        stroke={stroke}
+        strokeWidth="2"
+      />
+      <path d={torsoPath} fill="url(#bodyGradient)" stroke={stroke} strokeWidth="2" strokeLinejoin="round" />
+      <path
+        d="M34 28 C33 35 33 47 32 60"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+      <path
+        d="M46 28 C47 35 47 47 48 60"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+    </svg>
+  )
 }
 
 export const getBodyShapeOptionsForGender = (gender?: UserProfile['gender']) => {
@@ -130,11 +140,12 @@ export const BodyShapeSelector: React.FC<BodyShapeSelectorProps> = ({ gender, va
           <button
             key={option.id}
             type="button"
+            title={option.label}
             onClick={() => onChange(selected ? '' : option.id)}
             className={cn(
               'flex flex-col items-center rounded-xl border p-3 text-xs font-medium shadow-sm transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1',
               selected
-                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-md shadow-purple-100'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-purple-300 hover:bg-purple-50/60'
             )}
             aria-pressed={selected}
