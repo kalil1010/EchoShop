@@ -148,6 +148,8 @@
 
 
 /* Typing cursor visibility */
+/* Typing indicator cursor is globally hidden unless a parent explicitly opt-ins.
+   This prevents the blinking caret from appearing on static headings or copy. */
 .typed-cursor,
 .Typewriter__cursor,
 .TypewriterCursor,
@@ -156,6 +158,7 @@
   animation: none !important;
 }
 
+/* Chat and other interactive typing surfaces should set data-typing="true". */
 [data-typing="true"] .typed-cursor,
 [data-typing="true"] .Typewriter__cursor,
 [data-typing="true"] .TypewriterCursor,

@@ -82,6 +82,7 @@ export function FloatingAssistant() {
             </button>
           </header>
           <div
+            /* Restrict typing cursor to the assistant bubble while it is composing */
             className='flex max-h-[320px] flex-col gap-3 overflow-y-auto px-4 py-4 text-sm'
             data-typing={isLoading ? 'true' : undefined}
           >
