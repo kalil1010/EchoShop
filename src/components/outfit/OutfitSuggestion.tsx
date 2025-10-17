@@ -704,18 +704,18 @@ export function OutfitSuggestion() {
                   const created = new Date(item.createdAt)
                   const isDeleting = galleryDeleting === item.storagePath
                   return (
-                    <div key={item.storagePath} className="relative">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openLightbox(
+                    <div key={item.storagePath} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openLightbox(
                             thumbnail,
                             `Saved avatar - ${created.toLocaleString()}`,
                             'This avatar is not publicly accessible yet.'
                           )
                         }
                         disabled={isDeleting}
-                        className={`group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                        className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 ${
                           isDeleting ? 'cursor-not-allowed opacity-60' : ''
                         }`}
                       >
@@ -742,9 +742,9 @@ export function OutfitSuggestion() {
                           void handleDeleteGalleryItem(item.storagePath)
                         }}
                         disabled={isDeleting}
-                        className="absolute right-3 top-3 rounded-full bg-white/95 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed"
-                        aria-label="Delete avatar"
-                      >
+                      className="absolute right-2 top-2 flex rounded-full bg-white/95 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed group-hover:bg-red-50 group-hover:text-red-600"
+                      aria-label="Delete avatar"
+                    >
                         {isDeleting ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
