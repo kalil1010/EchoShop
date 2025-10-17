@@ -288,7 +288,30 @@ export function OutfitSuggestion() {
   )
 
 
-  const handleGetSuggestion = async () => {
+  const runSuggestion = useCallback(
+    async (occasionText: string, weatherSnapshot: WeatherData) => {
+      setLoading(true)
+      try {
+        const result = await getOutfitSuggestion({
+          occasion: occasionText,
+          weather: weatherSnapshot,
+          userProfile: userProfile || undefined,
+          userId: user?.uid,
+          closetItems: closetItems.length > 0 ? closetItems : undefined,
+        })
+        setSuggestion(result)
+        void triggerAvatarGeneration(result, occasionText, weatherSnapshot)
+      } catch (error) {
+        console.error('Failed to get outfit suggestion:', error)
+        toast({ variant: 'error', title: 'Suggestion failed', description: 'Please try again in a moment.' })
+      } finally {
+        setLoading(false)
+      }
+    },
+    [closetItems, toast, triggerAvatarGeneration, user?.uid, userProfile]
+  )
+
+  const handleGetSuggestion = useCallback(async () => {
     const occasionText = selectedOccasions[0] || ''
     if (!occasionText || !weather) {
       toast({ variant: 'error', title: 'Missing details', description: 'Add an occasion and confirm weather data before requesting an outfit.' })
@@ -296,24 +319,15 @@ export function OutfitSuggestion() {
     }
 
     setOccasion(occasionText)
-    setLoading(true)
-    try {
-      const result = await getOutfitSuggestion({
-        occasion: occasionText,
-        weather,
-        userProfile: userProfile || undefined,
-        userId: user?.uid,
-        closetItems: closetItems.length > 0 ? closetItems : undefined,
-      })
-      setSuggestion(result)
-      void triggerAvatarGeneration(result, occasionText, weather)
-    } catch (error) {
-      console.error('Failed to get outfit suggestion:', error)
-      toast({ variant: 'error', title: 'Suggestion failed', description: 'Please try again in a moment.' })
-    } finally {
-      setLoading(false)
-    }
-  }
+    await runSuggestion(occasionText, weather)
+  }, [selectedOccasions, weather, runSuggestion, toast])
+
+  const weatherKey = weather?.timestamp ? weather.timestamp.getTime() : null
+
+  useEffect(() => {
+    if (!weather || !occasion) return
+    void runSuggestion(occasion, weather)
+  }, [weatherKey, weather, occasion, runSuggestion])
 
   const paletteColors = useMemo(() => {
     if (!suggestion) return [] as string[]
