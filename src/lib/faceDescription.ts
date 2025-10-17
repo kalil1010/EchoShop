@@ -1,8 +1,14 @@
 const SIGHTENGINE_ENDPOINT = 'https://api.sightengine.com/1.0/check.json'
-const FACE_MODEL_CANDIDATES = [
-  'face-attributes,face-gender',
-  'face-attributes',
-]
+const resolveModelCandidates = (): string[] => {
+  const override = process.env.SIGHTENGINE_FACE_MODELS
+  if (override) {
+    return override
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  }
+  return ['face-attributes']
+}
 const DEFAULT_SIGHTENGINE_USER = '1244056913'
 const DEFAULT_SIGHTENGINE_SECRET = 'DS4wrd3ujeein2N3s5qbYog8rketceYk'
 
@@ -225,7 +231,7 @@ export async function describeFaceFromImage(imageUrl: string): Promise<string | 
   }
 
   try {
-    for (const models of FACE_MODEL_CANDIDATES) {
+    for (const models of resolveModelCandidates()) {
       const params = new URLSearchParams({
         models,
         api_user: apiUser,
