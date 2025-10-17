@@ -1,6 +1,5 @@
 const SIGHTENGINE_ENDPOINT = 'https://api.sightengine.com/1.0/check.json'
 const FACE_MODEL_CANDIDATES = [
-  'face-attributes,face-gender,face-age',
   'face-attributes,face-gender',
   'face-attributes',
 ]
