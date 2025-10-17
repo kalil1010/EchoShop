@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, X, Send, Sparkles } from 'lucide-react'
@@ -81,7 +81,10 @@ export function FloatingAssistant() {
               <X className='h-4 w-4' />
             </button>
           </header>
-          <div className='flex max-h-[320px] flex-col gap-3 overflow-y-auto px-4 py-4 text-sm'>
+          <div
+            className='flex max-h-[320px] flex-col gap-3 overflow-y-auto px-4 py-4 text-sm'
+            data-typing={isLoading ? 'true' : undefined}
+          >
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -92,7 +95,7 @@ export function FloatingAssistant() {
                 {message.text}
               </div>
             ))}
-            {isLoading && <div className='self-start rounded-2xl bg-slate-100 px-4 py-2 text-slate-500'>Let me think…</div>}
+            {isLoading && <div className='self-start rounded-2xl bg-slate-100 px-4 py-2 text-slate-500'>Let me think...</div>}
           </div>
           <div className='px-4 pb-4'>
             <div className='flex flex-wrap gap-2 pb-3'>
@@ -112,7 +115,7 @@ export function FloatingAssistant() {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 rows={2}
-                placeholder='Ask for help…'
+                placeholder='Ask for help...'
                 className='min-h-[60px] flex-1 resize-none rounded-2xl border-slate-200 bg-slate-50 focus-visible:ring-purple-500'
               />
               <Button

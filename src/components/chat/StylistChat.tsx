@@ -198,6 +198,7 @@ export function StylistChat() {
       
       <CardContent className="flex flex-col gap-4 flex-1">
         <div
+          data-typing={loading ? 'true' : undefined}
           ref={scrollContainerRef}
           className="space-y-4 mb-4 pr-2"
           style={{ minHeight: '12rem', maxHeight: '60vh', overflowY: 'auto' }}

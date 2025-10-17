@@ -145,3 +145,20 @@
   box-shadow: none;
 }
 
+
+
+/* Typing cursor visibility */
+.typed-cursor,
+.Typewriter__cursor,
+.TypewriterCursor,
+.typewriter-cursor {
+  display: none !important;
+  animation: none !important;
+}
+
+[data-typing="true"] .typed-cursor,
+[data-typing="true"] .Typewriter__cursor,
+[data-typing="true"] .TypewriterCursor,
+[data-typing="true"] .typewriter-cursor {
+  display: inline-block !important;
+}
