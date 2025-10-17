@@ -115,8 +115,30 @@ export function AvatarGallerySection() {
               {items.map((item) => {
                 const created = new Date(item.createdAt)
                 const isDeleting = deletingId === item.storagePath
+                const formattedDate = created.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })
                 return (
-                  <div key={item.storagePath} className="relative group">
+                  <div
+                    key={item.storagePath}
+                    className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <div className="flex items-center justify-between px-3 pt-2">
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500">{formattedDate}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        disabled={isDeleting}
+                        onClick={() => void handleDelete(item.storagePath)}
+                        aria-label="Delete avatar"
+                      >
+                        {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                        <span>Delete</span>
+                      </Button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -132,40 +154,21 @@ export function AvatarGallerySection() {
                         setLightboxCaption(`Saved avatar \u2014 ${created.toLocaleString()}`)
                       }}
                       disabled={isDeleting}
-                      className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 ${isDeleting ? 'cursor-not-allowed opacity-60' : ''}`}
+                      className={`mt-2 overflow-hidden rounded-b-xl border-t border-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                        isDeleting ? 'cursor-not-allowed opacity-60' : ''
+                      }`}
                     >
                       {item.publicUrl ? (
                         <img
                           src={item.publicUrl}
                           alt="Saved avatar"
-                          className="h-32 w-full object-cover transition duration-150 group-hover:scale-[1.02]"
+                          className="h-32 w-full object-cover transition duration-150 hover:scale-[1.02]"
                         />
                       ) : (
                         <div className="flex h-32 w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
                           Preview not available
                         </div>
                       )}
-                      <div className="border-t border-slate-100 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
-                        {created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        void handleDelete(item.storagePath)
-                      }}
-                      disabled={isDeleting}
-                      className="absolute right-2 top-2 flex rounded-full bg-white/95 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed group-hover:bg-red-50 group-hover:text-red-600"
-                      aria-label="Delete avatar"
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                      <span className="sr-only">Delete avatar</span>
                     </button>
                   </div>
                 )
