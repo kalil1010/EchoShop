@@ -560,7 +560,7 @@ export function OutfitSuggestion() {
                   onClick={() =>
                     openLightbox(
                       avatarPreview.persistentUrl ?? avatarPreview.displayUrl,
-                      `Generated avatar ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ${new Date(avatarPreview.generatedAt).toLocaleString()}`,
+                      `Generated avatar \u2014 ${new Date(avatarPreview.generatedAt).toLocaleString()}`,
                       'Regenerate the avatar to create a shareable link.'
                     )
                   }
