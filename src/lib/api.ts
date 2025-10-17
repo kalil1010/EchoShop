@@ -57,6 +57,7 @@ export interface GenerateImageProfileInput {
   weightKg?: number
   photoUrl?: string
   displayName?: string
+  faceDescriptor?: string
 }
 
 export interface GenerateImageContextInput {

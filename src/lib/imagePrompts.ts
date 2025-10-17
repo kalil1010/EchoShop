@@ -6,6 +6,7 @@ export interface AvatarProfileDescriptor {
   weightKg?: number
   photoUrl?: string
   displayName?: string
+  faceDescriptor?: string
 }
 
 export interface AvatarContextDescriptor {
@@ -57,7 +58,7 @@ const formatPiece = (label: string, piece?: OutfitPieceRecommendation) => {
   } else if (piece.source === 'online') {
     details.push('Source: online recommendation')
   }
-  return `- ${label}: ${details.join(' — ')}`
+  return `- ${label}: ${details.join(' - ')}`
 }
 
 const buildContextBlock = (context?: AvatarContextDescriptor) => {
@@ -65,7 +66,7 @@ const buildContextBlock = (context?: AvatarContextDescriptor) => {
   const parts: string[] = []
   if (context.occasion) parts.push(`Occasion: ${context.occasion}`)
   if (context.location) parts.push(`Location: ${context.location}`)
-  if (typeof context.temperatureC === 'number') parts.push(`Temperature: ${context.temperatureC}°C`)
+  if (typeof context.temperatureC === 'number') parts.push(`Temperature: ${context.temperatureC} deg C`)
   if (context.condition) parts.push(`Weather: ${context.condition}`)
   if (!parts.length) return null
   return parts.join(', ')
@@ -78,7 +79,14 @@ export function buildAvatarPrompt(options: AvatarPromptOptions): string {
   const height = formatHeight(profile?.heightCm)
   const weight = formatWeight(profile?.weightKg)
 
-  const subjectDescription = `Generate a realistic full-body studio portrait of a ${gender} adult with ${height} height and ${weight} body build.`
+  const faceDescriptor = profile?.faceDescriptor?.trim()
+  const subjectParts = [
+    `Generate a realistic full-body studio portrait of a ${gender} adult with ${height} height and ${weight} body build.`,
+  ]
+  if (faceDescriptor) {
+    subjectParts.push(`Ensure the face matches these traits: ${faceDescriptor}.`)
+  }
+  const subjectDescription = subjectParts.join(' ')
 
   const outfitLines: string[] = []
   const topLine = formatPiece('Top', outfit.top)
@@ -103,6 +111,10 @@ export function buildAvatarPrompt(options: AvatarPromptOptions): string {
   }
 
   const instructions: string[] = []
+
+  if (faceDescriptor) {
+    instructions.push(`Facial traits to respect: ${faceDescriptor}.`)
+  }
 
   if (profile?.photoUrl) {
     instructions.push(

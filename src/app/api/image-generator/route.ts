@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { buildAvatarPrompt } from '@/lib/imagePrompts'
+import { describeFaceFromImage } from '@/lib/faceDescription'
 import { generateImageFromPrompt } from '@/lib/mistralImage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
@@ -37,6 +38,7 @@ const ProfileSchema = z.object({
   weightKg: z.number().positive().optional(),
   photoUrl: z.string().url().optional(),
   displayName: z.string().optional(),
+  faceDescriptor: z.string().min(4).max(400).optional(),
 })
 
 const ContextSchema = z.object({
@@ -235,13 +237,32 @@ export async function POST(request: NextRequest) {
     const payload = parsed.data
     const purpose = payload.purpose ?? (payload.outfit ? 'avatar' : 'concept')
 
+    let profileForPrompt = payload.profile ? { ...payload.profile } : undefined
+
+    if (
+      purpose === 'avatar' &&
+      payload.outfit &&
+      payload.profile?.photoUrl &&
+      !payload.profile.faceDescriptor
+    ) {
+      try {
+        const descriptor = await describeFaceFromImage(payload.profile.photoUrl)
+        if (descriptor) {
+          profileForPrompt = { ...payload.profile, faceDescriptor: descriptor }
+          console.debug('[avatar] face descriptor derived', { length: descriptor.length })
+        }
+      } catch (error) {
+        console.warn('[avatar] face descriptor lookup failed', error)
+      }
+    }
+
     let promptText: string | null = null
 
     if (payload.outfit) {
       const normalisedOutfit = normaliseOutfit(payload.outfit)
       const autoPrompt = buildAvatarPrompt({
         outfit: normalisedOutfit,
-        profile: payload.profile ?? undefined,
+        profile: profileForPrompt ?? undefined,
         context: payload.context ?? undefined,
         metadata: payload.metadata ?? undefined,
       })
