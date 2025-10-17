@@ -20,8 +20,13 @@ export interface StylistMessagePayload {
 }
 
 export interface StylistMessageResponse {
+  type?: 'text' | 'image'
   response?: string
   reply?: string
+  text?: string
+  caption?: string
+  imageUrl?: string
+  error?: string
   meta?: Record<string, unknown>
 }
 

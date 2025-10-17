@@ -8,16 +8,65 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/toast'
 import { getUserClothing, toClosetSummary, type ClosetItemSummary } from '@/lib/closet'
 import { isPermissionError } from '@/lib/security'
-import { sendStylistMessage } from '@/lib/api'
+import { sendStylistMessage, type StylistMessageResponse } from '@/lib/api'
 import { MessageCircle, Sparkles, ImagePlus, X } from 'lucide-react'
 import { analyzeImageColors } from '@/lib/imageAnalysis'
 
+const OUTFIT_KEYWORDS = [
+  'outfit',
+  'wear',
+  'look',
+  'attire',
+  'ensemble',
+  'garment',
+  'style me',
+  'dress me',
+  'suit',
+  'what should i wear',
+  'put together',
+  'coordinate',
+  'suggest',
+  'recommend',
+  'styling idea',
+]
+
 interface Message {
   id: string
-  content: string
+  type: 'text' | 'image'
+  content?: string
+  caption?: string
+  imageUrl?: string
   isUser: boolean
   timestamp: Date
   imagePreviewUrl?: string
+}
+
+const isLikelyOutfitRequest = (value: string): boolean => {
+  const text = value.toLowerCase().trim()
+  if (!text) return false
+  if (/what should i wear|show me (an )?outfit|suggest (an )?outfit|outfit idea|outfit for/.test(text)) {
+    return true
+  }
+  if (text.includes('outfit') || text.includes('what to wear')) {
+    return true
+  }
+  const hasDirective = /(?:show|suggest|recommend|create|build|plan|put together|style|dress)\b/.test(text)
+  const hasKeyword = OUTFIT_KEYWORDS.some((keyword) => text.includes(keyword))
+  return hasDirective && hasKeyword
+}
+
+const summariseMessageForContext = (message: Message): string => {
+  const role = message.isUser ? 'User' : 'Assistant'
+  const parts: string[] = []
+  if (message.content) parts.push(message.content)
+  if (!message.content && message.caption) parts.push(message.caption)
+  if (!parts.length && message.type === 'image') parts.push('[image]')
+  const payload = parts.join(' ').trim()
+  return payload ? `${role}: ${payload}` : `${role}:`
+}
+
+const extractAssistantText = (payload: StylistMessageResponse): string => {
+  return payload.text ?? payload.reply ?? payload.response ?? ''
 }
 
 export function StylistChat() {
@@ -44,6 +93,7 @@ export function StylistChat() {
   const [messages, setMessages] = useState<Message[]>(() => ([
     {
       id: 'assistant-welcome',
+      type: 'text',
       content: greetingText,
       isUser: false,
       timestamp: new Date(),
@@ -55,6 +105,7 @@ export function StylistChat() {
       if (!prev.length) {
         return [{
           id: 'assistant-welcome',
+          type: 'text',
           content: greetingText,
           isUser: false,
           timestamp: new Date(),
@@ -70,7 +121,9 @@ export function StylistChat() {
       return [{ ...first, content: greetingText, timestamp: new Date() }, ...rest]
     })
   }, [greetingText])
-  const [loading, setLoading] = useState(false)
+
+  const [loadingState, setLoadingState] = useState<'idle' | 'text' | 'image'>('idle')
+  const isLoading = loadingState !== 'idle'
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -124,50 +177,71 @@ export function StylistChat() {
     return () => {
       active = false
     }
-  }, [user?.uid])
+  }, [toast, user?.uid])
 
-  const handleSendMessage = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      isUser: true,
-      timestamp: new Date(),
-      imagePreviewUrl: attachedImage?.preview,
+  const handleSendMessage = async (rawContent: string) => {
+    const trimmed = rawContent.trim()
+    if (!trimmed) {
+      return
     }
 
-    setMessages(prev => [...prev, userMessage])
-    setLoading(true)
+    const pendingAttachment = attachedImage
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'text',
+      content: trimmed,
+      isUser: true,
+      timestamp: new Date(),
+      imagePreviewUrl: pendingAttachment?.preview,
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setLoadingState(isLikelyOutfitRequest(trimmed) ? 'image' : 'text')
 
     try {
+      const contextSnippet = messages
+        .slice(-5)
+        .map((msg) => summariseMessageForContext(msg))
+        .join('\n')
+
       const response = await sendStylistMessage({
-        message: content,
-        context: messages.slice(-5).map(m => `${m.isUser ? 'User' : 'Assistant'}: ${m.content}`).join('\n'),
-        imageColors: attachedImage?.colors,
+        message: trimmed,
+        context: contextSnippet,
+        imageColors: pendingAttachment?.colors,
         userProfile: userProfile || undefined,
         closetItems: closetItems.length > 0 ? closetItems : undefined,
       })
 
-      const messageText = response.reply ?? response.response ?? ''
+      const assistantText = extractAssistantText(response)
+      const caption = response.caption || (response.type === 'image' ? assistantText : undefined)
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: messageText,
+        type: response.type === 'image' && response.imageUrl ? 'image' : 'text',
+        content: assistantText || undefined,
+        caption,
+        imageUrl: response.imageUrl,
         isUser: false,
         timestamp: new Date(),
       }
 
-      setMessages(prev => [...prev, assistantMessage])
+      setMessages((prev) => [...prev, assistantMessage])
+
+      if (response.error === 'image_generation_failed') {
+        toast({ variant: 'warning', title: 'Image unavailable', description: 'I shared the outfit details, but the image could not be generated. Please try again.' })
+      }
     } catch (error) {
       console.error('Failed to send message:', error)
       toast({ variant: 'error', title: 'Message failed', description: 'Please try sending your message again.' })
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
+        type: 'text',
         content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
         isUser: false,
         timestamp: new Date(),
       }
-      setMessages(prev => [...prev, errorMessage])
+      setMessages((prev) => [...prev, errorMessage])
     } finally {
-      setLoading(false)
+      setLoadingState('idle')
       setAttachedImage(null)
     }
   }
@@ -179,10 +253,13 @@ export function StylistChat() {
       const analysis = await analyzeImageColors(file, 'enhanced')
       const preview = URL.createObjectURL(file)
       setAttachedImage({ preview, colors: analysis.dominantColors })
-    } catch (e) {
-      console.error('Image analysis failed:', e)
+    } catch (error) {
+      console.error('Image analysis failed:', error)
+      toast({ variant: 'error', title: 'Image analysis failed', description: 'We could not read the colors from that photo. Try another image?' })
     }
   }
+
+  const loadingCopy = loadingState === 'image' ? 'ZMODA AI is styling your look...' : 'ZMODA AI is thinking...'
 
   return (
     <Card className="flex flex-col">
@@ -195,11 +272,10 @@ export function StylistChat() {
           Get personalized fashion advice and styling tips from ZMODA AI
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="flex flex-col gap-4 flex-1">
         <div
-          /* Only mark the scroll area as "typing" while the assistant response is pending so the cursor animation stays scoped to live chat */
-          data-typing={loading ? 'true' : undefined}
+          data-typing={isLoading ? 'true' : undefined}
           ref={scrollContainerRef}
           className="space-y-4 mb-4 pr-2"
           style={{ minHeight: '12rem', maxHeight: '60vh', overflowY: 'auto' }}
@@ -207,24 +283,27 @@ export function StylistChat() {
           {messages.map((message) => (
             <ChatMessage
               key={message.id}
-              message={message.content}
+              type={message.type}
+              content={message.content ?? ''}
+              caption={message.caption}
+              imageUrl={message.imageUrl}
               isUser={message.isUser}
               timestamp={message.timestamp}
               imagePreviewUrl={message.imagePreviewUrl}
             />
           ))}
-          {loading && (
+          {isLoading && (
             <div className="flex items-center space-x-2 text-gray-500">
               <Sparkles className="h-4 w-4 animate-pulse" />
-              <span className="text-sm">ZMODA AI is thinking...</span>
+              <span className="text-sm">{loadingCopy}</span>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
-        
+
         {attachedImage && (
           <div className="flex items-center gap-3 mb-2">
-            <img src={attachedImage.preview} className="h-14 w-14 object-cover rounded" />
+            <img src={attachedImage.preview} className="h-14 w-14 object-cover rounded" alt="attachment preview" />
             <div className="text-xs text-gray-600">Attached image. Dominant colors: {attachedImage.colors.join(', ')}</div>
             <button
               type="button"
@@ -253,13 +332,11 @@ export function StylistChat() {
             onChange={(e) => onImageSelected(e.target.files?.[0] || undefined)}
           />
           <div className="flex-1">
-            <ChatInput onSendMessage={handleSendMessage} disabled={loading} />
+            <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
           </div>
         </div>
       </CardContent>
     </Card>
   )
 }
-
-
 
