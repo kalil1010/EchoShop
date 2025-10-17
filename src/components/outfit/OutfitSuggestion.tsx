@@ -628,11 +628,6 @@ export function OutfitSuggestion() {
                     Open full image
                   </a>
                 )}
-                {avatarPreview.storagePath && (
-                  <p className="text-xs text-slate-400" title={avatarPreview.storagePath}>
-                    Storage path: {avatarPreview.storagePath}
-                  </p>
-                )}
                 {!avatarPreview.storagePath && (
                   <p className="text-xs text-amber-600">
                     Storage upload pending - refresh the avatar to persist it for gallery saving.
@@ -747,7 +742,7 @@ export function OutfitSuggestion() {
                           void handleDeleteGalleryItem(item.storagePath)
                         }}
                         disabled={isDeleting}
-                        className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed"
+                        className="absolute right-3 top-3 rounded-full bg-white/95 p-1.5 text-slate-500 shadow transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:cursor-not-allowed"
                         aria-label="Delete avatar"
                       >
                         {isDeleting ? (
