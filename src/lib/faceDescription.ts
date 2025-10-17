@@ -1,5 +1,9 @@
 const SIGHTENGINE_ENDPOINT = 'https://api.sightengine.com/1.0/check.json'
-const FACE_MODELS = 'face-attributes,face-expression,face-gender'
+const FACE_MODEL_CANDIDATES = [
+  'face-attributes,face-gender,face-age',
+  'face-attributes,face-gender',
+  'face-attributes',
+]
 const DEFAULT_SIGHTENGINE_USER = '1244056913'
 const DEFAULT_SIGHTENGINE_SECRET = 'DS4wrd3ujeein2N3s5qbYog8rketceYk'
 
@@ -222,48 +226,82 @@ export async function describeFaceFromImage(imageUrl: string): Promise<string | 
   }
 
   try {
-    const params = new URLSearchParams({
-      models: FACE_MODELS,
-      api_user: apiUser,
-      api_secret: apiSecret,
-      url: imageUrl,
-    })
-
-    const response = await fetch(`${SIGHTENGINE_ENDPOINT}?${params.toString()}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-
-    if (!response.ok) {
-      console.warn('[face-description] sightengine fetch failed', {
-        status: response.status,
-        statusText: response.statusText,
+    for (const models of FACE_MODEL_CANDIDATES) {
+      const params = new URLSearchParams({
+        models,
+        api_user: apiUser,
+        api_secret: apiSecret,
+        url: imageUrl,
       })
-      return null
+
+      const response = await fetch(`${SIGHTENGINE_ENDPOINT}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      })
+
+      const bodyText = await response.text()
+      let payload: Record<string, unknown> | null = null
+      try {
+        payload = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null
+      } catch {
+        payload = null
+      }
+
+      if (!response.ok) {
+        const message =
+          (payload?.error as { message?: string } | undefined)?.message ||
+          response.statusText ||
+          'request failed'
+        console.warn('[face-description] sightengine fetch failed', {
+          status: response.status,
+          statusText: response.statusText,
+          message,
+          models,
+        })
+        if (message.toLowerCase().includes('unknown model') || message.toLowerCase().includes('invalid model')) {
+          continue
+        }
+        return null
+      }
+
+      if (!payload) {
+        console.warn('[face-description] sightengine empty response', { models })
+        continue
+      }
+
+      const status = typeof payload.status === 'string' ? payload.status : ''
+      if (status !== 'success') {
+        const message =
+          (payload.error as { message?: string } | undefined)?.message ?? 'unknown error'
+        if (message.toLowerCase().includes('unknown model')) {
+          console.debug('[face-description] retrying with reduced model set', { models, message })
+          continue
+        }
+        console.warn('[face-description] sightengine reported failure', { models, payload })
+        continue
+      }
+
+      const faces = Array.isArray(payload.faces) ? payload.faces : []
+      if (!faces.length) {
+        continue
+      }
+
+      const firstFace = faces[0]
+      if (!firstFace || typeof firstFace !== 'object') {
+        continue
+      }
+
+      const descriptor = buildDescriptor(firstFace as Record<string, unknown>)
+      if (!descriptor) {
+        continue
+      }
+
+      return descriptor.length > 320 ? `${descriptor.slice(0, 317)}...` : descriptor
     }
 
-    const payload = (await response.json()) as Record<string, unknown>
-    const status = typeof payload.status === 'string' ? payload.status : ''
-    if (status === 'failure') {
-      console.warn('[face-description] sightengine reported failure', payload)
-      return null
-    }
-    const faces = Array.isArray(payload.faces) ? payload.faces : []
-    if (!faces.length) {
-      return null
-    }
-
-    const firstFace = faces[0]
-    if (!firstFace || typeof firstFace !== 'object') {
-      return null
-    }
-
-    const descriptor = buildDescriptor(firstFace as Record<string, unknown>)
-    if (!descriptor) return null
-
-    return descriptor.length > 320 ? `${descriptor.slice(0, 317)}...` : descriptor
+    return null
   } catch (error) {
     console.warn('[face-description] failed to derive traits', error)
     return null
