@@ -1,8 +1,9 @@
-﻿'use client'
+'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
 import {
   getCurrentLocation,
   getWeatherData,
@@ -11,7 +12,6 @@ import {
   type WeatherData,
   type LocationData,
 } from "@/lib/weather"
-import { RefreshCw } from "lucide-react"
 
 interface WeatherCardProps {
   onWeatherUpdate?: (weather: WeatherData) => void
@@ -19,14 +19,14 @@ interface WeatherCardProps {
 
 const formatInputDate = (date: Date) => {
   const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
 const parseInputDate = (value: string): Date | null => {
   if (!value) return null
-  const [year, month, day] = value.split("-").map(Number)
+  const [year, month, day] = value.split('-').map(Number)
   if (!year || !month || !day) return null
   const date = new Date(year, month - 1, day)
   date.setHours(0, 0, 0, 0)
@@ -44,9 +44,9 @@ const dayDifference = (target: Date) => {
 
 const formatDateLabel = (date: Date) => {
   const diff = dayDifference(date)
-  if (diff === 0) return "Today"
-  if (diff === 1) return "Tomorrow"
-  return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Tomorrow'
+  return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
 export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
@@ -70,7 +70,7 @@ export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
   const maxDateValue = useMemo(() => {
     const max = new Date()
     max.setHours(0, 0, 0, 0)
-    max.setDate(max.getDate() + 6)
+    max.setDate(max.getDate() + 3)
     return formatInputDate(max)
   }, [])
 
@@ -94,13 +94,13 @@ export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
         setWeather(weatherData)
         onWeatherUpdate?.(weatherData)
       } catch (err) {
-        console.error("Failed to fetch weather:", err)
-        setError("Unable to load weather data for the selected date.")
+        console.error('Failed to fetch weather:', err)
+        setError('Unable to load weather data for the selected date.')
       } finally {
         setLoading(false)
       }
     },
-    [onWeatherUpdate]
+    [onWeatherUpdate],
   )
 
   useEffect(() => {
@@ -177,7 +177,7 @@ export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
         </div>
         <div className="mt-3 flex flex-col gap-1">
           <label htmlFor="forecast-date" className="text-xs font-medium text-slate-600">
-            Select date (next 7 days)
+            Select date (next 4 days)
           </label>
           <div className="flex items-center gap-2">
             <input
@@ -201,7 +201,7 @@ export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
           </div>
           <div>
             <div className="text-2xl font-semibold">
-              {weather.temperature}\u00B0C
+              {weather.temperature}°C
             </div>
             <div className="text-sm text-slate-600">{weather.condition}</div>
             <div className="text-xs text-slate-500">{weather.location}</div>
@@ -216,6 +216,17 @@ export function WeatherCard({ onWeatherUpdate }: WeatherCardProps) {
             <span className="text-slate-500">Wind:</span>
             <span className="ml-1 font-medium">{Math.round(weather.windSpeed)} m/s</span>
           </div>
+        </div>
+        <div className="mt-6 flex items-center justify-end gap-1 text-[10px] uppercase tracking-wide text-slate-400">
+          <span>Data by</span>
+          <a
+            href="https://www.accuweather.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-orange-500 hover:text-orange-600"
+          >
+            AccuWeather
+          </a>
         </div>
       </CardContent>
     </Card>
