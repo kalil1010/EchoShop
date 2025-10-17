@@ -180,6 +180,9 @@ const fetchOpenWeatherForecast = async (
   )
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      return null
+    }
     const error = await response.json().catch(() => null)
     throw new Error(`OpenWeather forecast failed: ${response.status} ${JSON.stringify(error)}`)
   }
