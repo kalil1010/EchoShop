@@ -16,34 +16,6 @@ const isLikelySkinTone = (r: number, g: number, b: number): boolean => {
   return (r > 95 && g > 40 && b > 20 && (max - min) > 15 && Math.abs(r - g) > 15 && r > g && r > b)
 }
 
-const hslFromRgb = (r: number, g: number, b: number): { h: number; s: number; l: number } => {
-  let rn = r / 255
-  let gn = g / 255
-  let bn = b / 255
-  const max = Math.max(rn, gn, bn)
-  const min = Math.min(rn, gn, bn)
-  let h = 0
-  let s = 0
-  const l = (max + min) / 2
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    switch (max) {
-      case rn:
-        h = (gn - bn) / d + (gn < bn ? 6 : 0)
-        break
-      case gn:
-        h = (bn - rn) / d + 2
-        break
-      case bn:
-        h = (rn - gn) / d + 4
-        break
-    }
-    h /= 6
-  }
-  return { h: h * 360, s, l }
-}
-
 const estimateBackgroundColor = (imageData: ImageData): RGB | null => {
   const { data, width, height } = imageData
   const borderSamples: number[] = []
@@ -254,7 +226,7 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
   const { data, width, height } = imageData
 
   const bgColor = estimateBackgroundColor(imageData)
-  const bgHue = bgColor ? hslFromRgb(bgColor.r, bgColor.g, bgColor.b).h : null
+  const bgHue = bgColor ? rgbToHsl(bgColor.r, bgColor.g, bgColor.b).h : null
 
   const colorCounts: Record<string, number> = {}
   let total = 0
@@ -288,7 +260,7 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       if (isLikelySkinTone(r, g, b)) continue
 
       // Extra suppression: hues close to background hue with low saturation
-      const px = hslFromRgb(r, g, b)
+      const px = rgbToHsl(r, g, b)
       // Suppress beige/cream (common backgrounds): hue ~ 25-50, low/moderate sat, high lightness
       // Suppress beige/cream (common background) and low-sat bright pixels
       if ((px.h >= 25 && px.h <= 50 && px.s < 0.35 && px.l > 0.65) || (px.s < 0.12 && px.l > 0.6)) continue
@@ -627,5 +599,4 @@ export function ensureReadableColor(hex: string, targetL = 0.55, minS = 0.5): st
   const out = toRgb(hsl.h, newS, newL)
   return rgbToHex(out.r, out.g, out.b)
 }
-
 
