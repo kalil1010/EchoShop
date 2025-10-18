@@ -34,7 +34,9 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-image-crop": "^11.0.10",
+    "sharp": "^0.33.5",
     "typescript": "^5.9.2",
+    "uuid": "^9.0.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

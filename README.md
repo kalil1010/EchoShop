@@ -6,11 +6,12 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 
 - **Weather-Based Outfit Suggestions**: Get AI-powered outfit recommendations based on current weather conditions and your personal style preferences
 - **Digital Closet Management**: Upload photos of your clothing items with automatic color analysis and organization
+- **Multi-Garment Vision Pipeline**: Segment messy outfit photos into individual pieces with per-item moderation, color extraction, and AI descriptions
 - **Interactive AI Stylist Chat**: Chat with your personal AI stylist for fashion advice and styling tips
 - **AI Fashion Image Generator**: Create concept visuals securely via the Mistral image agent without exposing API credentials
 - **User Authentication & Profiles**: Secure user accounts with personalized style preferences
 - **Responsive Design**: Fully responsive design that works on desktop and mobile devices
-- **Image Moderation**: All clothing uploads are screened by Sightengine to block unsafe or NSFW imagery before storage
+- **Image Moderation**: Sightengine filters unsafe uploads while Mistral vision provides per-piece safety context before storage
 
 ## Technology Stack
 
@@ -52,9 +53,16 @@ npm install
 2. Copy `.env.example` to `.env.local` and fill in credentials.
 3. Run `npm run dev` to start the development server.
 
-### Sightengine Moderation
+### Vision Pipeline
 
-Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. You must provide your own credentials—placeholders are included in `.env.example`.
+The closet upload flow now runs a combined Sightengine + Mistral pipeline:
+
+1. Detects and segments garments via Mistral's multimodal endpoint
+2. Crops each bounding box locally with `sharp` using padded margins
+3. Screens each crop with Sightengine before requesting Mistral descriptions and safety metadata
+4. Verifies colours locally before saving to Supabase with a shared `outfit_group_id`
+
+If segmentation or moderation fails, the system falls back to a single-piece crop and prompts the user for manual review. Ensure both `MISTRAL_API_KEY` (and optionally `MISTRAL_VISION_MODEL`) plus Sightengine credentials are configured in `.env.local`.
 
 ### Mistral Image Generation
 

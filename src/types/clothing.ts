@@ -17,6 +17,18 @@ export interface ClothingItem {
   description?: string
   brand?: string
   season?: 'spring' | 'summer' | 'fall' | 'winter' | 'all'
+  outfitGroupId?: string
+  detection?: {
+    label?: string
+    confidence?: number
+    provider?: string
+  }
+  moderation?: {
+    status: 'ok' | 'review' | 'blocked' | 'error'
+    message?: string | null
+    category?: string | null
+    reasons?: string[] | null
+  }
   createdAt: Date
   updatedAt: Date
 }

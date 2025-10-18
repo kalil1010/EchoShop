@@ -26,6 +26,14 @@ export interface ClothingRow {
   season: ClothingItem['season'] | null
   created_at: string | null
   updated_at: string | null
+  outfit_group_id?: string | null
+  detection_label?: string | null
+  detection_confidence?: number | null
+  detection_provider?: string | null
+  moderation_status?: string | null
+  moderation_message?: string | null
+  moderation_category?: string | null
+  moderation_reasons?: string[] | null
 }
 
 type AiMatches = NonNullable<ClothingItem['aiMatches']>
@@ -73,6 +81,23 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
     description: row.description ?? undefined,
     brand: row.brand ?? undefined,
     season: row.season ?? 'all',
+    outfitGroupId: row.outfit_group_id ?? undefined,
+    detection:
+      row.detection_label || row.detection_confidence || row.detection_provider
+        ? {
+            label: row.detection_label ?? undefined,
+            confidence: row.detection_confidence ?? undefined,
+            provider: row.detection_provider ?? undefined,
+          }
+        : undefined,
+    moderation: row.moderation_status
+      ? {
+          status: row.moderation_status as 'ok' | 'review' | 'blocked' | 'error',
+          message: row.moderation_message ?? null,
+          category: row.moderation_category ?? null,
+          reasons: row.moderation_reasons ?? null,
+        }
+      : undefined,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(),
     updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
   }
