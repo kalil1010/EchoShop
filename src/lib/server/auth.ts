@@ -47,6 +47,20 @@ export async function resolveAuthenticatedUser(
     if (error || !data?.user) {
       throw primaryError
     }
-    return { supabase, userId: data.user.id }
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw primaryError
+    }
+    const sessionClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    })
+    return { supabase: sessionClient, userId: data.user.id }
   }
 }

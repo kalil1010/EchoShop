@@ -13,6 +13,7 @@ import { getColorName } from '@/lib/imageAnalysis'
 import { sanitizeText, isPermissionError } from '@/lib/security'
 import { fireConfetti } from '@/lib/confetti'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 
 interface ImageUploadProps {
   onItemAdded?: (item: ClothingItem) => void
@@ -98,6 +99,10 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     }
   }, [])
 
+  const [isCropOpen, setIsCropOpen] = useState(false)
+  const [cropSource, setCropSource] = useState<string | null>(null)
+  const cropSourceUrlRef = useRef<string | null>(null)
+  const cropFileRef = useRef<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [processing, setProcessing] = useState(false)
   const [committing, setCommitting] = useState(false)
@@ -108,12 +113,27 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const [sourceFileName, setSourceFileName] = useState<string | null>(null)
   const sourcePreviewUrlRef = useRef<string | null>(null)
 
-  const clearSourcePreview = useCallback(() => {
-    if (sourcePreviewUrlRef.current) {
-      URL.revokeObjectURL(sourcePreviewUrlRef.current)
-      sourcePreviewUrlRef.current = null
+  const updatePreview = useCallback((next: string | null) => {
+    const current = sourcePreviewUrlRef.current
+    if (current && current !== next) {
+      URL.revokeObjectURL(current)
     }
-    setSourcePreview(null)
+    sourcePreviewUrlRef.current = next ?? null
+    setSourcePreview(next ?? null)
+  }, [])
+
+  const clearSourcePreview = useCallback(() => {
+    updatePreview(null)
+  }, [updatePreview])
+
+  const clearCropSource = useCallback(() => {
+    if (cropSourceUrlRef.current) {
+      URL.revokeObjectURL(cropSourceUrlRef.current)
+      cropSourceUrlRef.current = null
+    }
+    cropFileRef.current = null
+    setCropSource(null)
+    setIsCropOpen(false)
   }, [])
 
   const resetState = useCallback(() => {
@@ -122,55 +142,45 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     setWarnings([])
     setSourceFileName(null)
     clearSourcePreview()
+    clearCropSource()
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }, [clearSourcePreview])
+  }, [clearCropSource, clearSourcePreview])
 
   const updatePiece = useCallback((tempId: string, updater: (current: ProcessedPiece) => ProcessedPiece) => {
     setPieces((prev) => prev.map((piece) => (piece.tempId === tempId ? updater(piece) : piece)))
   }, [])
 
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
+  const analyzeSelectedFile = useCallback(async (file: File, previewOverride?: string) => {
     if (!user) {
       toast({
         variant: 'error',
         title: 'Sign in required',
         description: 'Please sign in to analyze and upload clothing items.',
       })
-      event.target.value = ''
       return
     }
 
-    if (file.size > 12 * 1024 * 1024) {
+    if (!supabase) {
       toast({
         variant: 'error',
-        title: 'Image too large',
-        description: 'Please choose an image smaller than 12MB.',
+        title: 'Supabase not configured',
+        description: 'Unable to analyse images because Supabase credentials are missing.',
       })
-      event.target.value = ''
       return
     }
 
+    setProcessing(true)
+    setPieces([])
+    setWarnings([])
+    setOutfitGroupId(null)
+    setSourceFileName(file.name)
+
+    const previewUrl = previewOverride ?? URL.createObjectURL(file)
+    updatePreview(previewUrl)
+
     try {
-      setProcessing(true)
-      setPieces([])
-      setWarnings([])
-      setOutfitGroupId(null)
-
-      if (!supabase) {
-        toast({
-          variant: 'error',
-          title: 'Supabase not configured',
-          description: 'Unable to analyse images because Supabase credentials are missing.',
-        })
-        event.target.value = ''
-        return
-      }
-
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) {
         console.warn('[closet] getSession failed', sessionError)
@@ -189,7 +199,6 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
           title: 'Session required',
           description: 'Please sign in again before uploading items.',
         })
-        event.target.value = ''
         return
       }
 
@@ -244,12 +253,6 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       setPieces(mappedPieces)
       setOutfitGroupId(body.outfitGroupId ?? null)
       setWarnings(Array.isArray(body.warnings) ? body.warnings : [])
-      setSourceFileName(file.name)
-      clearSourcePreview()
-      const previewUrl = URL.createObjectURL(file)
-      sourcePreviewUrlRef.current = previewUrl
-      setSourcePreview(previewUrl)
-
       toast({
         variant: 'success',
         title: 'Analysis complete',
@@ -265,7 +268,73 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     } finally {
       setProcessing(false)
     }
-  }, [clearSourcePreview, toast, user])
+  }, [supabase, toast, updatePreview, user])
+
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!user) {
+      toast({
+        variant: 'error',
+        title: 'Sign in required',
+        description: 'Please sign in to analyze and upload clothing items.',
+      })
+      event.target.value = ''
+      return
+    }
+
+    if (!supabase) {
+      toast({
+        variant: 'error',
+        title: 'Supabase not configured',
+        description: 'Unable to analyse images because Supabase credentials are missing.',
+      })
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 12 * 1024 * 1024) {
+      toast({
+        variant: 'error',
+        title: 'Image too large',
+        description: 'Please choose an image smaller than 12MB.',
+      })
+      event.target.value = ''
+      return
+    }
+
+    setProcessing(false)
+    setPieces([])
+    setWarnings([])
+    setOutfitGroupId(null)
+    setSourceFileName(null)
+    updatePreview(null)
+
+    if (cropSourceUrlRef.current) {
+      URL.revokeObjectURL(cropSourceUrlRef.current)
+    }
+    const objectUrl = URL.createObjectURL(file)
+    cropSourceUrlRef.current = objectUrl
+    cropFileRef.current = file
+    setCropSource(objectUrl)
+    setIsCropOpen(true)
+  }, [supabase, toast, updatePreview, user])
+
+  const handleCropCancel = useCallback(() => {
+    clearCropSource()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [clearCropSource])
+
+  const handleCropComplete = useCallback((croppedFile: File, previewUrl: string) => {
+    clearCropSource()
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    void analyzeSelectedFile(croppedFile, previewUrl)
+  }, [analyzeSelectedFile, clearCropSource])
 
   const handleCommit = useCallback(async () => {
     if (!user) {
@@ -400,7 +469,16 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const hasAcceptedPieces = useMemo(() => pieces.some((piece) => piece.accepted), [pieces])
 
   return (
-    <Card>
+    <>
+      <ImageCropDialog
+        open={isCropOpen && !!cropSource && !!cropFileRef.current}
+        imageSrc={cropSource}
+        originalFile={cropFileRef.current}
+        title="Crop clothing image"
+        onCancel={handleCropCancel}
+        onComplete={handleCropComplete}
+      />
+      <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
           <Upload className="mr-2 h-5 w-5" />
@@ -633,7 +711,8 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </>
   )
 }
 
