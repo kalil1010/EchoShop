@@ -261,7 +261,8 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
 
   // Focus on center area to emphasize garment (tighter ellipse ~50–55%)
   const cx = width / 2, cy = height / 2
-  const rx = width * 0.25, ry = height * 0.25
+  const tightRx = width * 0.22, tightRy = height * 0.22
+  const softRx = width * 0.34, softRy = height * 0.30
 
   // Sample pixels with center bias and background suppression
   for (let y = 0; y < height; y += 2) {
@@ -274,16 +275,18 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       const maxc = Math.max(r, g, b)
       const minc = Math.min(r, g, b)
       const saturationApprox = maxc - minc
-      const norm = ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry)
-      const inCenter = norm <= 1
+      const normTight = ((x - cx) * (x - cx)) / (tightRx * tightRx) + ((y - cy) * (y - cy)) / (tightRy * tightRy)
+      const normSoft = ((x - cx) * (x - cx)) / (softRx * softRx) + ((y - cy) * (y - cy)) / (softRy * softRy)
+      const inTightCenter = normTight <= 1
+      const inSoftCenter = normSoft <= 1
 
       // Suppress near-white/near-black and flat gray
       if (brightness > 240 || brightness < 10 || (saturationApprox < 10 && brightness > 210)) continue
 
       // Suppress pixels similar to background (stronger margin)
-      if (bgColor && !inCenter) {
+      if (bgColor && !inSoftCenter) {
         const dist = colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b)
-        if (dist < 65) continue
+        if (dist < 72) continue
       }
 
       // Suppress likely skin tones (basic RGB rule)
@@ -294,9 +297,9 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       // Suppress beige/cream (common backgrounds): hue ~ 25-50, low/moderate sat, high lightness
       // Suppress beige/cream (common background) and low-sat bright pixels
       if ((px.h >= 25 && px.h <= 50 && px.s < 0.35 && px.l > 0.65) || (px.s < 0.12 && px.l > 0.6)) continue
-      if (bgHue != null && !inCenter) {
+      if (bgHue != null && !inSoftCenter) {
         const dh = Math.min(Math.abs(px.h - bgHue), 360 - Math.abs(px.h - bgHue))
-        if (px.s < 0.2 && dh < 18) continue
+        if (px.s < 0.2 && dh < 24) continue
       }
 
       // Quantize to reduce noise (finer than legacy)
@@ -305,10 +308,16 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       const qb = (b >> 3) << 3
       const hex = rgbToHex(qr, qg, qb)
       // Weighting: center * saturation * mid-lightness preference
-      const satW = 1 + Math.min(2.5, px.s * 3)
-      // Prefer mid/dark: heavier when l below 0.6, lighter penalty when above
-      const lightW = px.l <= 0.6 ? 1 + (0.6 - px.l) : 1 - Math.min(0.3, px.l - 0.6)
-      const weight = (inCenter ? 12 : 0.5) * satW * lightW
+      const satW = 1 + Math.min(3, px.s * 3.5)
+      // Prefer near-whites a little more once background is suppressed
+      const lightBonus =
+        px.l >= 0.72 && px.l <= 0.9
+          ? 1 + (px.l - 0.7) * 3
+          : px.l <= 0.55
+            ? 1 + (0.55 - px.l)
+            : 1
+      const centerWeight = inTightCenter ? 16 : inSoftCenter ? 4 : 0.4
+      const weight = centerWeight * satW * lightBonus
       colorCounts[hex] = (colorCounts[hex] || 0) + weight
       total += weight
     }
