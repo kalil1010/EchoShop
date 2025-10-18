@@ -4,6 +4,142 @@ import { ColorAnalysis } from '@/types/clothing'
 // Color detection using Canvas API with background suppression and center bias
 export type ColorAlgorithm = 'legacy' | 'enhanced'
 
+type RGB = { r: number; g: number; b: number }
+
+const BACKGROUND_DISTANCE_THRESHOLD = 48
+const ROW_ACTIVITY_THRESHOLD = 0.28
+const COLUMN_ACTIVITY_THRESHOLD = 0.18
+
+const isLikelySkinTone = (r: number, g: number, b: number): boolean => {
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  return (r > 95 && g > 40 && b > 20 && (max - min) > 15 && Math.abs(r - g) > 15 && r > g && r > b)
+}
+
+const estimateBackgroundColor = (imageData: ImageData): RGB | null => {
+  const { data, width, height } = imageData
+  const borderSamples: number[] = []
+  const addSample = (x: number, y: number) => {
+    const idx = (y * width + x) * 4
+    const a = data[idx + 3]
+    if (a < 128) return
+    const r = data[idx]
+    const g = data[idx + 1]
+    const b = data[idx + 2]
+    borderSamples.push((r << 16) | (g << 8) | b)
+  }
+  const stepX = Math.max(1, Math.floor(width / 50))
+  const stepY = Math.max(1, Math.floor(height / 50))
+  for (let x = 0; x < width; x += stepX) {
+    addSample(x, 0)
+    addSample(x, height - 1)
+  }
+  for (let y = 0; y < height; y += stepY) {
+    addSample(0, y)
+    addSample(width - 1, y)
+  }
+  const mode = estimateModeColor(borderSamples)
+  if (mode == null) return null
+  return {
+    r: (mode >> 16) & 0xff,
+    g: (mode >> 8) & 0xff,
+    b: mode & 0xff,
+  }
+}
+
+const focusGarmentRegion = (imageData: ImageData): { x: number; y: number; width: number; height: number } | null => {
+  const { data, width, height } = imageData
+  if (width < 60 || height < 60) {
+    return null
+  }
+  const background = estimateBackgroundColor(imageData)
+  const rowScores = new Array<number>(height).fill(0)
+  const colScores = new Array<number>(width).fill(0)
+  const rowTotals = new Array<number>(height).fill(0)
+  const colTotals = new Array<number>(width).fill(0)
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = (y * width + x) * 4
+      const alpha = data[idx + 3]
+      if (alpha < 64) continue
+      rowTotals[y] += 1
+      colTotals[x] += 1
+      const r = data[idx]
+      const g = data[idx + 1]
+      const b = data[idx + 2]
+      if (background) {
+        const dist = colorDistance(r, g, b, background.r, background.g, background.b)
+        if (dist < BACKGROUND_DISTANCE_THRESHOLD) continue
+      }
+      if (isLikelySkinTone(r, g, b)) continue
+      rowScores[y] += 1
+      colScores[x] += 1
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    if (rowTotals[y] > 0) {
+      rowScores[y] /= rowTotals[y]
+    }
+  }
+  for (let x = 0; x < width; x += 1) {
+    if (colTotals[x] > 0) {
+      colScores[x] /= colTotals[x]
+    }
+  }
+
+  const minRow = Math.floor(height * 0.12)
+  const maxRow = height - Math.floor(height * 0.05)
+  let top = -1
+  let bottom = -1
+  for (let y = minRow; y < maxRow; y += 1) {
+    if (rowScores[y] >= ROW_ACTIVITY_THRESHOLD) {
+      top = y
+      break
+    }
+  }
+  if (top < 0) return null
+  for (let y = maxRow; y > top; y -= 1) {
+    if (rowScores[y] >= ROW_ACTIVITY_THRESHOLD * 0.6) {
+      bottom = y
+      break
+    }
+  }
+  if (bottom < 0) bottom = Math.min(height - 1, top + Math.floor(height * 0.6))
+
+  const minCol = Math.floor(width * 0.05)
+  const maxCol = width - Math.floor(width * 0.05)
+  let left = minCol
+  let right = maxCol
+  for (let x = minCol; x < maxCol; x += 1) {
+    if (colScores[x] >= COLUMN_ACTIVITY_THRESHOLD) {
+      left = x
+      break
+    }
+  }
+  for (let x = maxCol; x > left; x -= 1) {
+    if (colScores[x] >= COLUMN_ACTIVITY_THRESHOLD) {
+      right = x
+      break
+    }
+  }
+
+  const marginY = Math.floor(height * 0.04)
+  const marginX = Math.floor(width * 0.04)
+  const cropX = Math.max(0, left - marginX)
+  const cropY = Math.max(0, top - marginY)
+  const cropWidth = Math.min(width - cropX, right - left + 1 + marginX * 2)
+  const cropHeight = Math.min(height - cropY, bottom - top + 1 + marginY * 2)
+  if (cropWidth < width * 0.4 || cropHeight < height * 0.3) {
+    return null
+  }
+  if (cropWidth * cropHeight >= width * height * 0.92) {
+    return null
+  }
+  return { x: cropX, y: cropY, width: cropWidth, height: cropHeight }
+}
+
 export function analyzeImageColors(imageFile: File, algorithm: ColorAlgorithm = 'enhanced'): Promise<ColorAnalysis> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas')
@@ -25,8 +161,30 @@ export function analyzeImageColors(imageFile: File, algorithm: ColorAlgorithm = 
       canvas.height = h
       ctx.drawImage(img, 0, 0, w, h)
 
-      const imageData = ctx.getImageData(0, 0, w, h)
+      let imageData = ctx.getImageData(0, 0, w, h)
       if (!imageData) return reject(new Error('Failed to get image data'))
+
+      const focusBounds = focusGarmentRegion(imageData)
+      if (focusBounds) {
+        const focusCanvas = document.createElement('canvas')
+        focusCanvas.width = focusBounds.width
+        focusCanvas.height = focusBounds.height
+        const focusCtx = focusCanvas.getContext('2d', { willReadFrequently: true })
+        if (focusCtx) {
+          focusCtx.drawImage(
+            canvas,
+            focusBounds.x,
+            focusBounds.y,
+            focusBounds.width,
+            focusBounds.height,
+            0,
+            0,
+            focusBounds.width,
+            focusBounds.height,
+          )
+          imageData = focusCtx.getImageData(0, 0, focusBounds.width, focusBounds.height)
+        }
+      }
 
       const colors = algorithm === 'enhanced'
         ? extractDominantColorsEnhanced(imageData)
@@ -67,24 +225,8 @@ function extractDominantColorsLegacy(imageData: ImageData): ColorAnalysis {
 function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
   const { data, width, height } = imageData
 
-  // Estimate background color by sampling border pixels and taking the mode (quantized)
-  const borderSamples: number[] = []
-  const addSample = (x: number, y: number) => {
-    const idx = (y * width + x) * 4
-    const a = data[idx + 3]
-    if (a < 128) return
-    const r = data[idx], g = data[idx + 1], b = data[idx + 2]
-    borderSamples.push((r << 16) | (g << 8) | b)
-  }
-  for (let x = 0; x < width; x += Math.max(1, Math.floor(width / 50))) {
-    addSample(x, 0)
-    addSample(x, height - 1)
-  }
-  for (let y = 0; y < height; y += Math.max(1, Math.floor(height / 50))) {
-    addSample(0, y)
-    addSample(width - 1, y)
-  }
-  const bg = estimateModeColor(borderSamples)
+  const bgColor = estimateBackgroundColor(imageData)
+  const bgHue = bgColor ? rgbToHsl(bgColor.r, bgColor.g, bgColor.b).h : null
 
   const colorCounts: Record<string, number> = {}
   let total = 0
@@ -109,42 +251,21 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       if (brightness > 240 || brightness < 10 || (saturationApprox < 10 && brightness > 210)) continue
 
       // Suppress pixels similar to background (stronger margin)
-      if (bg) {
-        const br = (bg >> 16) & 255, bgc = (bg >> 8) & 255, bb = bg & 255
-        const dist = colorDistance(r, g, b, br, bgc, bb)
+      if (bgColor) {
+        const dist = colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b)
         if (dist < 65) continue
       }
 
       // Suppress likely skin tones (basic RGB rule)
-      const maxv = Math.max(r, g, b), minv = Math.min(r, g, b)
-      const isSkin = (r > 95 && g > 40 && b > 20 && (maxv - minv) > 15 && Math.abs(r - g) > 15 && r > g && r > b)
-      if (isSkin) continue
+      if (isLikelySkinTone(r, g, b)) continue
 
       // Extra suppression: hues close to background hue with low saturation
-      const toHsl = (R: number, G: number, B: number) => {
-        let r1 = R / 255, g1 = G / 255, b1 = B / 255
-        const max = Math.max(r1, g1, b1), min = Math.min(r1, g1, b1)
-        let h = 0, s = 0, l = (max + min) / 2
-        if (max !== min) {
-          const d = max - min
-          s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-          switch (max) {
-            case r1: h = (g1 - b1) / d + (g1 < b1 ? 6 : 0); break
-            case g1: h = (b1 - r1) / d + 2; break
-            case b1: h = (r1 - g1) / d + 4; break
-          }
-          h /= 6
-        }
-        return { h: h * 360, s, l }
-      }
-      const px = toHsl(r, g, b)
+      const px = rgbToHsl(r, g, b)
       // Suppress beige/cream (common backgrounds): hue ~ 25-50, low/moderate sat, high lightness
       // Suppress beige/cream (common background) and low-sat bright pixels
       if ((px.h >= 25 && px.h <= 50 && px.s < 0.35 && px.l > 0.65) || (px.s < 0.12 && px.l > 0.6)) continue
-      if (bg) {
-        const br = (bg >> 16) & 255, bgc = (bg >> 8) & 255, bb = bg & 255
-        const bh = toHsl(br, bgc, bb).h
-        const dh = Math.min(Math.abs(px.h - bh), 360 - Math.abs(px.h - bh))
+      if (bgHue != null) {
+        const dh = Math.min(Math.abs(px.h - bgHue), 360 - Math.abs(px.h - bgHue))
         if (px.s < 0.2 && dh < 18) continue
       }
 
