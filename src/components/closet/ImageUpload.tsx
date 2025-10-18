@@ -276,7 +276,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     } finally {
       setProcessing(false)
     }
-  }, [getAccessToken, toast, updatePreview, user])
+  }, [toast, updatePreview, user])
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -327,7 +327,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     cropFileRef.current = file
     setCropSource(objectUrl)
     setIsCropOpen(true)
-  }, [getAccessToken, toast, updatePreview, user])
+  }, [toast, updatePreview, user])
 
   const handleCropCancel = useCallback(() => {
     clearCropSource()
