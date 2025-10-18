@@ -54,18 +54,15 @@ const decodeDataUrl = (dataUrl: string): { buffer: Buffer; mimeType: string } =>
 const DETECTION_COLUMNS = ['detection_label', 'detection_confidence', 'detection_provider'] as const
 const MODERATION_COLUMNS = ['moderation_status', 'moderation_message', 'moderation_category', 'moderation_reasons'] as const
 
-const OPTIONAL_COLUMN_GROUPS: Record<string, readonly string[]> = {}
-for (const column of DETECTION_COLUMNS) {
-  OPTIONAL_COLUMN_GROUPS[column] = DETECTION_COLUMNS
+const OPTIONAL_COLUMN_GROUPS: Record<string, readonly string[]> = {
+  detection: DETECTION_COLUMNS,
+  moderation: MODERATION_COLUMNS,
 }
-for (const column of MODERATION_COLUMNS) {
-  OPTIONAL_COLUMN_GROUPS[column] = MODERATION_COLUMNS
-}
-
 const MISSING_COLUMN_REGEX = /Could not find the '([^']+)' column/i
 
 const stripOptionalColumns = (rows: Record<string, unknown>[], missingColumn: string): Record<string, unknown>[] => {
-  const group = OPTIONAL_COLUMN_GROUPS[missingColumn] ?? [missingColumn]
+  const groupKey = missingColumn.startsWith('detection_') ? 'detection' : missingColumn.startsWith('moderation_') ? 'moderation' : null
+  const group = groupKey ? OPTIONAL_COLUMN_GROUPS[groupKey] : [missingColumn]
   return rows.map((row) => {
     const clone = { ...row }
     for (const column of group) {
