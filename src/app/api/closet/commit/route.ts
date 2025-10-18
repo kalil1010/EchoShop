@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { mapClothingRow } from '@/lib/closet'
 import { moderateImageBuffer } from '@/lib/imageModeration'
@@ -6,7 +7,9 @@ import { sanitizeText, mapSupabaseError } from '@/lib/security'
 import { buildStoragePath } from '@/lib/storage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
-import { createServiceClient } from '@/lib/supabaseServer'
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 type IncomingPiece = {
   tempId: string
@@ -52,11 +55,27 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   const uploadedPaths: string[] = []
-  let supabase: ReturnType<typeof createServiceClient> | null = null
+  let supabase: SupabaseClient | null = null
 
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
-    supabase = createServiceClient()
+    const { userId, accessToken } = await resolveAuthenticatedUser(request)
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error('Supabase configuration missing.')
+    }
+    if (!accessToken) {
+      throw new Error('Auth session missing.')
+    }
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
 
     const body = (await request.json()) as CommitmentRequest
     if (!body?.pieces || !Array.isArray(body.pieces) || body.pieces.length === 0) {
@@ -151,12 +170,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[closet/commit] failed', error)
-    if (uploadedPaths.length) {
+    if (uploadedPaths.length && supabase) {
       try {
         const { bucket } = getSupabaseStorageConfig()
-        if (supabase) {
-          await supabase.storage.from(bucket).remove(uploadedPaths)
-        }
+        await supabase.storage.from(bucket).remove(uploadedPaths)
       } catch (cleanupError) {
         console.warn('[closet/commit] failed to cleanup uploads', cleanupError)
       }
