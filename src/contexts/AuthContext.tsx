@@ -234,7 +234,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     if (!supabase) throw new Error('Supabase is not properly configured')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+    if (error) {
+      const message = error.message?.toLowerCase() ?? ''
+      if (message.includes('email logins are disabled')) {
+        throw new Error('Email/password sign-ins are disabled for this account. Please use the Google option instead.')
+      }
+      throw error
+    }
   }
 
   const signUp = async (email: string, password: string, displayName?: string) => {
