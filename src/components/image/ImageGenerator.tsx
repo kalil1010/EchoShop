@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Loader2, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Download, Loader2, Maximize2, Sparkles } from 'lucide-react'
 
 import { generateImage } from '@/lib/api'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 
 interface GeneratedImageItem {
   id: string
@@ -44,6 +45,8 @@ export function ImageGenerator() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [results, setResults] = useState<GeneratedImageItem[]>([])
   const urlRegistry = useRef<Set<string>>(new Set())
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [lightboxCaption, setLightboxCaption] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     return () => {
@@ -63,6 +66,27 @@ export function ImageGenerator() {
     }
     return 'Great! Press generate to bring it to life.'
   }, [prompt])
+
+  const openLightbox = useCallback(
+    (url?: string | null, caption?: string) => {
+      if (!url) {
+        toast({
+          variant: 'warning',
+          title: 'Preview unavailable',
+          description: 'Generate again to refresh the image URL.',
+        })
+        return
+      }
+      setLightboxImage(url)
+      setLightboxCaption(caption)
+    },
+    [toast],
+  )
+
+  const closeLightbox = useCallback(() => {
+    setLightboxImage(null)
+    setLightboxCaption(undefined)
+  }, [])
 
   const handleGenerate = async () => {
     const cleanedPrompt = prompt.trim()
@@ -205,10 +229,27 @@ export function ImageGenerator() {
           <div className="grid gap-4 md:grid-cols-2">
             {results.map((item) => (
               <Card key={item.id} className="overflow-hidden border-slate-200">
-                <div className="relative aspect-square bg-slate-100">
+                <button
+                  type="button"
+                  className="relative aspect-square w-full overflow-hidden bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                  onClick={() =>
+                    openLightbox(
+                      item.persistentUrl ?? item.url,
+                      `Generated image — ${item.createdAt.toLocaleString()}`,
+                    )
+                  }
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.persistentUrl ?? item.url} alt={item.prompt} className="h-full w-full object-cover" />
-                </div>
+                  <img
+                    src={item.persistentUrl ?? item.url}
+                    alt={item.prompt}
+                    className="h-full w-full object-cover transition-transform duration-150 hover:scale-[1.02]"
+                  />
+                  <span className="absolute bottom-3 right-3 inline-flex items-center rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white">
+                    <Maximize2 className="mr-1 h-3 w-3" />
+                    Preview
+                  </span>
+                </button>
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium text-slate-800">Prompt</p>
@@ -234,6 +275,16 @@ export function ImageGenerator() {
                       </span>
                     )}
                   </div>
+                  {item.persistentUrl && (
+                    <a
+                      href={item.persistentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-xs font-medium text-purple-600 hover:text-purple-700"
+                    >
+                      Open full image
+                    </a>
+                  )}
                   <Button
                     type="button"
                     variant="secondary"
@@ -250,13 +301,12 @@ export function ImageGenerator() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
-        <p className="font-semibold text-slate-800">Security reminder</p>
-        <p className="mt-2">
-          The frontend never sees `MISTRAL_IMAGE_API_KEY` or `MISTRAL_AGENT_ID`. All calls flow through `/api/image-generator`,
-          keeping image credentials isolated on the server. Rotate secrets directly in Railway without code changes.
-        </p>
-      </div>
+      <ImageLightbox
+        open={Boolean(lightboxImage)}
+        imageUrl={lightboxImage}
+        caption={lightboxCaption}
+        onClose={closeLightbox}
+      />
     </div>
   )
 }
