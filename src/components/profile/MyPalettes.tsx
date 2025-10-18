@@ -34,14 +34,14 @@ export function MyPalettes() {
       const { data, error } = await supabase
         .from('palettes')
         .select('*')
-        .eq('owner_id', user.uid)
+        .eq('user_id', user.uid)
         .order('created_at', { ascending: false })
 
       if (error) throw mapSupabaseError(error)
 
       const mapped = (data ?? []).map((row: any) => ({
         id: row.id,
-        ownerId: row.owner_id,
+        ownerId: row.user_id ?? row.owner_id,
         baseHex: row.base_hex,
         dominantHexes: row.dominant_hexes ?? [],
         richMatches: row.rich_matches ?? null,
@@ -96,7 +96,7 @@ export function MyPalettes() {
         .from('palettes')
         .delete()
         .eq('id', id)
-        .eq('owner_id', user.uid)
+        .eq('user_id', user.uid)
 
       if (error) throw mapSupabaseError(error)
 

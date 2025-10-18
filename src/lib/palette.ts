@@ -2,9 +2,9 @@ import { getSupabaseClient } from '@/lib/supabaseClient'
 import { mapSupabaseError, requireSessionUser, sanitizeText } from '@/lib/security'
 import { NewSavedPalette } from '@/types/palette'
 
-interface PaletteInsert {
+interface PaletteRow {
   id?: string
-  owner_id: string
+  user_id: string
   name: string
   base_hex: string
   dominant_hexes: string[]
@@ -34,8 +34,8 @@ export async function savePaletteForUser(payload: NewSavedPalette, paletteId?: s
     ? payload.dominantHexes.filter((hex): hex is string => typeof hex === 'string' && hex.trim().length > 0).slice(0, 24)
     : []
 
-  const row: PaletteInsert = {
-    owner_id: sessionUserId,
+  const row: PaletteRow = {
+    user_id: sessionUserId,
     name: paletteName,
     base_hex: payload.baseHex,
     dominant_hexes: dominantHexes,
