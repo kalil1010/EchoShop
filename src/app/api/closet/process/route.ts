@@ -19,7 +19,7 @@ type PixelBoundingBox = {
 }
 
 type ModerationSnapshot = {
-  status: 'ok' | 'review' | 'blocked'
+  status: 'ok' | 'review' | 'blocked' | 'error'
   message?: string
   category?: string
   reasons?: string[]
