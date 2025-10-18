@@ -59,7 +59,9 @@ export function mapSupabaseError(error: unknown): Error {
     console.warn('[supabase] action forbidden', error)
     return new PermissionError('forbidden', 'You are not authorized to perform this action.')
   }
-  return error instanceof Error ? error : new Error('Unexpected error occurred')
+  if (error instanceof Error) return error
+  const fallback = extractMessage(error)
+  return new Error(fallback || 'Unexpected error occurred')
 }
 
 export async function requireSessionUser(supabase: SupabaseClient, expectedUserId?: string): Promise<string> {

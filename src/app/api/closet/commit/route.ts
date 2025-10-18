@@ -3,13 +3,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { mapClothingRow } from '@/lib/closet'
 import { moderateImageBuffer } from '@/lib/imageModeration'
-import { sanitizeText, mapSupabaseError } from '@/lib/security'
+import { sanitizeText, mapSupabaseError, isPermissionError } from '@/lib/security'
 import { buildStoragePath } from '@/lib/storage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 type IncomingPiece = {
   tempId: string
@@ -58,22 +58,15 @@ export async function POST(request: NextRequest) {
   let supabase: SupabaseClient | null = null
 
   try {
-    const { userId, accessToken } = await resolveAuthenticatedUser(request)
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const { userId } = await resolveAuthenticatedUser(request)
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Supabase configuration missing.')
     }
-    if (!accessToken) {
-      throw new Error('Auth session missing.')
-    }
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
+    supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+        detectSessionInUrl: false,
       },
     })
 
@@ -180,8 +173,17 @@ export async function POST(request: NextRequest) {
     }
 
     const mapped = mapSupabaseError(error)
-    const message = mapped instanceof Error ? mapped.message : 'Failed to store garments.'
-    const status = mapped instanceof Error ? 400 : 500
+    let status = 500
+    let message = 'Failed to store garments.'
+
+    if (mapped instanceof Error) {
+      message = mapped.message || message
+      if (isPermissionError(mapped)) {
+        status = mapped.reason === 'auth' ? 401 : 403
+      } else {
+        status = 400
+      }
+    }
     return NextResponse.json({ error: message }, { status })
   }
 }
