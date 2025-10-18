@@ -274,12 +274,14 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       const maxc = Math.max(r, g, b)
       const minc = Math.min(r, g, b)
       const saturationApprox = maxc - minc
+      const norm = ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry)
+      const inCenter = norm <= 1
 
       // Suppress near-white/near-black and flat gray
       if (brightness > 240 || brightness < 10 || (saturationApprox < 10 && brightness > 210)) continue
 
       // Suppress pixels similar to background (stronger margin)
-      if (bgColor) {
+      if (bgColor && !inCenter) {
         const dist = colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b)
         if (dist < 65) continue
       }
@@ -292,14 +294,10 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       // Suppress beige/cream (common backgrounds): hue ~ 25-50, low/moderate sat, high lightness
       // Suppress beige/cream (common background) and low-sat bright pixels
       if ((px.h >= 25 && px.h <= 50 && px.s < 0.35 && px.l > 0.65) || (px.s < 0.12 && px.l > 0.6)) continue
-      if (bgHue != null) {
+      if (bgHue != null && !inCenter) {
         const dh = Math.min(Math.abs(px.h - bgHue), 360 - Math.abs(px.h - bgHue))
         if (px.s < 0.2 && dh < 18) continue
       }
-
-      // Elliptical center mask
-      const norm = ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry)
-      const inCenter = norm <= 1
 
       // Quantize to reduce noise (finer than legacy)
       const qr = (r >> 3) << 3
