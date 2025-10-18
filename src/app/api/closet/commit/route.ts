@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { mapClothingRow } from '@/lib/closet'
 import { moderateImageBuffer } from '@/lib/imageModeration'
-import { sanitizeText, mapSupabaseError, requireSessionUser } from '@/lib/security'
+import { sanitizeText, mapSupabaseError } from '@/lib/security'
 import { buildStoragePath } from '@/lib/storage'
-import { createRouteClient } from '@/lib/supabaseServer'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
+import { resolveAuthenticatedUser } from '@/lib/server/auth'
 
 type IncomingPiece = {
   tempId: string
@@ -50,13 +51,15 @@ const decodeDataUrl = (dataUrl: string): { buffer: Buffer; mimeType: string } =>
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  const supabase = createRouteClient()
   const uploadedPaths: string[] = []
+  let supabase: SupabaseClient | null = null
 
   try {
-    const userId = await requireSessionUser(supabase)
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const resolved = await resolveAuthenticatedUser(request)
+    supabase = resolved.supabase
+    const userId = resolved.userId
+    if (!supabase) {
+      throw new Error('Supabase client is unavailable.')
     }
 
     const body = (await request.json()) as CommitmentRequest
@@ -155,7 +158,9 @@ export async function POST(request: NextRequest) {
     if (uploadedPaths.length) {
       try {
         const { bucket } = getSupabaseStorageConfig()
-        await supabase.storage.from(bucket).remove(uploadedPaths)
+        if (supabase) {
+          await supabase.storage.from(bucket).remove(uploadedPaths)
+        }
       } catch (cleanupError) {
         console.warn('[closet/commit] failed to cleanup uploads', cleanupError)
       }

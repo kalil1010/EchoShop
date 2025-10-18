@@ -12,6 +12,7 @@ import type { ClothingItem } from '@/types/clothing'
 import { getColorName } from '@/lib/imageAnalysis'
 import { sanitizeText, isPermissionError } from '@/lib/security'
 import { fireConfetti } from '@/lib/confetti'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 
 interface ImageUploadProps {
   onItemAdded?: (item: ClothingItem) => void
@@ -88,6 +89,14 @@ const isValidHex = (hex: string): boolean => /^#?[0-9a-fA-F]{6}$/.test(hex.trim(
 export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const { user } = useAuth()
   const { toast } = useToast()
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient()
+    } catch (error) {
+      console.error('[closet] Supabase client unavailable for uploads', error)
+      return null
+    }
+  }, [])
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -151,12 +160,49 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       setPieces([])
       setWarnings([])
       setOutfitGroupId(null)
+
+      if (!supabase) {
+        toast({
+          variant: 'error',
+          title: 'Supabase not configured',
+          description: 'Unable to analyse images because Supabase credentials are missing.',
+        })
+        event.target.value = ''
+        return
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) {
+        console.warn('[closet] getSession failed', sessionError)
+      }
+      let accessToken = sessionData?.session?.access_token ?? null
+      if (!accessToken) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) {
+          console.warn('[closet] refreshSession failed', refreshError)
+        }
+        accessToken = refreshData?.session?.access_token ?? null
+      }
+      if (!accessToken) {
+        toast({
+          variant: 'error',
+          title: 'Session required',
+          description: 'Please sign in again before uploading items.',
+        })
+        event.target.value = ''
+        return
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
       const response = await fetch('/api/closet/process', {
         method: 'POST',
         body: formData,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        credentials: 'include',
       })
 
       if (!response.ok) {

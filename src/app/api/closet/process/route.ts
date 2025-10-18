@@ -6,8 +6,8 @@ import { getColorName, getMatchingColors, getRichPalette } from '@/lib/imageAnal
 import { analyzeGarmentWithMistral, segmentGarmentsWithMistral } from '@/lib/mistralVision'
 import { moderateImageBuffer } from '@/lib/imageModeration'
 import { analyzeBufferColors } from '@/lib/server/colorAnalysis'
-import { createRouteClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, requireSessionUser } from '@/lib/security'
+import { resolveAuthenticatedUser } from '@/lib/server/auth'
+import { mapSupabaseError } from '@/lib/security'
 
 export const runtime = 'nodejs'
 
@@ -168,13 +168,8 @@ const buildPixelBoundingBox = (
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = createRouteClient()
-
   try {
-    const userId = await requireSessionUser(supabase)
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
+    await resolveAuthenticatedUser(request)
 
     const formData = await request.formData()
     const file = formData.get('file')
