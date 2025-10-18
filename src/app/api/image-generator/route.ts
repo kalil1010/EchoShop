@@ -8,7 +8,6 @@ import { describeFaceFromImage } from '@/lib/faceDescription'
 import { generateImageFromPrompt } from '@/lib/mistralImage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
-import { moderateImageBuffer } from '@/lib/imageModeration'
 import type { OutfitSuggestionResponse } from '@/types/outfit'
 import type { User } from '@supabase/supabase-js'
 
@@ -282,22 +281,6 @@ export async function POST(request: NextRequest) {
 
     const { arrayBuffer, contentType, fileId } = await generateImageFromPrompt(promptText)
     const buffer = Buffer.from(arrayBuffer)
-
-    const moderation = await moderateImageBuffer(buffer, {
-      filename: 'generated-outfit.png',
-      contentType,
-    })
-
-    if (!moderation.ok) {
-      const payload: Record<string, unknown> = {
-        error: moderation.message,
-        reason: moderation.type,
-      }
-      if (moderation.category) payload.category = moderation.category
-      if (moderation.reasons) payload.reasons = moderation.reasons
-      console.warn('[avatar] generated image rejected by moderation', payload)
-      return NextResponse.json(payload, { status: moderation.status })
-    }
 
     const headers: Record<string, string> = {
       'Content-Type': contentType,
