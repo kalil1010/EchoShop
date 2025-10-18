@@ -152,6 +152,23 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     setPieces((prev) => prev.map((piece) => (piece.tempId === tempId ? updater(piece) : piece)))
   }, [])
 
+  const getAccessToken = useCallback(async () => {
+    if (!supabase) return null
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) {
+      console.warn('[closet] getSession failed', sessionError)
+    }
+    let accessToken = sessionData?.session?.access_token ?? null
+    if (!accessToken) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError) {
+        console.warn('[closet] refreshSession failed', refreshError)
+      }
+      accessToken = refreshData?.session?.access_token ?? null
+    }
+    return accessToken
+  }, [supabase])
+
   const analyzeSelectedFile = useCallback(async (file: File, previewOverride?: string) => {
     if (!user) {
       toast({
@@ -177,30 +194,20 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     setOutfitGroupId(null)
     setSourceFileName(file.name)
 
-    const previewUrl = previewOverride ?? URL.createObjectURL(file)
-    updatePreview(previewUrl)
-
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) {
-        console.warn('[closet] getSession failed', sessionError)
-      }
-      let accessToken = sessionData?.session?.access_token ?? null
-      if (!accessToken) {
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-        if (refreshError) {
-          console.warn('[closet] refreshSession failed', refreshError)
-        }
-        accessToken = refreshData?.session?.access_token ?? null
-      }
+      const accessToken = await getAccessToken()
       if (!accessToken) {
         toast({
           variant: 'error',
           title: 'Session required',
           description: 'Please sign in again before uploading items.',
         })
+        setProcessing(false)
         return
       }
+
+      const previewUrl = previewOverride ?? URL.createObjectURL(file)
+      updatePreview(previewUrl)
 
       const formData = new FormData()
       formData.append('file', file)
@@ -260,6 +267,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
       })
     } catch (error) {
       console.error('[closet] process failed', error)
+      updatePreview(null)
       toast({
         variant: 'error',
         title: 'Unable to analyze image',
@@ -268,7 +276,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     } finally {
       setProcessing(false)
     }
-  }, [supabase, toast, updatePreview, user])
+  }, [getAccessToken, toast, updatePreview, user])
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -319,7 +327,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     cropFileRef.current = file
     setCropSource(objectUrl)
     setIsCropOpen(true)
-  }, [supabase, toast, updatePreview, user])
+  }, [getAccessToken, toast, updatePreview, user])
 
   const handleCropCancel = useCallback(() => {
     clearCropSource()
@@ -367,6 +375,17 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 
     setCommitting(true)
     try {
+      const accessToken = await getAccessToken()
+      if (!accessToken) {
+        toast({
+          variant: 'error',
+          title: 'Session required',
+          description: 'Please sign in again before saving items.',
+        })
+        setCommitting(false)
+        return
+      }
+
       const payload = {
         outfitGroupId,
         originalFileName: sourceFileName ?? undefined,
@@ -394,7 +413,11 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 
       const response = await fetch('/api/closet/commit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        credentials: 'include',
         body: JSON.stringify(payload),
       })
 
@@ -432,7 +455,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     } finally {
       setCommitting(false)
     }
-  }, [onItemAdded, outfitGroupId, pieces, resetState, sourceFileName, toast, user])
+  }, [getAccessToken, onItemAdded, outfitGroupId, pieces, resetState, sourceFileName, toast, user])
 
   const handleHexAdd = useCallback((pieceId: string) => {
     const target = pieces.find((piece) => piece.tempId === pieceId)

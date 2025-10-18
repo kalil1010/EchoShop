@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { mapClothingRow } from '@/lib/closet'
 import { moderateImageBuffer } from '@/lib/imageModeration'
@@ -7,6 +6,7 @@ import { sanitizeText, mapSupabaseError } from '@/lib/security'
 import { buildStoragePath } from '@/lib/storage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
+import { createServiceClient } from '@/lib/supabaseServer'
 
 type IncomingPiece = {
   tempId: string
@@ -52,15 +52,11 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   const uploadedPaths: string[] = []
-  let supabase: SupabaseClient | null = null
+  let supabase: ReturnType<typeof createServiceClient> | null = null
 
   try {
-    const resolved = await resolveAuthenticatedUser(request)
-    supabase = resolved.supabase
-    const userId = resolved.userId
-    if (!supabase) {
-      throw new Error('Supabase client is unavailable.')
-    }
+    const { userId } = await resolveAuthenticatedUser(request)
+    supabase = createServiceClient()
 
     const body = (await request.json()) as CommitmentRequest
     if (!body?.pieces || !Array.isArray(body.pieces) || body.pieces.length === 0) {
