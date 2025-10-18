@@ -280,8 +280,15 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       const inTightCenter = normTight <= 1
       const inSoftCenter = normSoft <= 1
 
-      // Suppress near-white/near-black and flat gray
-      if (brightness > 240 || brightness < 10 || (saturationApprox < 10 && brightness > 210)) continue
+      // Suppress extreme brightness/darkness mostly when we're likely sampling the background.
+      const isVeryBright = brightness > 244
+      const isFlatBright = saturationApprox < 12 && brightness > 215
+      const isVeryDark = brightness < 10
+      if (!inSoftCenter && (isVeryBright || isVeryDark || isFlatBright)) continue
+      if (!inTightCenter && isVeryBright && bgColor) {
+        const distToBg = colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b)
+        if (distToBg < 28) continue
+      }
 
       // Suppress pixels similar to background (stronger margin)
       if (bgColor && !inSoftCenter) {
