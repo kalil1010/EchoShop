@@ -1,8 +1,6 @@
 'use client'
-
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { AuthUser, UserProfile } from '@/types/user'
 
@@ -59,7 +57,8 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
 }
 
 function extractUserId(rawId: string | null | undefined): string {
-  return rawId ?? ''
+  if (!rawId) return ''
+  return rawId
 }
 
 function mapAuthUser(user: User): AuthUser {
@@ -157,7 +156,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const profileData = (data ?? null) as ProfileRow | null
-
         if (profileData) {
           if (!isMounted) return
           setUserProfile(mapProfileRow(profileData, authUser))
@@ -198,9 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.auth.getSession()
       setSession(data.session ?? null)
       const sessionUser = data.session?.user
-
       if (!isMounted) return
-
       if (sessionUser) {
         const mapped = mapAuthUser(sessionUser)
         setUser(mapped)
@@ -243,7 +239,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     if (!supabase) throw new Error('Supabase is not properly configured')
-
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -253,7 +248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     })
-
     if (error) throw error
 
     const newUser = data.user
@@ -261,7 +255,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const authUser = mapAuthUser(newUser)
     const bootstrap = buildBootstrapProfile(authUser)
-
     const row: Partial<ProfileRow> = {
       id: authUser.uid,
       email: authUser.email,
@@ -279,12 +272,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       created_at: bootstrap.createdAt.toISOString(),
       updated_at: bootstrap.updatedAt.toISOString(),
     }
-
     const { error: profileError } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
     if (profileError) {
       console.warn('Failed to seed profile during sign-up:', profileError)
     }
-
     setUserProfile(bootstrap)
   }
 
@@ -328,7 +319,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
     if (error) throw error
-
     setUserProfile(merged)
   }
 
@@ -346,5 +336,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
-
