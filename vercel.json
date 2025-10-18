@@ -15,7 +15,7 @@
     "NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET": "@supabase_storage_bucket",
     "NEXT_PUBLIC_SUPABASE_STORAGE_FOLDER": "@supabase_storage_folder",
     "MISTRAL_API_KEY": "@mistral_api_key",
-    "NEXT_PUBLIC_OPENWEATHERMAP_API_KEY": "@openweathermap_api_key",
+    "ACCUWEATHER_API_KEY": "@accuweather_api_key",
     "NEXT_PUBLIC_IPINFO_API_KEY": "@ipinfo_api_key",
     "MINIO_ENDPOINT": "@minio_endpoint",
     "MINIO_PORT": "@minio_port",

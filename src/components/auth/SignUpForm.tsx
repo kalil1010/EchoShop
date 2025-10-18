@@ -35,18 +35,42 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const trimmedEmail = email.trim().toLowerCase()
+    const trimmedPassword = password.trim()
+    const trimmedDisplayName = displayName.trim()
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Please enter a valid email address.')
+      toast({ variant: 'error', title: 'Invalid email', description: 'Double-check your email format and try again.' })
+      return
+    }
+
+    if (trimmedPassword.length < 8) {
+      setError('Password must be at least 8 characters long.')
+      toast({ variant: 'error', title: 'Weak password', description: 'Passwords must be at least 8 characters.' })
+      return
+    }
+
+    if (trimmedDisplayName.length > 80) {
+      setError('Display name is too long.')
+      toast({ variant: 'error', title: 'Display name too long', description: 'Please keep your display name under 80 characters.' })
+      return
+    }
+
     setLoading(true)
     setError('')
 
     try {
-      await signUp(email, password, displayName)
-      const name = (displayName && displayName.trim()) || email?.split('@')[0] || 'there'
+      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
+      const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
       toast({ variant: 'success', title: 'Account created', description: `Welcome, ${name}!` })
       setTimeout(() => router.push('/profile'), 1500)
-    } catch (error: any) {
-      setError(error.message || 'Failed to sign up')
-      toast({ variant: 'error', title: 'Sign-up failed', description: error?.message || 'Please try again.' })
+    } catch (unknownError) {
+      const message =
+        unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
+      setError(message)
+      toast({ variant: 'error', title: 'Sign-up failed', description: message || 'Please try again.' })
     } finally {
       setLoading(false)
     }
@@ -68,12 +92,13 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       if (oauthError) {
         throw oauthError
       }
-    } catch (oauthError: any) {
+    } catch (oauthError) {
+      const message = oauthError instanceof Error ? oauthError.message : 'Please try again.'
       console.error('Google sign-up failed:', oauthError)
       toast({
         variant: 'error',
         title: 'Google sign-up failed',
-        description: oauthError?.message || 'Please try again.',
+        description: message,
       })
       setGoogleLoading(false)
     }

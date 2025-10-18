@@ -59,9 +59,7 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
 }
 
 function extractUserId(rawId: string | null | undefined): string {
-  if (!rawId) return ''
-  const [base] = rawId.split('_')
-  return base
+  return rawId ?? ''
 }
 
 function mapAuthUser(user: User): AuthUser {

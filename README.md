@@ -26,7 +26,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - Supabase Database
 - Supabase Storage
 - Mistral AI for text generation
-- OpenWeatherMap API
+- AccuWeather API
 - IPinfo API for geolocation
 
 ## Getting Started
@@ -37,7 +37,7 @@ A complete, full-stack AI-powered fashion assistant web application built with N
 - Supabase project
 - Mistral AI API key
 - Mistral image agent key & agent ID
-- OpenWeatherMap API key
+- AccuWeather API key
 - IPinfo API key
 
 ### Installation
@@ -54,7 +54,7 @@ npm install
 
 ### Sightengine Moderation
 
-Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. The development template includes default credentials provided for this exercise.
+Set `SIGHTENGINE_API_USER` and `SIGHTENGINE_API_SECRET` in your environment (.env) so the `/api/moderate-image` endpoint can vet uploads before they reach Supabase. You must provide your own credentials—placeholders are included in `.env.example`.
 
 ### Mistral Image Generation
 

@@ -34,18 +34,39 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const trimmedEmail = email.trim().toLowerCase()
+    const trimmedPassword = password.trim()
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Please enter a valid email address.')
+      toast({ variant: 'error', title: 'Invalid email', description: 'Double-check your email format and try again.' })
+      return
+    }
+
+    if (trimmedPassword.length < 8) {
+      setError('Password must be at least 8 characters long.')
+      toast({ variant: 'error', title: 'Invalid password', description: 'Passwords must be at least 8 characters.' })
+      return
+    }
+
     setLoading(true)
     setError('')
 
     try {
-      await signIn(email, password)
-      const name = email?.split('@')[0] || 'there'
+      await signIn(trimmedEmail, trimmedPassword)
+      const name = trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Welcome back, ${name}! Redirecting...`)
       toast({ variant: 'success', title: 'Signed in', description: `Welcome back, ${name}!` })
       setTimeout(() => router.push('/'), 1200)
-    } catch (error: any) {
-      setError(error.message || 'Failed to sign in')
-      toast({ variant: 'error', title: 'Sign-in failed', description: error?.message || 'Please check your credentials and try again.' })
+    } catch (unknownError) {
+      const message =
+        unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
+      setError(message)
+      toast({
+        variant: 'error',
+        title: 'Sign-in failed',
+        description: message || 'Please check your credentials and try again.',
+      })
     } finally {
       setLoading(false)
     }
@@ -67,12 +88,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       if (oauthError) {
         throw oauthError
       }
-    } catch (oauthError: any) {
+    } catch (oauthError) {
+      const message = oauthError instanceof Error ? oauthError.message : 'Please try again.'
       console.error('Google sign-in failed:', oauthError)
       toast({
         variant: 'error',
         title: 'Google sign-in failed',
-        description: oauthError?.message || 'Please try again.',
+        description: message,
       })
       setGoogleLoading(false)
     }
@@ -142,7 +164,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
               onClick={onToggleMode}
               className="text-sm text-blue-600 hover:underline"
             >
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </button>
           </div>
         </form>
