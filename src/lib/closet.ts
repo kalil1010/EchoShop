@@ -20,6 +20,7 @@ export interface ClothingRow {
   primary_hex: string | null
   color_names: string[] | null
   ai_matches: unknown
+  ai_prompt?: string | null
   description: string | null
   brand: string | null
   season: ClothingItem['season'] | null
@@ -68,6 +69,7 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
     primaryHex: row.primary_hex ?? undefined,
     colorNames: row.color_names ?? undefined,
     aiMatches,
+    aiPrompt: row.ai_prompt ?? undefined,
     description: row.description ?? undefined,
     brand: row.brand ?? undefined,
     season: row.season ?? 'all',

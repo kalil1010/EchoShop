@@ -13,6 +13,7 @@ export interface ClothingItem {
     analogous: string[]
     triadic: string[]
   }
+  aiPrompt?: string
   description?: string
   brand?: string
   season?: 'spring' | 'summer' | 'fall' | 'winter' | 'all'

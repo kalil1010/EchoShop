@@ -15,6 +15,7 @@ import { type ClothingRow, mapClothingRow, uploadClothingImage } from '@/lib/clo
 import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
 import { savePaletteForUser } from '@/lib/palette'
 import { fireConfetti } from '@/lib/confetti'
+import { describeClothingFromImage } from '@/lib/mistralVision'
 
 interface ImageUploadProps {
   onItemAdded?: (item: ClothingItem) => void
@@ -299,6 +300,16 @@ const { toast } = useToast()
       const nowIso = new Date().toISOString()
       const resolvedGarmentType = (garmentType || 'top') as ClothingItem['garmentType']
       const safeDescription = description ? sanitizeText(description, { maxLength: 240 }) : ''
+      let aiPrompt: string | null = null
+
+      try {
+        const generatedPrompt = await describeClothingFromImage(publicUrl)
+        if (generatedPrompt) {
+          aiPrompt = sanitizeText(generatedPrompt, { maxLength: 400, allowNewlines: false }) || generatedPrompt.trim()
+        }
+      } catch (visionError) {
+        console.warn('[closet] ai prompt generation failed', visionError)
+      }
 
       const insertPayload = {
         user_id: user.uid,
@@ -310,6 +321,7 @@ const { toast } = useToast()
         primary_hex: aiPrimaryHex,
         color_names: aiColorNames,
         ai_matches: aiRichMatches,
+        ai_prompt: aiPrompt,
         description: safeDescription || null,
         season: 'all',
         created_at: nowIso,
