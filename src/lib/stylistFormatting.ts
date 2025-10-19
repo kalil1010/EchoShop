@@ -71,14 +71,15 @@ export const normaliseStructuredReply = (raw: unknown): StructuredStylistReply =
       .map((piece) => {
         if (!piece || typeof piece !== 'object') return null
         const pieceObj = piece as Record<string, unknown>
-        const type = typeof pieceObj.type === 'string' ? pieceObj.type : ''
+        const type = typeof pieceObj.type === 'string' ? pieceObj.type.trim() : ''
         if (!type) return null
-        const color = typeof pieceObj.color === 'string' ? pieceObj.color : undefined
-        const hex = typeof pieceObj.hex === 'string' ? pieceObj.hex : undefined
-        const description = typeof pieceObj.description === 'string' ? pieceObj.description : undefined
-        return { type, color, hex, description }
+        const color = typeof pieceObj.color === 'string' ? pieceObj.color.trim() : undefined
+        const hex = typeof pieceObj.hex === 'string' ? pieceObj.hex.trim() : undefined
+        const description = typeof pieceObj.description === 'string' ? pieceObj.description.trim() : undefined
+        const cleaned: StructuredPiece = { type, color, hex, description }
+        return cleaned
       })
-      .filter((piece): piece is StructuredPiece => Boolean(piece))
+      .filter((piece): piece is StructuredPiece => piece !== null)
     return {
       title: typeof obj.title === 'string' ? obj.title : undefined,
       summary: typeof obj.summary === 'string' ? obj.summary : undefined,
