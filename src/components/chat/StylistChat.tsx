@@ -215,12 +215,23 @@ export function StylistChat() {
         .map((msg) => summariseMessageForContext(msg))
         .join('\n')
 
+      const profilePayload = userProfile
+        ? {
+            displayName: userProfile.displayName ?? (firstName && firstName !== 'there' ? firstName : undefined),
+            gender: userProfile.gender ?? undefined,
+            age: userProfile.age ?? undefined,
+            favoriteColors: userProfile.favoriteColors ?? undefined,
+            dislikedColors: userProfile.dislikedColors ?? undefined,
+            favoriteStyles: userProfile.favoriteStyles ?? undefined,
+          }
+        : undefined
+
       const response = await sendStylistMessage({
         message: trimmed,
         context: contextSnippet,
         imageColors: pendingAttachment?.colors,
         imageDescription: pendingAttachment?.description,
-        userProfile: userProfile || undefined,
+        userProfile: profilePayload,
         closetItems: closetItems.length > 0 ? closetItems : undefined,
       })
 

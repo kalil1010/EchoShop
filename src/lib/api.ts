@@ -8,6 +8,7 @@ export interface StylistMessagePayload {
   message: string
   context?: string
   userProfile?: {
+    displayName?: string
     gender?: string
     age?: number
     favoriteColors?: string[]
@@ -40,6 +41,7 @@ export interface OutfitSuggestionPayload {
     location: string
   }
   userProfile?: {
+    displayName?: string
     gender?: string
     age?: number
     favoriteColors?: string[]

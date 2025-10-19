@@ -11,6 +11,12 @@ import { generateImageFromPrompt } from '@/lib/mistralImage'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { createServiceClient, getAuthenticatedUserId } from '@/lib/supabaseServer'
 import type { GenderTarget } from '@/types/arrivals'
+import {
+  buildErrorStructuredReply,
+  normaliseStructuredReply,
+  renderStructuredReply,
+  type StructuredStylistReply,
+} from '@/lib/stylistFormatting'
 
 const ClosetItemSchema = z.object({
   id: z.string(),
@@ -25,11 +31,13 @@ const PayloadSchema = z.object({
   context: z.string().optional(),
   userProfile: z
     .object({
+      displayName: z.string().optional(),
       gender: z.string().optional(),
       age: z.number().optional(),
       favoriteColors: z.array(z.string()).optional(),
       dislikedColors: z.array(z.string()).optional(),
       favoriteStyles: z.array(z.string()).optional(),
+      stylePreferences: z.array(z.string()).optional(),
     })
     .optional(),
   closetItems: ClosetItemSchema.array().optional(),
@@ -81,6 +89,43 @@ const isOutfitRequest = (message: string | undefined | null): boolean => {
   return false
 }
 
+const STRUCTURED_RESPONSE_SCHEMA = `{
+  "structured": {
+    "header": "Hi [Name]! Here are two looks tailored to your vibe.",
+    "outfits": [
+      {
+        "title": "City Sleek",
+        "summary": "Polished layers for a breezy day.",
+        "pieces": [
+          { "type": "Top", "description": "Cropped lilac hoodie with soft fleece lining", "color": "Soft Lilac", "hex": "#CBB4DA" },
+          { "type": "Bottom", "description": "High-waist cream joggers with tapered leg", "color": "Warm Cream" },
+          { "type": "Shoes", "description": "White leather sneakers", "color": "Cloud White" },
+          { "type": "Accessories", "description": "Silver hoop earrings from your closet", "color": "Silver" }
+        ]
+      },
+      {
+        "title": "Weekend Ease",
+        "summary": "Relaxed denim layers for casual plans.",
+        "pieces": [
+          { "type": "Top", "description": "Dusty blue oversized tee", "color": "Dusty Blue" },
+          { "type": "Bottom", "description": "Soft charcoal straight-leg jeans", "color": "Charcoal" },
+          { "type": "Shoes", "description": "Tan suede loafers", "color": "Warm Tan" }
+        ]
+      }
+    ],
+    "colors": {
+      "complementary": ["Soft Lilac", "Warm Sand"],
+      "analogous": ["Lavender", "Sky Blue"],
+      "neutrals": ["Cloud White", "Soft Charcoal"]
+    },
+    "tips": [
+      "Layer a cropped denim jacket if the evening breeze picks up.",
+      "Swap the trainers for loafers to dress things up for dinner."
+    ],
+    "followUp": "Which outfit feels right today? Want me to remix another vibe?"
+  }
+}`
+
 const parseJsonBlock = (payload: string): unknown => {
   const trimmed = payload.trim()
   if (!trimmed) return null
@@ -111,38 +156,45 @@ const sanitizeLine = (line: string): string => {
   return line.replace(/^[-*#>\s]+/, '').trim()
 }
 
-const buildCaption = (candidate?: string, markdown?: string): string => {
+const buildCaption = (candidate?: string, structured?: StructuredStylistReply): string => {
   const safeCandidate = candidate?.trim()
   if (safeCandidate) return safeCandidate
-  if (markdown) {
-    const lines = markdown
-      .split(/\r?\n/)
-      .map((line) => sanitizeLine(line))
-      .filter(Boolean)
-    if (lines.length) {
-      return `Here's an outfit idea: ${lines[0]}`
-    }
+  if (structured?.header) {
+    const cleaned = sanitizeLine(structured.header).replace(/^\*+|\*+$/g, '').trim()
+    if (cleaned) return cleaned
   }
   return "Here's a fresh outfit idea to explore!"
 }
 
-const extractOutfitDescription = (markdown?: string): string => {
-  if (!markdown) return ''
-  const lines = markdown.split(/\r?\n/)
-  const details: string[] = []
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (/^-\s*(top|bottom|footwear|shoes?|outerwear|accessor)/i.test(trimmed)) {
-      details.push(sanitizeLine(trimmed))
-    } else if (/Top:\s/i.test(trimmed) || /Bottom:\s/i.test(trimmed) || /Shoes?:\s/i.test(trimmed) || /Accessories?:\s/i.test(trimmed)) {
-      details.push(trimmed.replace(/^[*-]\s*/, ''))
-    }
+const extractStructuredReply = (payload: unknown): StructuredStylistReply | null => {
+  const reply = normaliseStructuredReply(payload)
+  if (!reply) return null
+  const hasOutfit = Array.isArray(reply.outfits) && reply.outfits.some((outfit) => outfit.pieces && outfit.pieces.length > 0)
+  const hasTips = Array.isArray(reply.tips) && reply.tips.length > 0
+  if (reply.header || hasOutfit || hasTips || reply.followUp) {
+    return reply
   }
-  return details.length ? details.join(', ') : ''
+  return null
 }
 
-const buildFallbackImagePrompt = (caption: string, markdown: string | undefined, gender?: GenderTarget): string => {
-  const focus = extractOutfitDescription(markdown) || caption
+const buildFallbackImagePrompt = (caption: string, structured: StructuredStylistReply | null, gender?: GenderTarget): string => {
+  let focus = caption
+  if (structured?.outfits && structured.outfits.length) {
+    const lead = structured.outfits[0]
+    const pieces = (lead.pieces ?? [])
+      .map((piece) => {
+        const color = piece.color ? piece.color.trim() : ''
+        const descriptor = piece.description ?? piece.type
+        const combined = color ? `${color} ${descriptor}` : descriptor
+        return sanitizeLine(combined)
+      })
+      .filter(Boolean)
+    if (pieces.length) {
+      focus = pieces.join(', ')
+    } else if (lead.summary) {
+      focus = lead.summary
+    }
+  }
   const genderPhrase =
     gender === 'female'
       ? 'fashion portrait of a stylish woman'
@@ -181,6 +233,7 @@ const persistChatImage = async (
 }
 
 export async function POST(request: NextRequest) {
+  let resolvedDisplayName: string | undefined
   try {
     const json = await request.json()
     const parsed = PayloadSchema.safeParse(json)
@@ -189,6 +242,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = parsed.data
+    resolvedDisplayName = body.userProfile?.displayName?.trim() || undefined
     const mode = body.mode ?? 'stylist'
 
     const targetGender = normalizeGender(body.userProfile?.gender)
@@ -208,30 +262,24 @@ ${closetSummary.join('\n')}`
 ${onlineSummary.join('\n')}`
       : 'Online Store Highlights: None available.'
 
-    const stylistSystemPrompt = `You are a friendly fashion stylist AI in Concise Mode. Keep answers short, clear, and enjoyable to read.
+    const stylistSystemPrompt = `You are ZMODA AI's friendly fashion stylist. Always respond with JSON exactly matching this structure (no extra prose):
 
-Formatting rules (strict):
-- Use simple Markdown only (no tables).
-- Max 8-12 lines total.
-- Short bullets, no long paragraphs.
-- End with one short follow-up question.
+${STRUCTURED_RESPONSE_SCHEMA}
 
-When asked for an outfit, use the user's closet items first. Only reference the online store highlights when the closet lacks a needed piece or when suggesting an optional purchase-make it clear when something is a shopping idea.
+Guidelines:
+- Provide one or two outfit options at most. Each piece needs a clear garment type, a friendly colour name, and a concise descriptor. Include a hex code only when you are confident; otherwise omit it.
+- Prioritise items from the user's closet. When you suggest an online or new purchase, mention the source or brand inside the description (e.g., "Online – Concrete: Navy trench coat").
+- Spotlight favourite colours or styles and avoid any listed dislikes. Match the tone and aesthetic to the user's age, gender, and context.
+- Keep "tips" to a maximum of three short, practical bullets.
+- "followUp" must be an engaging question that invites the user to reply.
+- Colour arrays (complementary/analogous/neutrals) must contain approachable colour names only—never theory jargon or raw hex codes.
+- Make the header feel like a warm greeting that includes the user's name when available.`
 
-When asked for an outfit, return exactly these sections (omit any that don't apply):
+    const stylistSystemPromptWithImage = `${stylistSystemPrompt}
 
-## Outfit (1-2 options)
-- Top: ...  Bottom: ...  Shoes: ...  Accessories: ...
-
-## Colors
-- Complementary: ...
-- Analogous: ...
-- Neutrals: ...
-
-## Tips
-- 1-2 quick pointers (fit/fabric/occasion).
-
-Personalize to the user's profile (highlight favourites, avoid dislikes, respect age/gender tone) and any provided image colors. Be helpful and upbeat, but never verbose.`
+When an inspirational image is useful, include these additional top-level fields alongside "structured":
+- "caption": A one-sentence, friendly description suited for screen readers.
+- "imagePrompt": A vivid, single-paragraph description for an AI image generator that references garments, colours, setting, lighting, and camera mood.`
 
     const assistantSystemPrompt = `You are the ZMODA AI onboarding assistant. Be brief, encouraging, and always guide the user to specific features. Prioritise:
 1. Explaining the four core features (Outfit Builder, Digital Closet, Color Analyzer, AI Chat).
@@ -245,6 +293,7 @@ ${body.context ? `Context: ${body.context}` : ''}
 ${body.imageColors?.length ? `Image context: Dominant colors detected: ${body.imageColors.join(', ')}. If relevant, suggest color pairings and outfit ideas that complement these colors.` : ''}
 
 User Profile:
+- Name: ${body.userProfile?.displayName || 'not specified'}
 - Gender: ${body.userProfile?.gender || 'not specified'}
 - Age: ${body.userProfile?.age || 'not specified'}
 - Favorite Colors: ${body.userProfile?.favoriteColors?.join(', ') || 'none specified'}
@@ -260,58 +309,65 @@ Please provide a helpful and personalised response that references these sources
     const systemPrompt = mode === 'assistant'
       ? assistantSystemPrompt
       : shouldGenerateImage
-        ? `${stylistSystemPrompt}
-
-Additional instructions:
-- Return only JSON with the shape {"markdown": string, "caption": string, "imagePrompt": string}.
-- "markdown" must follow the formatting rules above and include the detailed outfit response.
-- "caption" should be 1-2 friendly sentences that describe the visual outfit clearly for accessibility.
-- "imagePrompt" should be a vivid, single-paragraph description tailored for an AI image generator (include garments, colours, gender cues, setting, camera framing).
-- Do not include Markdown fences or any text outside the JSON object.`
+        ? stylistSystemPromptWithImage
         : stylistSystemPrompt
 
     const maxTokens = mode === 'assistant' ? 250 : 800
+    const baseAiOptions = { temperature: 0.5, maxTokens }
 
     if (!shouldGenerateImage) {
-      const reply = await callMistralAI(prompt, systemPrompt, { temperature: 0.5, maxTokens })
+      if (mode === 'assistant') {
+        const reply = await callMistralAI(prompt, systemPrompt, baseAiOptions)
+        return NextResponse.json({
+          response: reply,
+          reply,
+          meta: { source: 'assistant' },
+        })
+      }
+
+      const raw = await callMistralAI(prompt, systemPrompt, {
+        ...baseAiOptions,
+        responseFormat: { type: 'json_object' },
+      })
+
+      const parsed = parseJsonBlock(raw)
+      const container = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+      let structuredReply = extractStructuredReply(container['structured'] ?? parsed) ?? null
+
+      if (!structuredReply) {
+        console.warn('[stylist-chat] Structured reply missing, using fallback content.')
+        structuredReply = buildErrorStructuredReply('I need a moment to polish these ideas—shall we try again right now?')
+      }
+
+      const formatted = renderStructuredReply(structuredReply, { userName: resolvedDisplayName })
 
       return NextResponse.json({
-        response: reply,
-        reply,
-        meta: mode === 'assistant' ? { source: 'assistant' } : undefined,
+        response: formatted,
+        reply: formatted,
+        structured: structuredReply,
       })
     }
 
     const raw = await callMistralAI(prompt, systemPrompt, {
-      temperature: 0.5,
-      maxTokens,
+      ...baseAiOptions,
       responseFormat: { type: 'json_object' },
     })
 
-    const structured = parseJsonBlock(raw)
+    const parsed = parseJsonBlock(raw)
+    const container = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+    let structuredReply = extractStructuredReply(container['structured'] ?? parsed) ?? null
 
-    if (!structured || typeof structured !== 'object') {
-      console.warn('Failed to parse structured stylist response, falling back to text mode')
-      const fallbackReply = await callMistralAI(prompt, stylistSystemPrompt, { temperature: 0.5, maxTokens: 600 })
-      return NextResponse.json({
-        response: fallbackReply,
-        reply: fallbackReply,
-      })
+    if (!structuredReply) {
+      console.warn('[stylist-chat] Structured reply missing for image mode, falling back to friendly template.')
+      structuredReply = buildErrorStructuredReply('Here is a simple outfit direction while I refresh the visual preview.')
     }
 
-    const structuredData = structured as Record<string, unknown>
-    const markdownValue = structuredData['markdown']
-    const markdown = typeof markdownValue === 'string' ? markdownValue.trim() : ''
-    const captionValue = structuredData['caption']
-    const caption = buildCaption(
-      typeof captionValue === 'string' ? captionValue : undefined,
-      markdown
-    )
-    const imagePromptValue = structuredData['imagePrompt']
+    const formatted = renderStructuredReply(structuredReply, { userName: resolvedDisplayName })
+    const caption = buildCaption(typeof container.caption === 'string' ? container.caption : undefined, structuredReply)
     const imagePromptSource =
-      typeof imagePromptValue === 'string' && imagePromptValue.trim().length > 0
-        ? imagePromptValue.trim()
-        : buildFallbackImagePrompt(caption, markdown, targetGender)
+      typeof container.imagePrompt === 'string' && container.imagePrompt.trim().length > 0
+        ? container.imagePrompt.trim()
+        : buildFallbackImagePrompt(caption, structuredReply, targetGender)
 
     try {
       const imageResult = await generateImageFromPrompt(imagePromptSource)
@@ -325,22 +381,25 @@ Additional instructions:
         type: 'image',
         imageUrl,
         caption,
-        text: markdown,
-        response: markdown,
-        reply: markdown,
+        text: formatted,
+        response: formatted,
+        reply: formatted,
+        structured: structuredReply,
       })
     } catch (imageError) {
       console.error('Failed to generate or store outfit image:', imageError)
-      const fallbackText = markdown || 'I pulled together an outfit idea, but generating the image failed. Please retry in a moment.'
       return NextResponse.json({
-        response: fallbackText,
-        reply: fallbackText,
+        response: formatted,
+        reply: formatted,
+        structured: structuredReply,
         error: 'image_generation_failed',
       })
     }
   } catch (error) {
     console.error('Stylist chat error:', error)
-    return NextResponse.json({ error: 'Failed to generate chat response' }, { status: 500 })
+    const fallbackStructured = buildErrorStructuredReply('I ran into an unexpected issue, but I can try again right away.')
+    const fallback = renderStructuredReply(fallbackStructured, { userName: resolvedDisplayName })
+    return NextResponse.json({ error: 'Failed to generate chat response', response: fallback, reply: fallback, structured: fallbackStructured }, { status: 500 })
   }
 }
 
