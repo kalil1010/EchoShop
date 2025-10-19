@@ -330,9 +330,9 @@ Please provide a helpful and personalised response that references these sources
         responseFormat: { type: 'json_object' },
       })
 
-      const parsed = parseJsonBlock(raw)
-      const container = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
-      let structuredReply = extractStructuredReply(container['structured'] ?? parsed) ?? null
+      const structuredPayload = parseJsonBlock(raw)
+      const container = structuredPayload && typeof structuredPayload === 'object' ? (structuredPayload as Record<string, unknown>) : {}
+      let structuredReply = extractStructuredReply(container['structured'] ?? structuredPayload) ?? null
 
       if (!structuredReply) {
         console.warn('[stylist-chat] Structured reply missing, using fallback content.')
@@ -353,9 +353,9 @@ Please provide a helpful and personalised response that references these sources
       responseFormat: { type: 'json_object' },
     })
 
-    const parsed = parseJsonBlock(raw)
-    const container = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
-    let structuredReply = extractStructuredReply(container['structured'] ?? parsed) ?? null
+    const structuredPayload = parseJsonBlock(raw)
+    const container = structuredPayload && typeof structuredPayload === 'object' ? (structuredPayload as Record<string, unknown>) : {}
+    let structuredReply = extractStructuredReply(container['structured'] ?? structuredPayload) ?? null
 
     if (!structuredReply) {
       console.warn('[stylist-chat] Structured reply missing for image mode, falling back to friendly template.')
