@@ -29,6 +29,7 @@ interface ProfileRow {
   body_shape: string | null
   foot_size: string | null
   favorite_colors: string[] | null
+  disliked_colors: string[] | null
   favorite_styles: string[] | null
   created_at: string | null
   updated_at: string | null
@@ -52,6 +53,7 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     bodyShape: profile.bodyShape ?? undefined,
     footSize: profile.footSize ?? undefined,
     favoriteColors: profile.favoriteColors ?? [],
+    dislikedColors: profile.dislikedColors ?? [],
     favoriteStyles: profile.favoriteStyles ?? [],
   }
 }
@@ -87,6 +89,7 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     bodyShape: row.body_shape ?? undefined,
     footSize: row.foot_size ?? undefined,
     favoriteColors: row.favorite_colors ?? [],
+    dislikedColors: row.disliked_colors ?? [],
     favoriteStyles: row.favorite_styles ?? [],
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
@@ -104,6 +107,7 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     bodyShape: undefined,
     footSize: undefined,
     favoriteColors: [],
+    dislikedColors: [],
     favoriteStyles: [],
     createdAt: now,
     updatedAt: now,
@@ -274,6 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body_shape: bootstrap.bodyShape ?? null,
       foot_size: bootstrap.footSize ?? null,
       favorite_colors: bootstrap.favoriteColors,
+      disliked_colors: bootstrap.dislikedColors,
       favorite_styles: bootstrap.favoriteStyles,
       created_at: bootstrap.createdAt.toISOString(),
       updated_at: bootstrap.updatedAt.toISOString(),
@@ -301,6 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...userProfile,
       ...profileUpdates,
       favoriteColors: profileUpdates.favoriteColors ?? userProfile.favoriteColors,
+      dislikedColors: profileUpdates.dislikedColors ?? userProfile.dislikedColors,
       favoriteStyles: profileUpdates.favoriteStyles ?? userProfile.favoriteStyles,
       createdAt: userProfile.createdAt,
       updatedAt: new Date(),
@@ -319,6 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body_shape: merged.bodyShape ?? null,
       foot_size: merged.footSize ?? null,
       favorite_colors: merged.favoriteColors,
+      disliked_colors: merged.dislikedColors,
       favorite_styles: merged.favoriteStyles,
       updated_at: merged.updatedAt.toISOString(),
     }

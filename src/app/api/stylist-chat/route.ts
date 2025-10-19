@@ -28,6 +28,7 @@ const PayloadSchema = z.object({
       gender: z.string().optional(),
       age: z.number().optional(),
       favoriteColors: z.array(z.string()).optional(),
+      dislikedColors: z.array(z.string()).optional(),
       favoriteStyles: z.array(z.string()).optional(),
     })
     .optional(),
@@ -230,7 +231,7 @@ When asked for an outfit, return exactly these sections (omit any that don't app
 ## Tips
 - 1-2 quick pointers (fit/fabric/occasion).
 
-Personalize to the user's profile and any provided image colors. Be helpful and upbeat, but never verbose.`
+Personalize to the user's profile (highlight favourites, avoid dislikes, respect age/gender tone) and any provided image colors. Be helpful and upbeat, but never verbose.`
 
     const assistantSystemPrompt = `You are the ZMODA AI onboarding assistant. Be brief, encouraging, and always guide the user to specific features. Prioritise:
 1. Explaining the four core features (Outfit Builder, Digital Closet, Color Analyzer, AI Chat).
@@ -247,6 +248,7 @@ User Profile:
 - Gender: ${body.userProfile?.gender || 'not specified'}
 - Age: ${body.userProfile?.age || 'not specified'}
 - Favorite Colors: ${body.userProfile?.favoriteColors?.join(', ') || 'none specified'}
+- Disliked Colors: ${body.userProfile?.dislikedColors?.join(', ') || 'none specified'}
 - Favorite Styles: ${body.userProfile?.favoriteStyles?.join(', ') || 'none specified'}
 
 ${closetBlock}

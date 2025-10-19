@@ -27,6 +27,7 @@ interface ProfileFormState {
   bodyShape?: string
   footSize?: string
   favoriteColors: string[]
+  dislikedColors: string[]
   favoriteStyles: string[]
   photoURL?: string
   photoPath?: string
@@ -124,6 +125,7 @@ export function ProfileForm() {
     bodyShape: undefined,
     footSize: undefined,
     favoriteColors: [],
+    dislikedColors: [],
     favoriteStyles: [],
     photoURL: undefined,
   })
@@ -133,6 +135,8 @@ export function ProfileForm() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [customColorPicker, setCustomColorPicker] = useState('#6b7280')
   const [customColorText, setCustomColorText] = useState('')
+  const [customDislikedColorPicker, setCustomDislikedColorPicker] = useState('#d1d5db')
+  const [customDislikedColorText, setCustomDislikedColorText] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cropFileRef = useRef<File | null>(null)
   const [cropSource, setCropSource] = useState<string | null>(null)
@@ -164,7 +168,7 @@ export function ProfileForm() {
     })
   }, [])
 
-  const prepareFavoriteColors = useCallback((values?: string[]) => {
+  const prepareColorList = useCallback((values?: string[]) => {
     const unique = new Set<string>()
     values?.forEach((value) => {
       const hex = toHexFromInput(value)
@@ -183,13 +187,14 @@ export function ProfileForm() {
       weight: userProfile.weight ?? undefined,
       bodyShape: userProfile.bodyShape ?? undefined,
       footSize: userProfile.footSize ?? undefined,
-      favoriteColors: prepareFavoriteColors(userProfile.favoriteColors),
+      favoriteColors: prepareColorList(userProfile.favoriteColors),
+      dislikedColors: prepareColorList(userProfile.dislikedColors),
       favoriteStyles: userProfile.favoriteStyles ?? [],
       photoURL: userProfile.photoURL ?? undefined,
       photoPath: userProfile.photoPath ?? undefined,
     })
     setPreviewUrl(null)
-  }, [prepareFavoriteColors, userProfile])
+  }, [prepareColorList, userProfile])
 
   const updateFavoriteColors = useCallback((updater: (current: string[]) => string[]) => {
     setFormData((prev) => {
@@ -205,8 +210,9 @@ export function ProfileForm() {
       toast({ variant: 'error', title: 'Invalid color', description: 'Enter a valid hex (e.g. #3B82F6) or known color name.' })
       return
     }
+    updateDislikedColors((current) => current.filter((entry) => entry !== hex))
     updateFavoriteColors((current) => (current.includes(hex) ? current : [...current, hex]))
-  }, [updateFavoriteColors, toast])
+  }, [toast, updateDislikedColors, updateFavoriteColors])
 
   const removeFavoriteColor = useCallback((value: string) => {
     const hex = normalizeHex(value)
@@ -225,6 +231,41 @@ export function ProfileForm() {
     }
   }, [addFavoriteColor, customColorPicker, customColorText])
 
+  const updateDislikedColors = useCallback((updater: (current: string[]) => string[]) => {
+    setFormData((prev) => {
+      const current = prev.dislikedColors ?? []
+      const next = updater(current)
+      return { ...prev, dislikedColors: next }
+    })
+  }, [])
+
+  const addDislikedColor = useCallback((value: string) => {
+    const hex = toHexFromInput(value)
+    if (!hex) {
+      toast({ variant: 'error', title: 'Invalid color', description: 'Enter a valid hex (e.g. #F97316) or known color name.' })
+      return
+    }
+    updateFavoriteColors((current) => current.filter((entry) => entry !== hex))
+    updateDislikedColors((current) => (current.includes(hex) ? current : [...current, hex]))
+  }, [toast, updateDislikedColors, updateFavoriteColors])
+
+  const removeDislikedColor = useCallback((value: string) => {
+    const hex = normalizeHex(value)
+    if (!hex) return
+    updateDislikedColors((current) => current.filter((entry) => entry !== hex))
+  }, [updateDislikedColors])
+
+  const handleAddCustomDislikedColor = useCallback(() => {
+    if (customDislikedColorText.trim()) {
+      addDislikedColor(customDislikedColorText)
+      setCustomDislikedColorText('')
+      return
+    }
+    if (customDislikedColorPicker) {
+      addDislikedColor(customDislikedColorPicker)
+    }
+  }, [addDislikedColor, customDislikedColorPicker, customDislikedColorText])
+
   const selectedColors = useMemo(() => {
     const seen = new Set<string>()
     return (formData.favoriteColors ?? [])
@@ -242,6 +283,27 @@ export function ProfileForm() {
   }, [formData.favoriteColors])
 
   const selectedColorSet = useMemo(() => new Set(selectedColors.map((color) => color.hex)), [selectedColors])
+
+  const selectedDislikedColors = useMemo(() => {
+    const seen = new Set<string>()
+    return (formData.dislikedColors ?? [])
+      .map((value) => normalizeHex(value))
+      .filter((hex): hex is string => Boolean(hex))
+      .filter((hex) => {
+        if (seen.has(hex)) return false
+        seen.add(hex)
+        return true
+      })
+      .map((hex) => ({
+        hex,
+        name: getNameForHex(hex) ?? hex,
+      }))
+  }, [formData.dislikedColors])
+
+  const selectedDislikedColorSet = useMemo(
+    () => new Set(selectedDislikedColors.map((color) => color.hex)),
+    [selectedDislikedColors],
+  )
 
   const handleInputChange = (field: keyof ProfileFormState, value: unknown) => {
     setFormData((prev) => {
@@ -301,6 +363,16 @@ export function ProfileForm() {
     )
   }, [formData.favoriteColors])
 
+  const uniqueDislikedColors = useMemo(() => {
+    return Array.from(
+      new Set(
+        (formData.dislikedColors ?? [])
+          .map((value) => normalizeHex(value))
+          .filter((hex): hex is string => Boolean(hex)),
+      ),
+    )
+  }, [formData.dislikedColors])
+
 const buildUpdatePayload = (): Partial<UserProfile> => ({
     displayName: normaliseDisplayName(formData.displayName),
     gender: formData.gender || undefined,
@@ -310,6 +382,7 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
     bodyShape: formData.bodyShape || undefined,
     footSize: formData.footSize || undefined,
     favoriteColors: uniqueFavoriteColors,
+    dislikedColors: uniqueDislikedColors,
     favoriteStyles: formData.favoriteStyles,
     photoURL: formData.photoURL || undefined,
     photoPath: formData.photoPath || undefined,
@@ -707,6 +780,102 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
                   </div>
                   <p className="mt-1 text-[11px] text-gray-500">
                     Tip: paste a hex like <code>#3B82F6</code> or type a color name such as "sage".
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Colors to Avoid</label>
+              {selectedDislikedColors.length > 0 && (
+                <span className="text-xs text-gray-500">Tap a swatch to remove it</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedDislikedColors.length === 0 ? (
+                <span className="text-sm text-gray-500">No disliked colors yet.</span>
+              ) : (
+                selectedDislikedColors.map((color) => (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    onClick={() => removeDislikedColor(color.hex)}
+                    className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm transition hover:border-rose-400 hover:text-rose-500"
+                  >
+                    <span
+                      className="h-4 w-4 rounded-full border border-black/10 shadow"
+                      style={{ backgroundColor: color.hex }}
+                      aria-hidden
+                    />
+                    <span>{color.name}</span>
+                    <X className="h-3.5 w-3.5 text-gray-400 group-hover:text-rose-500" aria-hidden />
+                    <span className="sr-only">Remove {color.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="rounded-lg border border-dashed border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mark colours to downplay</p>
+                <span className="text-xs text-gray-400">Avoid up to {Math.max(0, 8 - selectedDislikedColors.length)} shades</span>
+              </div>
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 md:grid-cols-8">
+                  {paletteColors.map((color) => {
+                    const isSelected = selectedDislikedColorSet.has(color.hex)
+                    return (
+                      <button
+                        key={color.hex}
+                        type="button"
+                        onClick={() => addDislikedColor(color.hex)}
+                        disabled={isSelected}
+                        className={cn(
+                          'group flex flex-col items-center gap-1 rounded-md border border-transparent p-2 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-1',
+                          isSelected
+                            ? 'cursor-not-allowed opacity-50'
+                            : 'hover:-translate-y-1 hover:bg-rose-50',
+                        )}
+                        title={`${color.name} (${color.hex})`}
+                        aria-pressed={isSelected}
+                      >
+                        <span
+                          className="h-8 w-8 rounded-full border border-black/10 shadow-sm"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        <span className="text-[11px] text-gray-600 group-hover:text-gray-900">{color.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="rounded-md border border-gray-200 bg-white/60 p-3 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add custom colour</p>
+                  <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                    <div className="flex w-full items-center gap-2">
+                      <input
+                        type="color"
+                        aria-label="Pick a colour to avoid"
+                        value={customDislikedColorPicker}
+                        onChange={(event) => setCustomDislikedColorPicker(event.target.value)}
+                        className="h-10 w-14 cursor-pointer rounded-md border border-gray-200 bg-white shadow-sm"
+                      />
+                      <Input
+                        value={customDislikedColorText}
+                        onChange={(event) => setCustomDislikedColorText(event.target.value)}
+                        placeholder="#RRGGBB or colour name"
+                        className="flex-1"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <Button type="button" variant="outline" className="sm:w-auto" onClick={handleAddCustomDislikedColor}>
+                      Add Colour
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    We&rsquo;ll downplay these shades when building outfits for you.
                   </p>
                 </div>
               </div>

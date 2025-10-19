@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -10,7 +10,6 @@ import { getUserClothing, toClosetSummary, type ClosetItemSummary } from '@/lib/
 import { isPermissionError } from '@/lib/security'
 import { sendStylistMessage, type StylistMessageResponse } from '@/lib/api'
 import { MessageCircle, Sparkles, ImagePlus, X } from 'lucide-react'
-import { analyzeImageColors } from '@/lib/imageAnalysis'
 
 const OUTFIT_KEYWORDS = [
   'outfit',
@@ -32,6 +31,13 @@ const OUTFIT_KEYWORDS = [
 
 interface Message {
   id: string
+type AnalyzeImageResponse = {
+  description?: string
+  colors?: Array<{ name?: string; hex?: string }>
+  advice?: { summary?: string }
+}
+
+
   type: 'text' | 'image'
   content?: string
   caption?: string
@@ -127,7 +133,13 @@ export function StylistChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [attachedImage, setAttachedImage] = useState<{ preview: string; colors: string[] } | null>(null)
+  const fileToDataUrl = useCallback((input: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read image'))
+    reader.readAsDataURL(input)
+  }), [])
+  const [attachedImage, setAttachedImage] = useState<{ preview: string; colors: string[]; description?: string; summary?: string } | null>(null)
 
   const scrollToBottom = () => {
     const container = scrollContainerRef.current
@@ -208,6 +220,7 @@ export function StylistChat() {
         message: trimmed,
         context: contextSnippet,
         imageColors: pendingAttachment?.colors,
+        imageDescription: pendingAttachment?.description,
         userProfile: userProfile || undefined,
         closetItems: closetItems.length > 0 ? closetItems : undefined,
       })
@@ -250,9 +263,34 @@ export function StylistChat() {
   const onImageSelected = async (file?: File) => {
     if (!file) return
     try {
-      const analysis = await analyzeImageColors(file, 'enhanced')
+      const dataUrl = await fileToDataUrl(file)
+      const profilePayload = userProfile
+        ? {
+            gender: userProfile.gender ?? undefined,
+            age: userProfile.age ?? undefined,
+            favoriteColors: userProfile.favoriteColors ?? [],
+            dislikedColors: userProfile.dislikedColors ?? [],
+            stylePreferences: userProfile.favoriteStyles ?? [],
+          }
+        : undefined
+      const response = await fetch('/api/analyze-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl, profile: profilePayload }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(typeof body?.error === 'string' ? body.error : 'Image analysis failed')
+      }
+      const body = (await response.json()) as AnalyzeImageResponse
+      const rawColors = Array.isArray(body.colors) ? body.colors : []
+      const colors = rawColors
+        .map((entry) => (typeof entry?.name === 'string' ? entry.name : null))
+        .filter((name): name is string => Boolean(name))
+      const description = typeof body.description === 'string' ? body.description : undefined
+      const summary = typeof body?.advice?.summary === 'string' ? body.advice.summary : undefined
       const preview = URL.createObjectURL(file)
-      setAttachedImage({ preview, colors: analysis.dominantColors })
+      setAttachedImage({ preview, colors, description, summary })
     } catch (error) {
       console.error('Image analysis failed:', error)
       toast({ variant: 'error', title: 'Image analysis failed', description: 'We could not read the colors from that photo. Try another image?' })
@@ -304,7 +342,12 @@ export function StylistChat() {
         {attachedImage && (
           <div className="flex items-center gap-3 mb-2">
             <img src={attachedImage.preview} className="h-14 w-14 object-cover rounded" alt="attachment preview" />
-            <div className="text-xs text-gray-600">Attached image. Dominant colors: {attachedImage.colors.join(', ')}</div>
+            <div className="text-xs text-gray-600">
+              Attached image. {attachedImage.summary ? `${attachedImage.summary} ` : ''}
+              {attachedImage.colors.length
+                ? `Dominant shades: ${attachedImage.colors.join(', ')}.`
+                : 'Dominant shades: not clearly detected.'}
+            </div>
             <button
               type="button"
               onClick={() => setAttachedImage(null)}

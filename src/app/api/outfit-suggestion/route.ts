@@ -142,6 +142,7 @@ const InputSchema = z.object({
       gender: z.string().optional(),
       age: z.number().optional(),
       favoriteColors: z.array(z.string()).optional(),
+      dislikedColors: z.array(z.string()).optional(),
       favoriteStyles: z.array(z.string()).optional(),
     })
     .optional(),
@@ -231,6 +232,7 @@ User Profile:
 - Gender: ${input.userProfile?.gender || 'not specified'}
 - Age: ${input.userProfile?.age || 'not specified'}
 - Favorite Colors: ${input.userProfile?.favoriteColors?.join(', ') || 'none specified'}
+- Disliked Colors: ${input.userProfile?.dislikedColors?.join(', ') || 'none specified'}
 - Favorite Styles: ${input.userProfile?.favoriteStyles?.join(', ') || 'none specified'}
 
 ${occasionGuidance}
@@ -242,7 +244,7 @@ ${onlineBlock}
 Online Catalog JSON (each entry is eligible for online picks, reference id when using one):
 ${onlinePiecesPayload}
 
-Provide a detailed outfit recommendation and clear style notes. Reference the item names when you use them.`
+Provide a detailed outfit recommendation and clear style notes. Reference the item names when you use them, spotlight favourite colours, and deliberately avoid any listed dislikes.`
 
     const response = await callMistralAI(prompt, systemPrompt, { responseFormat: { type: 'json_object' } })
 

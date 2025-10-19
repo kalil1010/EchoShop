@@ -11,6 +11,7 @@ export interface StylistMessagePayload {
     gender?: string
     age?: number
     favoriteColors?: string[]
+    dislikedColors?: string[]
     favoriteStyles?: string[]
   }
   closetItems?: ClosetItemSummary[]
@@ -42,6 +43,7 @@ export interface OutfitSuggestionPayload {
     gender?: string
     age?: number
     favoriteColors?: string[]
+    dislikedColors?: string[]
     favoriteStyles?: string[]
   }
   userId?: string

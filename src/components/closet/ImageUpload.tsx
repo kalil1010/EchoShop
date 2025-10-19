@@ -14,6 +14,7 @@ import { sanitizeText, isPermissionError } from '@/lib/security'
 import { fireConfetti } from '@/lib/confetti'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { ImageCropDialog } from '@/components/ui/ImageCropDialog'
+import type { ColorAdvice, ColorSwatch } from '@/lib/personalizedColors'
 
 interface ImageUploadProps {
   onItemAdded?: (item: ClothingItem) => void
@@ -24,12 +25,6 @@ type ModerationSnapshot = {
   message?: string | null
   category?: string | null
   reasons?: string[] | null
-}
-
-type MatchingSuggestions = {
-  complementary: string
-  analogous: string[]
-  triadic: string[]
 }
 
 type ProcessedPiece = {
@@ -43,13 +38,11 @@ type ProcessedPiece = {
   dominantColors: string[]
   primaryHex: string | null
   colorNames: string[]
-  colorPercentages: Record<string, number>
   aiPrompt: string | null
   moderation: ModerationSnapshot
   previewDataUrl: string
-  matchingSuggestions?: MatchingSuggestions | null
-  richPalette?: unknown
-  mistralColors?: Array<{ name: string; hex: string }>
+  colorAdvice?: ColorAdvice | null
+  mistralColors?: ColorSwatch[]
   accepted: boolean
   description?: string
   overridePrimary?: string | null
@@ -68,13 +61,11 @@ type ProcessResponsePiece = {
   dominantColors?: string[]
   primaryHex?: string | null
   colorNames?: string[]
-  colorPercentages?: Record<string, number>
   aiPrompt?: string | null
   moderation?: ModerationSnapshot
   previewDataUrl: string
-  matchingSuggestions?: MatchingSuggestions | null
-  richPalette?: unknown
-  mistralColors?: Array<{ name: string; hex: string }>
+  colorAdvice?: ColorAdvice | null
+  mistralColors?: ColorSwatch[]
 }
 
 const GARMENT_TYPES: ClothingItem['garmentType'][] = ['top', 'bottom', 'outerwear', 'footwear', 'accessory']
@@ -86,6 +77,12 @@ const ensureHex = (hex: string): string => {
 }
 
 const isValidHex = (hex: string): boolean => /^#?[0-9a-fA-F]{6}$/.test(hex.trim())
+
+const normaliseColorName = (value: string): string => {
+  const trimmed = value?.trim?.() ?? ''
+  if (!trimmed) return ''
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
 
 export function ImageUpload({ onItemAdded }: ImageUploadProps) {
   const { user } = useAuth()
@@ -228,30 +225,61 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
 
       const body = await response.json()
       const responsePieces = Array.isArray(body.pieces) ? (body.pieces as ProcessResponsePiece[]) : []
-      const mappedPieces: ProcessedPiece[] = responsePieces.map((piece) => ({
-        tempId: piece.tempId,
-        outfitGroupId: piece.outfitGroupId,
-        garmentType: (piece.garmentType || 'top') as ClothingItem['garmentType'],
-        detectionLabel: piece.detectionLabel || 'Garment',
-        detectionConfidence: typeof piece.detectionConfidence === 'number' ? piece.detectionConfidence : 0,
-        provider: piece.provider || 'vision',
-        boundingBox: piece.boundingBox,
-        dominantColors: Array.isArray(piece.dominantColors) ? piece.dominantColors : [],
-        primaryHex: piece.primaryHex ?? null,
-        colorNames: Array.isArray(piece.colorNames) ? piece.colorNames : [],
-        colorPercentages: piece.colorPercentages ?? {},
-        aiPrompt: piece.aiPrompt ?? null,
-        moderation: piece.moderation ?? { status: 'ok' },
-        previewDataUrl: piece.previewDataUrl,
-        matchingSuggestions: piece.matchingSuggestions ?? null,
-        richPalette: piece.richPalette ?? null,
-        mistralColors: Array.isArray(piece.mistralColors) ? piece.mistralColors : [],
-        accepted: true,
-        description: '',
-        overridePrimary: null,
-        overrideColors: null,
-        draftHex: '',
-      }))
+      const mappedPieces: ProcessedPiece[] = responsePieces.map((piece) => {
+        const dominantColors = Array.isArray(piece.dominantColors)
+          ? piece.dominantColors.map(ensureHex)
+          : []
+
+        const seen = new Set<string>()
+        const mistralColors: ColorSwatch[] = Array.isArray(piece.mistralColors)
+          ? piece.mistralColors
+              .map((entry) => {
+                const hex = ensureHex(entry?.hex ?? '')
+                if (!/^#[0-9A-F]{6}$/.test(hex) || seen.has(hex)) {
+                  return null
+                }
+                seen.add(hex)
+                return {
+                  name: typeof entry?.name === 'string' && entry.name.trim().length > 0 ? entry.name : getColorName(hex),
+                  hex,
+                }
+              })
+              .filter((swatch): swatch is ColorSwatch => Boolean(swatch))
+          : []
+
+        const primaryHex =
+          piece.primaryHex ??
+          dominantColors[0] ??
+          (mistralColors.length ? mistralColors[0].hex : null)
+
+        const colorNames =
+          mistralColors.length > 0
+            ? mistralColors.map((color) => color.name)
+            : dominantColors.map((hex) => getColorName(hex))
+
+        return {
+          tempId: piece.tempId,
+          outfitGroupId: piece.outfitGroupId,
+          garmentType: (piece.garmentType || 'top') as ClothingItem['garmentType'],
+          detectionLabel: piece.detectionLabel || 'Garment',
+          detectionConfidence: typeof piece.detectionConfidence === 'number' ? piece.detectionConfidence : 0,
+          provider: piece.provider || 'mistral-vision',
+          boundingBox: piece.boundingBox,
+          dominantColors,
+          primaryHex,
+          colorNames,
+          aiPrompt: piece.aiPrompt ?? null,
+          moderation: piece.moderation ?? { status: 'ok' },
+          previewDataUrl: piece.previewDataUrl,
+          colorAdvice: piece.colorAdvice ?? null,
+          mistralColors,
+          accepted: true,
+          description: '',
+          overridePrimary: null,
+          overrideColors: null,
+          draftHex: '',
+        }
+      })
 
       if (!mappedPieces.length) {
         throw new Error('No garments detected. Try using a clearer image or adjust the framing.')
@@ -702,6 +730,56 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
                           <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
                             <span className="font-medium text-gray-600 block mb-1">AI Summary</span>
                             {piece.aiPrompt}
+                          </div>
+                        )}
+                        {piece.colorAdvice && (
+                          <div className="rounded-md border border-purple-100 bg-purple-50/70 p-3 text-sm text-purple-900 space-y-2">
+                            <div className="flex items-center gap-2 font-medium text-purple-900/90">
+                              <Sparkles className="h-4 w-4 text-purple-500" />
+                              <span>Personalised color tips</span>
+                            </div>
+                            {piece.colorAdvice.summary && (
+                              <p className="text-xs leading-relaxed text-purple-900/90">
+                                {piece.colorAdvice.summary}
+                              </p>
+                            )}
+                            {Array.isArray(piece.colorAdvice.pairings) && piece.colorAdvice.pairings.length > 0 && (
+                              <div className="space-y-2">
+                                {piece.colorAdvice.pairings.map((pairing) => (
+                                  <div
+                                    key={`${piece.tempId}-${pairing.title}`}
+                                    className="rounded border border-purple-200/60 bg-white/80 px-3 py-2"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-purple-900">{pairing.title}</span>
+                                      {pairing.highlight && (
+                                        <span className="text-[10px] text-purple-500">
+                                          Highlights your love of {pairing.highlight}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      {pairing.colors.map((swatch) => (
+                                        <div
+                                          key={`${pairing.title}-${swatch.hex}`}
+                                          className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5"
+                                        >
+                                          <span
+                                            className="h-3 w-3 rounded-full border border-black/10"
+                                            style={{ backgroundColor: swatch.hex }}
+                                            aria-hidden
+                                          />
+                                          <span className="text-[10px] font-medium text-purple-900">
+                                            {normaliseColorName(swatch.name)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <p className="mt-2 text-[11px] text-purple-800/80 leading-relaxed">{pairing.rationale}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

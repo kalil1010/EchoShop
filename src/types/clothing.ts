@@ -1,3 +1,4 @@
+import type { ColorAdvice, ColorSwatch } from '@/lib/personalizedColors'
 export interface ClothingItem {
   id: string
   userId: string
@@ -13,6 +14,8 @@ export interface ClothingItem {
     analogous: string[]
     triadic: string[]
   }
+  colorAdvice?: ColorAdvice
+  mistralColors?: ColorSwatch[]
   aiPrompt?: string
   description?: string
   brand?: string

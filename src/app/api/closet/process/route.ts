@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { v4 as uuidv4 } from 'uuid'
 
-import { getColorName, getMatchingColors, getRichPalette } from '@/lib/imageAnalysis'
+import { getColorName } from '@/lib/imageAnalysis'
 import { analyzeGarmentWithMistral, segmentGarmentsWithMistral } from '@/lib/mistralVision'
 import { moderateImageBuffer } from '@/lib/imageModeration'
-import { analyzeBufferColors } from '@/lib/server/colorAnalysis'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError } from '@/lib/security'
+import { buildPersonalizedColorAdvice, type ColorAdvice } from '@/lib/personalizedColors'
+import { fetchUserStyleProfile } from '@/lib/server/userProfile'
 
 export const runtime = 'nodejs'
 
@@ -25,12 +26,6 @@ type ModerationSnapshot = {
   reasons?: string[]
 }
 
-type MatchingSuggestions = {
-  complementary: string
-  analogous: string[]
-  triadic: string[]
-}
-
 type ProcessPiecePayload = {
   tempId: string
   outfitGroupId: string
@@ -42,12 +37,10 @@ type ProcessPiecePayload = {
   dominantColors: string[]
   primaryHex: string | null
   colorNames: string[]
-  colorPercentages: Record<string, number>
   aiPrompt: string | null
   moderation: ModerationSnapshot
   previewDataUrl: string
-  matchingSuggestions?: MatchingSuggestions | null
-  richPalette?: unknown
+  colorAdvice?: ColorAdvice | null
   mistralColors?: Array<{ name: string; hex: string }>
 }
 
@@ -58,19 +51,6 @@ const ensureHex = (hex: string): string => {
   if (!trimmed) return '#000000'
   const normalised = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
   return normalised.toUpperCase()
-}
-
-const dedupeHexes = (hexes: string[]): string[] => {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const hex of hexes) {
-    const normalised = ensureHex(hex)
-    if (!/^#[0-9A-F]{6}$/.test(normalised)) continue
-    if (seen.has(normalised)) continue
-    seen.add(normalised)
-    result.push(normalised)
-  }
-  return result
 }
 
 const mapSuggestedType = (value?: string | null): 'top' | 'bottom' | 'outerwear' | 'footwear' | 'accessory' => {
@@ -169,7 +149,8 @@ const buildPixelBoundingBox = (
 
 export async function POST(request: NextRequest) {
   try {
-    await resolveAuthenticatedUser(request)
+    const { userId } = await resolveAuthenticatedUser(request)
+    const userProfile = await fetchUserStyleProfile(userId)
 
     const formData = await request.formData()
     const file = formData.get('file')
@@ -252,12 +233,10 @@ export async function POST(request: NextRequest) {
               dominantColors: [],
               primaryHex: null,
               colorNames: [],
-              colorPercentages: {},
               aiPrompt: null,
               moderation,
               previewDataUrl,
-              matchingSuggestions: undefined,
-              richPalette: null,
+              colorAdvice: null,
               mistralColors: [],
             })
             continue
@@ -276,14 +255,30 @@ export async function POST(request: NextRequest) {
       }
 
       const analysis = await analyzeGarmentWithMistral(jpegBuffer, 'image/jpeg')
-      const localColors = await analyzeBufferColors(pngBuffer)
 
-      const mistralHexes = analysis?.colors?.map((color) => color.hex) ?? []
-      const localHexes = localColors.dominantColors
-      const combinedHexes = dedupeHexes([...mistralHexes, ...localHexes])
-      const dominantColors = combinedHexes.length > 0 ? combinedHexes : dedupeHexes(localHexes)
+      const seenHex = new Set<string>()
+      const mistralColors = analysis?.colors
+        ? analysis.colors
+            .map((color) => ({
+              name: color.name?.trim() || getColorName(color.hex),
+              hex: ensureHex(color.hex),
+            }))
+            .filter((entry) => {
+              if (!/^#[0-9A-F]{6}$/.test(entry.hex)) return false
+              if (seenHex.has(entry.hex)) return false
+              seenHex.add(entry.hex)
+              return true
+            })
+        : []
+
+      const dominantColors = mistralColors.map((color) => color.hex)
       const primaryHex = dominantColors[0] ?? null
-      const colorNames = dominantColors.map((hex) => getColorName(hex))
+      const colorNames = mistralColors.map((color) => color.name)
+      const colorAdvice = buildPersonalizedColorAdvice(
+        mistralColors.map((color) => ({ name: color.name, hex: color.hex })),
+        analysis?.suggestedType ?? detection.garmentType,
+        userProfile,
+      )
 
       if (analysis) {
         if (analysis.safety.status !== 'ok') {
@@ -316,9 +311,6 @@ export async function POST(request: NextRequest) {
         ? mapLabelToType(analysis.suggestedType, detection.label)
         : mapLabelToType(detection.garmentType, detection.label)
 
-      const matches = primaryHex ? getMatchingColors(primaryHex) : null
-      const richMatches = primaryHex ? getRichPalette(primaryHex) : null
-
       pieces.push({
         tempId,
         outfitGroupId,
@@ -330,13 +322,11 @@ export async function POST(request: NextRequest) {
         dominantColors,
         primaryHex,
         colorNames,
-        colorPercentages: localColors.colorPercentages,
         aiPrompt: analysis?.description ?? null,
         moderation,
         previewDataUrl,
-        matchingSuggestions: matches ?? undefined,
-        richPalette: richMatches,
-        mistralColors: analysis?.colors ?? [],
+        colorAdvice,
+        mistralColors,
       })
     }
 
