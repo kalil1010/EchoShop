@@ -196,6 +196,14 @@ export function ProfileForm() {
     setPreviewUrl(null)
   }, [prepareColorList, userProfile])
 
+  const updateDislikedColors = useCallback((updater: (current: string[]) => string[]) => {
+    setFormData((prev) => {
+      const current = prev.dislikedColors ?? []
+      const next = updater(current)
+      return { ...prev, dislikedColors: next }
+    })
+  }, [])
+
   const updateFavoriteColors = useCallback((updater: (current: string[]) => string[]) => {
     setFormData((prev) => {
       const current = prev.favoriteColors ?? []
@@ -230,14 +238,6 @@ export function ProfileForm() {
       addFavoriteColor(customColorPicker)
     }
   }, [addFavoriteColor, customColorPicker, customColorText])
-
-  const updateDislikedColors = useCallback((updater: (current: string[]) => string[]) => {
-    setFormData((prev) => {
-      const current = prev.dislikedColors ?? []
-      const next = updater(current)
-      return { ...prev, dislikedColors: next }
-    })
-  }, [])
 
   const addDislikedColor = useCallback((value: string) => {
     const hex = toHexFromInput(value)
