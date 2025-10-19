@@ -103,7 +103,11 @@ const formatList = (values: string[]): string => {
   if (values.length === 1) return values[0]
   if (values.length === 2) return `${values[0]} or ${values[1]}`
   const [head, ...rest] = values
-  return `${head}, ${rest.slice(0, -1).join(', ')}, or ${rest.at(-1)}`
+  if (!rest.length) return head
+  const last = rest[rest.length - 1]
+  const middle = rest.slice(0, -1).join(', ')
+  if (!middle) return `${head}, or ${last}`
+  return `${head}, ${middle}, or ${last}`
 }
 
 const buildRationale = (
