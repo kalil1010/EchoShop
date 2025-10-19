@@ -29,15 +29,14 @@ const OUTFIT_KEYWORDS = [
   'styling idea',
 ]
 
-interface Message {
-  id: string
 type AnalyzeImageResponse = {
   description?: string
   colors?: Array<{ name?: string; hex?: string }>
   advice?: { summary?: string }
 }
 
-
+interface Message {
+  id: string
   type: 'text' | 'image'
   content?: string
   caption?: string
