@@ -12,13 +12,13 @@ type AnalyzeImageRequest = {
 
 const parseDataUrl = (dataUrl?: string): { buffer: Buffer; mimeType: string } | null => {
   if (!dataUrl) return null
-  const match = dataUrl.match(/^data:(?<mime>[^;]+);base64,(?<data>.+)$/)
-  if (!match?.groups?.data || !match.groups.mime) {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+  if (!match || match.length < 3) {
     return null
   }
   try {
-    const buffer = Buffer.from(match.groups.data, 'base64')
-    return { buffer, mimeType: match.groups.mime }
+    const buffer = Buffer.from(match[2], 'base64')
+    return { buffer, mimeType: match[1] }
   } catch (error) {
     console.warn('[analyze-image] Failed to parse data URL', error)
     return null
