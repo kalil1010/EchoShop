@@ -8,6 +8,7 @@ export interface UserStyleProfile {
   favoriteColors?: string[]
   dislikedColors?: string[]
   stylePreferences?: string[]
+  favoriteStyles?: string[]
 }
 
 export interface ColorPairing {
