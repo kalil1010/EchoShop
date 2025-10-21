@@ -1,5 +1,8 @@
 import type { FashionPiece, GenderTarget, PriceLabel } from "@/types/arrivals"
 import { BRAND_PIECES } from "@/data/brandPieces"
+import { createServiceClient } from '@/lib/supabaseServer'
+import { mapVendorProductRow } from '@/lib/vendorProducts'
+import type { VendorProduct } from '@/types/vendor'
 
 type GenderMap = Partial<Record<GenderTarget, string[]>>
 
@@ -258,6 +261,96 @@ export const gatherBrandPieces = async (): Promise<FashionPiece[]> => {
   return chunks.flat()
 }
 
+const determineVendorPriceLabel = (price: number): PriceLabel => {
+  if (!Number.isFinite(price) || price <= 0) return 'Mid-Range'
+  if (price < 1100) return 'Budget'
+  if (price > 2400) return 'Premium'
+  return 'Mid-Range'
+}
+
+const formatVendorPrice = (price: number, currency: string): string => {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(price)
+  } catch {
+    return `${currency} ${price.toFixed(2)}`
+  }
+}
+
+const mapVendorProductToPiece = (product: VendorProduct): FashionPiece | null => {
+  const imageUrl = product.primaryImageUrl || product.gallery[0]?.url
+  if (!imageUrl) return null
+
+  const vendorName = product.vendorName ?? 'Marketplace Vendor'
+  const formattedPrice = formatVendorPrice(product.price, product.currency)
+  const highlights: string[] = []
+  if (vendorName) highlights.push(vendorName)
+  highlights.push(formattedPrice)
+  if (product.aiColors && product.aiColors.length > 0) {
+    highlights.push(product.aiColors[0].name)
+  }
+
+  return {
+    id: `vendor-${product.id}`,
+    title: product.title,
+    description: product.description ?? product.aiDescription ?? 'Marketplace listing',
+    brand: vendorName,
+    gender: 'unisex',
+    priceLabel: determineVendorPriceLabel(product.price),
+    categories: ['Marketplace'],
+    imageUrl,
+    sourceUrl: '/marketplace',
+    store: `${vendorName} · ZMODA Marketplace`,
+    price: formattedPrice,
+    highlights,
+  }
+}
+
+const fetchVendorMarketplacePieces = async (): Promise<FashionPiece[]> => {
+  try {
+    const supabase = createServiceClient()
+    const { data, error } = await supabase
+      .from('vendor_products')
+      .select(`
+        id,
+        vendor_id,
+        title,
+        description,
+        price,
+        currency,
+        status,
+        primary_image_url,
+        primary_image_path,
+        gallery_urls,
+        gallery_paths,
+        ai_description,
+        ai_colors,
+        created_at,
+        updated_at,
+        profiles(display_name)
+      `)
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(36)
+
+    if (error) {
+      console.warn('[fashion-pieces] failed to load vendor listings', error)
+      return []
+    }
+
+    const products = (data ?? []).map(mapVendorProductRow)
+    return products
+      .map(mapVendorProductToPiece)
+      .filter((piece): piece is FashionPiece => Boolean(piece))
+  } catch (error) {
+    console.warn('[fashion-pieces] vendor marketplace fetch error', error)
+    return []
+  }
+}
+
 export const filterPiecesByGender = (
   pieces: FashionPiece[],
   gender?: GenderTarget | null,
@@ -286,10 +379,30 @@ const filterPiecesByOccasion = (pieces: FashionPiece[], occasion?: string | null
 }
 
 export const getOnlinePieces = async (gender?: GenderTarget | null, occasion?: string | null): Promise<FashionPiece[]> => {
-  const live = await gatherBrandPieces()
-  const base = live.length > 0 ? live : BRAND_PIECES
-  const genderFiltered = filterPiecesByGender(base, gender)
-  return filterPiecesByOccasion(genderFiltered, occasion).slice(0, 18)
+  const [vendorPieces, brandPieces] = await Promise.all([
+    fetchVendorMarketplacePieces(),
+    gatherBrandPieces().catch((error) => {
+      console.warn('[fashion-pieces] failed to load brand catalogues', error)
+      return [] as FashionPiece[]
+    }),
+  ])
+
+  const combined = [
+    ...vendorPieces,
+    ...(brandPieces.length > 0 ? brandPieces : BRAND_PIECES),
+  ]
+
+  const uniquePieces: FashionPiece[] = []
+  const seen = new Set<string>()
+  for (const piece of combined) {
+    if (!piece || seen.has(piece.id)) continue
+    seen.add(piece.id)
+    uniquePieces.push(piece)
+  }
+
+  const genderFiltered = filterPiecesByGender(uniquePieces, gender)
+  const occasionFiltered = filterPiecesByOccasion(genderFiltered, occasion)
+  return occasionFiltered.slice(0, 24)
 }
 
 export const summarisePiecesForPrompt = (

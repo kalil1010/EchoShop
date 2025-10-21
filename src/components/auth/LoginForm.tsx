@@ -155,7 +155,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             onClick={handleGoogleSignUp}
             disabled={loading || googleLoading}
           >
-            {googleLoading ? 'Redirecting...' : 'Sign up with Google'}
+            {googleLoading ? 'Redirecting...' : 'Sign in with Google'}
           </Button>
 
           <div className="text-center">

@@ -13,6 +13,8 @@ import {
   Home,
   Palette,
   Image as ImageIcon,
+  ShoppingBag,
+  Store,
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,11 +29,11 @@ interface NavItem {
 }
 
 export function Navigation() {
-  const { user, userProfile, logout, loading } = useAuth();
+  const { user, userProfile, logout, loading, isVendor } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navItems = useMemo<NavItem[]>(
-    () => [
+  const navItems = useMemo<NavItem[]>(() => {
+    const items: NavItem[] = [
       { href: '/', label: 'Home', icon: Home },
       { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true },
       { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true },
@@ -39,9 +41,12 @@ export function Navigation() {
       { href: '/image-generator', label: 'Image Lab', icon: ImageIcon, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
-    ],
-    [],
-  );
+    ];
+    if (isVendor) {
+      items.push({ href: '/dashboard/vendor', label: 'Vendor Portal', icon: Store, requiresAuth: true });
+    }
+    return items;
+  }, [isVendor]);
 
   const visibleNavItems = navItems.filter((item) => !item.requiresAuth || !!user);
 
@@ -155,3 +160,6 @@ export function Navigation() {
     </nav>
   );
 }
+
+
+

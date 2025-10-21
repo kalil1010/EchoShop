@@ -21,7 +21,8 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
-  const { signUp } = useAuth()
+  const [registerAsVendor, setRegisterAsVendor] = useState(false)
+  const { signUp, refreshProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const supabase = useMemo(() => {
@@ -32,6 +33,19 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       return null
     }
   }, [])
+
+  const rememberVendorIntent = (value: boolean) => {
+    if (typeof window === 'undefined') return
+    try {
+      if (value) {
+        window.sessionStorage.setItem('zmoda:vendor-intent', '1')
+      } else {
+        window.sessionStorage.removeItem('zmoda:vendor-intent')
+      }
+    } catch (storageError) {
+      console.warn('Failed to persist vendor intent preference:', storageError)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,12 +74,68 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setLoading(true)
     setError('')
 
+    rememberVendorIntent(registerAsVendor)
+
     try {
       await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
       const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
-      setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
-      toast({ variant: 'success', title: 'Account created', description: `Welcome, ${name}!` })
-      setTimeout(() => router.push('/profile'), 1500)
+      let redirectPath = '/profile'
+      let vendorMessage = ''
+
+      if (registerAsVendor) {
+        try {
+          const response = await fetch('/api/vendor/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          })
+
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}))
+            const message =
+              typeof payload?.error === 'string'
+                ? payload.error
+                : 'We could not enable your vendor dashboard automatically. Please try again later.'
+            throw new Error(message)
+          }
+
+          redirectPath = '/dashboard/vendor'
+          vendorMessage = ' Your vendor dashboard is ready.'
+          refreshProfile().catch((profileError) => {
+            console.warn('Failed to refresh profile after vendor activation:', profileError)
+          })
+          toast({
+            variant: 'success',
+            title: 'Vendor account activated',
+            description: 'Welcome aboard! You can start listing products right away.',
+          })
+        } catch (vendorError) {
+          const message =
+            vendorError instanceof Error
+              ? vendorError.message
+              : 'Vendor activation requires manual review.'
+          console.error('Vendor activation failed:', vendorError)
+          toast({
+            variant: 'error',
+            title: 'Vendor activation pending',
+            description: message,
+          })
+        } finally {
+          rememberVendorIntent(false)
+        }
+      } else {
+        rememberVendorIntent(false)
+      }
+
+      setSuccess(`Account created successfully! Welcome, ${name}.${vendorMessage} Redirecting...`)
+      toast({
+        variant: 'success',
+        title: registerAsVendor ? 'Account created' : 'Account created',
+        description: registerAsVendor
+          ? `Welcome, ${name}! Your vendor tools are available.`
+          : `Welcome, ${name}!`,
+      })
+      setTimeout(() => router.push(redirectPath), 1500)
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
@@ -88,6 +158,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
     setGoogleLoading(true)
     try {
+      rememberVendorIntent(registerAsVendor)
       const { error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google' })
       if (oauthError) {
         throw oauthError
@@ -152,6 +223,28 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Create a password"
               required
             />
+          </div>
+
+          <div className="flex items-start space-x-3 rounded-md border border-dashed border-border p-3">
+            <input
+              id="vendor-intent"
+              type="checkbox"
+              checked={registerAsVendor}
+              onChange={(event) => {
+                const checked = event.target.checked
+                setRegisterAsVendor(checked)
+                rememberVendorIntent(checked)
+              }}
+              className="mt-1 h-4 w-4 rounded border border-input text-purple-600 focus:ring-2 focus:ring-purple-500"
+            />
+            <div className="space-y-1">
+              <label htmlFor="vendor-intent" className="text-sm font-medium text-foreground">
+                I want to sell products on ZMODA Marketplace
+              </label>
+              <p className="text-xs text-muted-foreground">
+                You&apos;ll unlock a vendor dashboard to upload products, manage listings, and reach ZMODA shoppers.
+              </p>
+            </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

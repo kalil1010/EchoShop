@@ -1,8 +1,10 @@
-﻿export interface UserProfile {
-uid: string
-email: string
-displayName?: string
-photoURL?: string
+export type UserRole = 'user' | 'vendor' | 'admin'
+
+export interface UserProfile {
+  uid: string
+  email: string
+  displayName?: string
+  photoURL?: string
   photoPath?: string
   gender?: 'male' | 'female' | 'other'
   age?: number
@@ -13,13 +15,16 @@ photoURL?: string
   favoriteColors?: string[]
   dislikedColors?: string[]
   favoriteStyles?: string[]
+  role: UserRole
   createdAt: Date
   updatedAt: Date
 }
+
 export interface AuthUser {
-uid: string
-email: string | null
-displayName: string | null
-photoURL: string | null
-emailVerified: boolean
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
+  emailVerified: boolean
+  role?: UserRole
 }
