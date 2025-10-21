@@ -4,6 +4,7 @@ import VendorDashboard from '@/components/vendor/VendorDashboard'
 import BecomeVendorCard from '@/components/vendor/BecomeVendorCard'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapVendorProductRow } from '@/lib/vendorProducts'
+import type { VendorProduct } from '@/types/vendor'
 
 const VENDOR_ROLES = new Set(['vendor', 'admin'])
 
@@ -34,7 +35,7 @@ export default async function VendorDashboardPage() {
     )
   }
 
-  let initialProducts = []
+  let initialProducts: VendorProduct[] = []
 
   try {
     const service = createServiceClient()
@@ -48,14 +49,7 @@ export default async function VendorDashboardPage() {
       throw productsError
     }
 
-    initialProducts = (productsData ?? []).map((row) => {
-      const mapped = mapVendorProductRow(row)
-      return {
-        ...mapped,
-        createdAt: mapped.createdAt.toISOString(),
-        updatedAt: mapped.updatedAt.toISOString(),
-      }
-    })
+    initialProducts = (productsData ?? []).map(mapVendorProductRow)
   } catch (error) {
     console.warn('[vendor-dashboard] vendor products unavailable, starting empty:', error)
     initialProducts = []

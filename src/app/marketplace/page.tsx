@@ -21,7 +21,7 @@ export const metadata = {
 }
 
 export default async function MarketplacePage() {
-  let products: Array<ReturnType<typeof mapVendorProductRow> & { createdAt: string; updatedAt: string }> = []
+  let products: ReturnType<typeof mapVendorProductRow>[] = []
 
   try {
     const supabase = createServiceClient()
@@ -52,14 +52,7 @@ export default async function MarketplacePage() {
       throw error
     }
 
-    products = (data ?? []).map((row) => {
-      const mapped = mapVendorProductRow(row)
-      return {
-        ...mapped,
-        createdAt: mapped.createdAt.toISOString(),
-        updatedAt: mapped.updatedAt.toISOString(),
-      }
-    })
+    products = (data ?? []).map(mapVendorProductRow)
   } catch (error) {
     console.warn('[marketplace] vendor listings unavailable, falling back to empty state:', error)
     products = []
@@ -125,3 +118,7 @@ export default async function MarketplacePage() {
     </div>
   )
 }
+
+
+
+
