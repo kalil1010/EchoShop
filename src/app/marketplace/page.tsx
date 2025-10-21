@@ -21,42 +21,49 @@ export const metadata = {
 }
 
 export default async function MarketplacePage() {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase
-    .from('vendor_products')
-    .select(
-      `id,
-       vendor_id,
-       title,
-       description,
-       price,
-       currency,
-       status,
-       primary_image_url,
-       primary_image_path,
-       gallery_urls,
-       gallery_paths,
-       ai_description,
-       ai_colors,
-       created_at,
-       updated_at`,
-    )
-    .eq('status', 'active')
-    .order('updated_at', { ascending: false })
-    .limit(PRODUCTS_LIMIT)
+  let products: Array<ReturnType<typeof mapVendorProductRow> & { createdAt: string; updatedAt: string }> = []
 
-  if (error) {
-    console.error('[marketplace] Failed to load vendor listings:', error)
-  }
+  try {
+    const supabase = createServiceClient()
+    const { data, error } = await supabase
+      .from('vendor_products')
+      .select(
+        `id,
+         vendor_id,
+         title,
+         description,
+         price,
+         currency,
+         status,
+         primary_image_url,
+         primary_image_path,
+         gallery_urls,
+         gallery_paths,
+         ai_description,
+         ai_colors,
+         created_at,
+         updated_at`,
+      )
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(PRODUCTS_LIMIT)
 
-  const products = (data ?? []).map((row) => {
-    const mapped = mapVendorProductRow(row)
-    return {
-      ...mapped,
-      createdAt: mapped.createdAt.toISOString(),
-      updatedAt: mapped.updatedAt.toISOString(),
+    if (error) {
+      throw error
     }
-  })
+
+    products = (data ?? []).map((row) => {
+      const mapped = mapVendorProductRow(row)
+      return {
+        ...mapped,
+        createdAt: mapped.createdAt.toISOString(),
+        updatedAt: mapped.updatedAt.toISOString(),
+      }
+    })
+  } catch (error) {
+    console.warn('[marketplace] vendor listings unavailable, falling back to empty state:', error)
+    products = []
+  }
 
   return (
     <div className="container mx-auto px-4 py-10 space-y-8">

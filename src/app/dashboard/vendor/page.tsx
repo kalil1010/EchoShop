@@ -34,25 +34,32 @@ export default async function VendorDashboardPage() {
     )
   }
 
-  const service = createServiceClient()
-  const { data: productsData, error: productsError } = await service
-    .from('vendor_products')
-    .select('*')
-    .eq('vendor_id', user.id)
-    .order('updated_at', { ascending: false })
+  let initialProducts = []
 
-  if (productsError) {
-    console.warn('[vendor-dashboard] failed to fetch vendor products', productsError)
-  }
+  try {
+    const service = createServiceClient()
+    const { data: productsData, error: productsError } = await service
+      .from('vendor_products')
+      .select('*')
+      .eq('vendor_id', user.id)
+      .order('updated_at', { ascending: false })
 
-  const initialProducts = (productsData ?? []).map((row) => {
-    const mapped = mapVendorProductRow(row)
-    return {
-      ...mapped,
-      createdAt: mapped.createdAt.toISOString(),
-      updatedAt: mapped.updatedAt.toISOString(),
+    if (productsError) {
+      throw productsError
     }
-  })
+
+    initialProducts = (productsData ?? []).map((row) => {
+      const mapped = mapVendorProductRow(row)
+      return {
+        ...mapped,
+        createdAt: mapped.createdAt.toISOString(),
+        updatedAt: mapped.updatedAt.toISOString(),
+      }
+    })
+  } catch (error) {
+    console.warn('[vendor-dashboard] vendor products unavailable, starting empty:', error)
+    initialProducts = []
+  }
 
   return (
     <div className="container mx-auto px-4 py-10">
