@@ -24,7 +24,7 @@ interface AuthContextType {
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
   isSupabaseEnabled: boolean
   isVendor: boolean
-  refreshProfile: () => Promise<void>
+  refreshProfile: () => Promise<UserProfile | null>
 }
 
 interface ProfileRow {
@@ -256,11 +256,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase, applyProfileToState],
   )
 
-  const refreshProfile = useCallback(async () => {
-    if (!supabase) return
+  const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
+    if (!supabase) return null
     const currentUser = user
-    if (!currentUser) return
-    await loadUserProfile(currentUser)
+    if (!currentUser) return null
+    return loadUserProfile(currentUser)
   }, [supabase, user, loadUserProfile])
 
   useEffect(() => {

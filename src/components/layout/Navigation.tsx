@@ -102,9 +102,16 @@ export function Navigation() {
                 </Button>
               </div>
             ) : (
-              <Link href="/auth">
-                <Button disabled={loading}>{loading ? 'Checking...' : 'Sign In'}</Button>
-              </Link>
+              <>
+                <Link href="/vendor/login" className="hidden md:inline-block">
+                  <Button variant="outline" size="sm">
+                    Vendor Login
+                  </Button>
+                </Link>
+                <Link href="/auth">
+                  <Button disabled={loading}>{loading ? 'Checking...' : 'Sign In'}</Button>
+                </Link>
+              </>
             )}
 
             <Button
@@ -144,14 +151,24 @@ export function Navigation() {
                   <span>Logout</span>
                 </button>
               ) : (
-                <Link
-                  href="/auth"
-                  className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-purple-600 hover:bg-gray-50 rounded-md transition-colors"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <User className="h-4 w-4" />
-                  <span>{loading ? 'Checking...' : 'Sign In'}</span>
-                </Link>
+                <>
+                  <Link
+                    href="/vendor/login"
+                    className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-purple-600 hover:bg-gray-50 rounded-md transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Store className="h-4 w-4" />
+                    <span>Vendor Login</span>
+                  </Link>
+                  <Link
+                    href="/auth"
+                    className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-purple-600 hover:bg-gray-50 rounded-md transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <User className="h-4 w-4" />
+                    <span>{loading ? 'Checking...' : 'Sign In'}</span>
+                  </Link>
+                </>
               )}
             </div>
           </div>
