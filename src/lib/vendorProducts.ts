@@ -110,6 +110,8 @@ export function mapVendorProductRow(row: VendorProductRow): VendorProduct {
   const gallery = buildGallery(primaryImageUrl, primaryImagePath, row.gallery_urls, row.gallery_paths)
   const moderationStatus =
     typeof row.moderation_status === 'string' ? (row.moderation_status.toLowerCase() as ModerationStatus) : null
+  const profileValue = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+  const vendorName = profileValue?.display_name ?? undefined
 
   return {
     id: row.id,
@@ -135,7 +137,7 @@ export function mapVendorProductRow(row: VendorProductRow): VendorProduct {
     aiColors: normaliseAiColors(row.ai_colors),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
-    vendorName: row.profiles?.display_name ?? undefined,
+    vendorName,
   }
 }
 

@@ -329,8 +329,7 @@ const fetchVendorMarketplacePieces = async (): Promise<FashionPiece[]> => {
         ai_description,
         ai_colors,
         created_at,
-        updated_at,
-        profiles(display_name)
+        updated_at
       `)
       .eq('status', 'active')
       .order('updated_at', { ascending: false })

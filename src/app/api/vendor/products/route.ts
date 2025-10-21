@@ -5,9 +5,10 @@ import { analyzeGarmentWithMistral } from '@/lib/mistralVision'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { requireVendorUser } from '@/lib/server/vendor'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { buildStoragePath, getSupabaseStorageConfig } from '@/lib/storage'
+import { buildStoragePath } from '@/lib/storage'
 import { PermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
 import { mapVendorProductRow } from '@/lib/vendorProducts'
+import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 
 export const runtime = 'nodejs'
 

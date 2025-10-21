@@ -42,13 +42,13 @@ export interface VendorProductRow {
   primary_image_path: string | null
   gallery_urls: string[] | null
   gallery_paths: string[] | null
-  moderation_status: string | null
-  moderation_message: string | null
-  moderation_category: string | null
-  moderation_reasons: string[] | null
+  moderation_status?: string | null
+  moderation_message?: string | null
+  moderation_category?: string | null
+  moderation_reasons?: string[] | null
   ai_description: string | null
   ai_colors: Array<{ name?: string; hex?: string }> | null
   created_at: string | null
   updated_at: string | null
-  profiles?: { display_name: string | null } | null
+  profiles?: { display_name: string | null } | { display_name: string | null }[] | null
 }

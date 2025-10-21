@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { requireVendorUser } from '@/lib/server/vendor'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { getSupabaseStorageConfig } from '@/lib/storage'
+import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { PermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
 import { mapVendorProductRow } from '@/lib/vendorProducts'
 import type { VendorProductStatus } from '@/types/vendor'
@@ -39,8 +39,9 @@ const parsePrice = (value: unknown): number | undefined => {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: any,
 ) {
+  const params = (context as { params?: { id?: string } })?.params ?? {}
   const productId = params.id
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })
@@ -124,8 +125,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: any,
 ) {
+  const params = (context as { params?: { id?: string } })?.params ?? {}
   const productId = params.id
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })
