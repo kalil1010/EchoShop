@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-import { createRouteClient } from '@/lib/supabaseServer'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies as nextCookies } from 'next/headers'
 import { PermissionError } from '@/lib/security'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -16,7 +16,9 @@ const extractBearerToken = (headerValue?: string | null): string | null => {
 export async function resolveAuthenticatedUser(
   request: NextRequest,
 ): Promise<{ userId: string; accessToken: string }> {
-  const routeClient = createRouteClient()
+  const routeClient = createRouteHandlerClient({
+    cookies: () => request.cookies as unknown as ReturnType<typeof nextCookies>,
+  })
   const { data: sessionData } = await routeClient.auth.getSession()
   const session = sessionData?.session
   if (session?.user) {
