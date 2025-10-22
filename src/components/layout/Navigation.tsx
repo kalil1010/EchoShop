@@ -41,7 +41,6 @@ export function Navigation() {
       { href: '/image-generator', label: 'Image Lab', icon: ImageIcon, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
       { href: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
-      { href: '/vendor/hub', label: 'Vendor Hub', icon: Store },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
     ];
     return items;
