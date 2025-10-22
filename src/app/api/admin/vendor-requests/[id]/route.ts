@@ -21,7 +21,7 @@ type RequestRow = {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: any,
 ) {
   try {
     const { userId } = await resolveAuthenticatedUser(request)
@@ -39,6 +39,7 @@ export async function PATCH(
       throw new PermissionError('forbidden', 'Only system owners may manage vendor requests.')
     }
 
+    const params = (context as { params?: { id?: string } })?.params ?? {}
     const requestId = params.id
     if (!requestId) {
       return NextResponse.json({ error: 'Missing request identifier.' }, { status: 400 })
