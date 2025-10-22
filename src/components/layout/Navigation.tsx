@@ -40,13 +40,18 @@ export function Navigation() {
       { href: '/chat', label: 'ZMODA AI Chat', icon: MessageCircle, requiresAuth: true },
       { href: '/image-generator', label: 'Image Lab', icon: ImageIcon, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
+      { href: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
+      { href: '/vendor/hub', label: 'Vendor Hub', icon: Store },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
     ];
     if (isVendor) {
       items.push({ href: '/dashboard/vendor', label: 'Vendor Portal', icon: Store, requiresAuth: true });
     }
+    if (userProfile?.role?.toLowerCase() === 'admin') {
+      items.push({ href: '/dashboard/system-owner', label: 'Owner Console', icon: Store, requiresAuth: true });
+    }
     return items;
-  }, [isVendor]);
+  }, [isVendor, userProfile?.role]);
 
   const visibleNavItems = navItems.filter((item) => !item.requiresAuth || !!user);
 

@@ -52,3 +52,16 @@ export interface VendorProductRow {
   updated_at: string | null
   profiles?: { display_name: string | null } | { display_name: string | null }[] | null
 }
+
+export type VendorRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface VendorRequest {
+  id: string
+  userId: string
+  status: VendorRequestStatus
+  message?: string
+  adminNotes?: string
+  decidedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}

@@ -335,38 +335,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, loadUserProfile])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!userProfile || userProfile.role !== 'user') return
-    try {
-      const intent = window.sessionStorage.getItem('zmoda:vendor-intent')
-      if (intent === '1') {
-        window.sessionStorage.removeItem('zmoda:vendor-intent')
-        fetch('/api/vendor/activate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: 'oauth-intent' }),
-        })
-          .then(async (response) => {
-            if (response.ok) {
-              await refreshProfile()
-            } else {
-              const payload = await response.json().catch(() => ({}))
-              console.warn(
-                'Deferred vendor activation failed:',
-                typeof payload?.error === 'string' ? payload.error : response.statusText,
-              )
-            }
-          })
-          .catch((error) => {
-            console.warn('Unable to complete vendor activation intent:', error)
-          })
-      }
-    } catch (error) {
-      console.warn('Failed to resolve vendor activation intent:', error)
-    }
-  }, [userProfile?.role, refreshProfile])
-
   const signIn = useCallback(
     async (email: string, password: string) => {
       if (!supabase) throw new Error('Supabase is not properly configured')

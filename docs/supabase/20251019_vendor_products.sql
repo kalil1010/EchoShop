@@ -55,3 +55,53 @@ create policy "Public can view active products"
   on public.vendor_products
   for select
   using (status = 'active');
+
+-- ------------------------------------------------------------------
+-- Vendor onboarding requests
+-- ------------------------------------------------------------------
+create table if not exists public.vendor_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  message text,
+  admin_notes text,
+  decided_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists vendor_requests_user_id_idx on public.vendor_requests (user_id);
+create index if not exists vendor_requests_status_idx on public.vendor_requests (status);
+
+create or replace function public.touch_vendor_requests_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_vendor_requests_updated_at on public.vendor_requests;
+create trigger trg_vendor_requests_updated_at
+before update on public.vendor_requests
+for each row execute function public.touch_vendor_requests_updated_at();
+
+alter table public.vendor_requests enable row level security;
+
+drop policy if exists "Vendor requests select by owner" on public.vendor_requests;
+create policy "Vendor requests select by owner"
+  on public.vendor_requests
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "Vendor requests insert by owner" on public.vendor_requests;
+create policy "Vendor requests insert by owner"
+  on public.vendor_requests
+  for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Vendor requests update by owner" on public.vendor_requests;
+create policy "Vendor requests update by owner"
+  on public.vendor_requests
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
