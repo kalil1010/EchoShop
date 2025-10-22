@@ -335,6 +335,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, loadUserProfile])
 
+  useEffect(() => {
+    if (!supabase || typeof window === 'undefined') return
+
+    const handleStorage = async (event: StorageEvent) => {
+      if (!event.key || !event.key.includes('-auth-token')) return
+
+      setLoading(true)
+      try {
+        const { data } = await supabase.auth.getSession()
+        const nextSession = data?.session ?? null
+        setSession(nextSession)
+
+        const sessionUser = nextSession?.user ?? null
+        if (sessionUser) {
+          const mapped = mapAuthUser(sessionUser)
+          setUser(mapped)
+          await loadUserProfile(mapped)
+        } else {
+          setUser(null)
+          setUserProfile(null)
+        }
+      } catch (error) {
+        console.warn('[auth] storage sync failed', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [supabase, loadUserProfile])
+
   const signIn = useCallback(
     async (email: string, password: string) => {
       if (!supabase) throw new Error('Supabase is not properly configured')
