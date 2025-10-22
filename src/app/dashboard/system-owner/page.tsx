@@ -10,6 +10,9 @@ export const metadata = {
   description: 'Review vendor applications and approve marketplace access.',
 }
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function SystemOwnerDashboardPage() {
   const routeClient = createRouteClient()
   const {

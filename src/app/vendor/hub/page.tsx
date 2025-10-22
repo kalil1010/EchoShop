@@ -10,6 +10,9 @@ export const metadata = {
   description: 'Submit a marketplace vendor application or view your approval status.',
 }
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function VendorHubPage() {
   const routeClient = createRouteClient()
   const {
