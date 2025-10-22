@@ -4,6 +4,7 @@ import '../styles/globals.css'
 import 'react-image-crop/dist/ReactCrop.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Navigation } from '@/components/layout/Navigation'
+import { Footer } from '@/components/layout/Footer'
 import { ToastProvider } from '@/components/ui/toast'
 import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider'
 import { FloatingAssistant } from '@/components/chat/FloatingAssistant'
@@ -31,6 +32,7 @@ export default function RootLayout({
                 <main className="pb-8">
                   {children}
                 </main>
+                <Footer />
                 <FloatingAssistant />
               </OnboardingProvider>
             </AuthProvider>

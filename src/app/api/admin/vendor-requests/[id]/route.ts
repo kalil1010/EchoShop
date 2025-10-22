@@ -15,6 +15,18 @@ type RequestRow = {
   message: string | null
   admin_notes: string | null
   decided_at: string | null
+  business_name: string | null
+  business_description: string | null
+  business_address: string | null
+  product_categories: string[] | null
+  contact_email: string | null
+  phone: string | null
+  website: string | null
+  tax_id: string | null
+  submitted_at: string | null
+  reviewed_at: string | null
+  reviewed_by: string | null
+  rejection_reason: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -48,6 +60,7 @@ export async function PATCH(
     const body = await request.json().catch(() => ({})) as {
       action?: 'approve' | 'reject'
       adminNotes?: string
+      rejectionReason?: string
     }
 
     const action = body.action
@@ -60,8 +73,14 @@ export async function PATCH(
         ? body.adminNotes.trim()
         : null
 
+    const rawRejectionReason =
+      typeof body.rejectionReason === 'string' && body.rejectionReason.trim().length > 0
+        ? body.rejectionReason.trim()
+        : null
+
     const targetStatus: VendorRequestStatus = action === 'approve' ? 'approved' : 'rejected'
-    const blockRoleUpdate = targetStatus !== 'approved'
+    const rejectionReason = targetStatus === 'rejected' ? rawRejectionReason ?? adminNotes : null
+    const isApproval = targetStatus === 'approved'
 
     const { data: requestRow, error: fetchError } = await supabase
       .from('vendor_requests')
@@ -86,6 +105,9 @@ export async function PATCH(
         status: targetStatus,
         admin_notes: adminNotes,
         decided_at: nowIso,
+        reviewed_at: nowIso,
+        reviewed_by: userId,
+        rejection_reason: rejectionReason,
       })
       .eq('id', requestId)
       .select('*')
@@ -93,12 +115,22 @@ export async function PATCH(
 
     if (updateError) throw updateError
 
-    if (!blockRoleUpdate) {
+    if (isApproval) {
       const userToPromote = requestRow.user_id
 
       const { error: roleUpdateError } = await supabase
         .from('profiles')
-        .update({ role: 'vendor', updated_at: nowIso })
+        .update({
+          role: 'vendor',
+          updated_at: nowIso,
+          vendor_business_name: requestRow.business_name,
+          vendor_business_description: requestRow.business_description,
+          vendor_contact_email: requestRow.contact_email,
+          vendor_phone: requestRow.phone,
+          vendor_website: requestRow.website,
+          vendor_approved_at: nowIso,
+          vendor_approved_by: userId,
+        })
         .eq('id', userToPromote)
 
       if (roleUpdateError) {

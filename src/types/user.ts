@@ -16,6 +16,15 @@ export interface UserProfile {
   dislikedColors?: string[]
   favoriteStyles?: string[]
   role: UserRole
+  isSuperAdmin?: boolean
+  vendorBusinessName?: string
+  vendorBusinessDescription?: string
+  vendorBusinessAddress?: string
+  vendorContactEmail?: string
+  vendorPhone?: string
+  vendorWebsite?: string
+  vendorApprovedAt?: Date
+  vendorApprovedBy?: string
   createdAt: Date
   updatedAt: Date
 }

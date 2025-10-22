@@ -62,6 +62,18 @@ export interface VendorRequest {
   message?: string
   adminNotes?: string
   decidedAt?: string | null
+  businessName?: string
+  businessDescription?: string
+  businessAddress?: string
+  productCategories?: string[]
+  contactEmail?: string
+  phone?: string
+  website?: string
+  taxId?: string
+  submittedAt: string
+  reviewedAt?: string | null
+  reviewedBy?: string | null
+  rejectionReason?: string
   createdAt: string
   updatedAt: string
 }

@@ -42,6 +42,15 @@ interface ProfileRow {
   favorite_colors: string[] | null
   disliked_colors: string[] | null
   favorite_styles: string[] | null
+  is_super_admin: boolean | null
+  vendor_business_name: string | null
+  vendor_business_description: string | null
+  vendor_business_address: string | null
+  vendor_contact_email: string | null
+  vendor_phone: string | null
+  vendor_website: string | null
+  vendor_approved_at: string | null
+  vendor_approved_by: string | null
   role: string | null
   created_at: string | null
   updated_at: string | null
@@ -84,6 +93,15 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     favoriteColors: profile.favoriteColors ?? [],
     dislikedColors: profile.dislikedColors ?? [],
     favoriteStyles: profile.favoriteStyles ?? [],
+    isSuperAdmin: Boolean(profile.isSuperAdmin),
+    vendorBusinessName: profile.vendorBusinessName?.trim() || undefined,
+    vendorBusinessDescription: profile.vendorBusinessDescription?.trim() || undefined,
+    vendorBusinessAddress: profile.vendorBusinessAddress?.trim() || undefined,
+    vendorContactEmail: profile.vendorContactEmail?.trim() || undefined,
+    vendorPhone: profile.vendorPhone?.trim() || undefined,
+    vendorWebsite: profile.vendorWebsite?.trim() || undefined,
+    vendorApprovedAt: profile.vendorApprovedAt ? toDate(profile.vendorApprovedAt) : undefined,
+    vendorApprovedBy: profile.vendorApprovedBy ?? undefined,
     role: normaliseRole(profile.role),
   }
 }
@@ -125,6 +143,15 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     favoriteColors: row.favorite_colors ?? [],
     dislikedColors: row.disliked_colors ?? [],
     favoriteStyles: row.favorite_styles ?? [],
+    isSuperAdmin: Boolean(row.is_super_admin),
+    vendorBusinessName: row.vendor_business_name ?? undefined,
+    vendorBusinessDescription: row.vendor_business_description ?? undefined,
+    vendorBusinessAddress: row.vendor_business_address ?? undefined,
+    vendorContactEmail: row.vendor_contact_email ?? undefined,
+    vendorPhone: row.vendor_phone ?? undefined,
+    vendorWebsite: row.vendor_website ?? undefined,
+    vendorApprovedAt: row.vendor_approved_at ? toDate(row.vendor_approved_at) : undefined,
+    vendorApprovedBy: row.vendor_approved_by ?? undefined,
     role: normaliseRole(row.role ?? fallback.role),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
@@ -148,6 +175,15 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     favoriteColors: [],
     dislikedColors: [],
     favoriteStyles: [],
+    isSuperAdmin: false,
+    vendorBusinessName: undefined,
+    vendorBusinessDescription: undefined,
+    vendorBusinessAddress: undefined,
+    vendorContactEmail: undefined,
+    vendorPhone: undefined,
+    vendorWebsite: undefined,
+    vendorApprovedAt: undefined,
+    vendorApprovedBy: undefined,
     role: normaliseRole(user.role),
     createdAt: now,
     updatedAt: now,

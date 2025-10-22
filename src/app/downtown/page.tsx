@@ -4,29 +4,21 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import AdminDashboardLayout from '@/components/admin/AdminDashboardLayout'
 
-export default function DashboardPage() {
+export default function DowntownPage() {
   const { userProfile, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (loading) return
-    if (!userProfile) {
-      router.replace('/vendor/hub')
-      return
-    }
-
-    const role = userProfile.role.toLowerCase()
-    if (role === 'admin') {
-      router.replace('/downtown')
-    } else if (role === 'vendor') {
-      if (userProfile.vendorApprovedAt) {
+    const role = userProfile?.role?.toLowerCase()
+    if (role !== 'admin') {
+      if (role === 'vendor') {
         router.replace('/atlas')
       } else {
         router.replace('/vendor/hub')
       }
-    } else {
-      router.replace('/vendor/hub')
     }
   }, [loading, userProfile, router])
 
@@ -38,5 +30,13 @@ export default function DashboardPage() {
     )
   }
 
-  return null
+  if (userProfile?.role?.toLowerCase() !== 'admin') {
+    return null
+  }
+
+  return (
+    <main className="container mx-auto max-w-6xl px-4 py-8">
+      <AdminDashboardLayout />
+    </main>
+  )
 }

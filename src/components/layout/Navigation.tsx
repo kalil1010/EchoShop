@@ -29,7 +29,7 @@ interface NavItem {
 }
 
 export function Navigation() {
-  const { user, userProfile, logout, loading, isVendor } = useAuth();
+  const { user, userProfile, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = useMemo<NavItem[]>(() => {
@@ -44,14 +44,8 @@ export function Navigation() {
       { href: '/vendor/hub', label: 'Vendor Hub', icon: Store },
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
     ];
-    if (isVendor) {
-      items.push({ href: '/dashboard/vendor', label: 'Vendor Portal', icon: Store, requiresAuth: true });
-    }
-    if (userProfile?.role?.toLowerCase() === 'admin') {
-      items.push({ href: '/dashboard/system-owner', label: 'Owner Console', icon: Store, requiresAuth: true });
-    }
     return items;
-  }, [isVendor, userProfile?.role]);
+  }, [userProfile?.role]);
 
   const visibleNavItems = navItems.filter((item) => !item.requiresAuth || !!user);
 
