@@ -407,8 +407,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     if (!supabase) throw new Error('Supabase is not properly configured')
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) {
+        const { error } = await supabase.auth.signOut()
+        if (error) throw error
+      }
+    } catch (error) {
+      const tokenError =
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof (error as { message?: string }).message === 'string' &&
+        (error as { message: string }).message.includes('Refresh Token Not Found')
+      if (!tokenError) {
+        throw error
+      }
+    }
     setSession(null)
     setUser(null)
     setUserProfile(null)
