@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, {
   createContext,
@@ -302,7 +302,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
-        const { data } = await supabase.auth.getSession()
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+          console.warn('[AuthContext] Session error:', error)
+          const message = typeof error.message === 'string' ? error.message : ''
+          if (message.includes('Refresh Token') || message.includes('Invalid')) {
+            console.log('[AuthContext] Invalid token detected, clearing session')
+            await supabase.auth.signOut({ scope: 'local' })
+            if (isMounted) {
+              setUser(null)
+              setUserProfile(null)
+              setSession(null)
+            }
+            return
+          }
+          throw error
+        }
         if (!isMounted) return
 
         const nextSession = data?.session ?? null
@@ -334,8 +349,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     primeSession()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
+      console.log('[AuthContext] Auth state changed:', event)
+      if (event === 'TOKEN_REFRESHED' && !newSession) {
+        console.warn('[AuthContext] Token refresh failed, clearing session')
+        setSession(null)
+        setUser(null)
+        setUserProfile(null)
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
         setSession(newSession ?? null)
@@ -348,6 +373,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null)
           setUserProfile(null)
         }
+      } catch (error) {
+        console.error('[AuthContext] Auth state change failed:', error)
       } finally {
         if (isMounted) {
           setLoading(false)
@@ -369,7 +396,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setLoading(true)
       try {
-        const { data } = await supabase.auth.getSession()
+        const { data, error } = await supabase.auth.getSession()
         const nextSession = data?.session ?? null
         setSession(nextSession)
 
@@ -466,7 +493,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     if (!supabase) throw new Error('Supabase is not properly configured')
     try {
-      const { data } = await supabase.auth.getSession()
+      const { data, error } = await supabase.auth.getSession()
       if (data.session) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
@@ -553,3 +580,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
 }
+
+
+
+
+
