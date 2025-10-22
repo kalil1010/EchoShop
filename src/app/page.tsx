@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import type { ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { Sparkles, Shirt, MessageCircle, User, Cloud, Palette, ArrowRight, CheckCircle } from 'lucide-react'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -93,8 +93,23 @@ const benefits = [
 
 export default function Home() {
   const { user, userProfile, loading } = useAuth()
+  const [emergencyShow, setEmergencyShow] = useState(false)
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading) {
+      setEmergencyShow(false)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      if (loading && !emergencyShow) {
+        console.warn('[Home] Auth loading timeout - showing content anyway')
+        setEmergencyShow(true)
+      }
+    }, 8000)
+    return () => window.clearTimeout(timer)
+  }, [loading, emergencyShow])
+
+  if (loading && !emergencyShow) {
     return (
       <div className='container mx-auto px-4 py-16'>
         <div className='space-y-8 animate-pulse'>
@@ -118,7 +133,7 @@ export default function Home() {
             <Sparkles className='h-3 w-3' /> New onboarding experience
           </span>
           <h1 className='mt-4 text-4xl font-bold text-slate-900 md:text-5xl'>Style smarter with ZMODA AI.</h1>
-          <p className='mt-4 max-w-xl text-base text-slate-600'>Discover outfits you love, organise your wardrobe, and master colour theory—all guided by an assistant that learns your vibe.</p>
+          <p className='mt-4 max-w-xl text-base text-slate-600'>Discover outfits you love, organise your wardrobe, and master colour theory�all guided by an assistant that learns your vibe.</p>
           <div className='mt-6 flex flex-wrap items-center gap-3'>
             {!user ? (
               <>
@@ -230,4 +245,6 @@ export default function Home() {
     </div>
   )
 }
+
+
 

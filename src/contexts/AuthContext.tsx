@@ -198,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (authUser: AuthUser): Promise<UserProfile> => {
       if (!supabase) {
         const fallback = buildBootstrapProfile(authUser)
+        console.warn('[AuthContext] Supabase client unavailable. Using fallback profile.')
         return applyProfileToState(fallback, authUser)
       }
 
@@ -209,11 +210,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle<ProfileRow>()
 
         if (error && error.code !== 'PGRST116') {
+          console.error('[AuthContext] Profile fetch error:', error)
           throw error
         }
 
         if (data) {
           const mapped = mapProfileRow(data, authUser)
+          console.debug('[AuthContext] Profile loaded successfully for', authUser.uid)
           return applyProfileToState(mapped, authUser)
         }
 
@@ -243,12 +246,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .upsert(row, { onConflict: 'id' })
 
         if (upsertError) {
-          console.warn('Failed to seed profile during auth bootstrap:', upsertError)
+          console.error('[AuthContext] Profile upsert error:', upsertError)
         }
 
+        console.debug('[AuthContext] Bootstrap profile applied for', authUser.uid)
         return applyProfileToState(bootstrap, authUser)
       } catch (error) {
-        console.warn('Failed to load user profile:', error)
+        console.error('[AuthContext] Unhandled error in loadUserProfile:', error)
         const fallback = buildBootstrapProfile(authUser)
         return applyProfileToState(fallback, authUser)
       }
@@ -256,12 +260,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase, applyProfileToState],
   )
 
+  const loadUserProfileWithTimeout = useCallback(
+    async (authUser: AuthUser): Promise<UserProfile> => {
+      const TIMEOUT_MS = 10000
+      try {
+        const result = await Promise.race([
+          loadUserProfile(authUser),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Profile load timeout')), TIMEOUT_MS),
+          ),
+        ])
+        return result
+      } catch (error) {
+        console.error('[AuthContext] Profile load failed or timed out:', error)
+        const fallback = buildBootstrapProfile(authUser)
+        return applyProfileToState(fallback, authUser)
+      }
+    },
+    [loadUserProfile, applyProfileToState],
+  )
+
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
     if (!supabase) return null
     const currentUser = user
     if (!currentUser) return null
-    return loadUserProfile(currentUser)
-  }, [supabase, user, loadUserProfile])
+    return loadUserProfileWithTimeout(currentUser)
+  }, [supabase, user, loadUserProfileWithTimeout])
 
   useEffect(() => {
     if (!supabase) {
@@ -275,6 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true
 
     const primeSession = async () => {
+      console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
         const { data } = await supabase.auth.getSession()
@@ -287,7 +312,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfile(mapped)
+          await loadUserProfileWithTimeout(mapped)
         } else {
           setUser(null)
           setUserProfile(null)
@@ -302,6 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (isMounted) {
           setLoading(false)
+          console.log('[AuthContext] Session initialization complete')
         }
       }
     }
@@ -317,7 +343,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfile(mapped)
+          await loadUserProfileWithTimeout(mapped)
         } else {
           setUser(null)
           setUserProfile(null)
@@ -333,7 +359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false
       listener.subscription.unsubscribe()
     }
-  }, [supabase, loadUserProfile])
+  }, [supabase, loadUserProfileWithTimeout])
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return
@@ -351,7 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfile(mapped)
+          await loadUserProfileWithTimeout(mapped)
         } else {
           setUser(null)
           setUserProfile(null)
@@ -365,7 +391,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
-  }, [supabase, loadUserProfile])
+  }, [supabase, loadUserProfileWithTimeout])
 
   const signIn = useCallback(
     async (email: string, password: string) => {
