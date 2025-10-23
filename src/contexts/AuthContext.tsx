@@ -119,6 +119,23 @@ function extractUserId(rawId: string | null | undefined): string {
   return rawId
 }
 
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 2000,
+): Promise<T> {
+  try {
+    return await fn()
+  } catch (error) {
+    if (retries > 0) {
+      console.log(`[Auth] Retry attempt remaining: ${retries}`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      return withRetry(fn, retries - 1, delay)
+    }
+    throw error
+  }
+}
+
 function mapAuthUser(user: User): AuthUser {
   const metadata = user.user_metadata || {}
   const uid = extractUserId(user.id)
@@ -247,16 +264,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authUser.uid)
-          .maybeSingle<ProfileRow>()
+        const { data } = await withRetry(async () => {
+          const response = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authUser.uid)
+            .maybeSingle<ProfileRow>()
 
-        if (error && error.code !== 'PGRST116') {
-          console.error('[AuthContext] Profile fetch error:', error)
-          throw error
-        }
+          if (response.error && response.error.code !== 'PGRST116') {
+            console.error('[AuthContext] Profile fetch error:', response.error)
+            throw response.error
+          }
+
+          return response
+        })
 
         if (data) {
           const mapped = mapProfileRow(data, authUser)
@@ -306,12 +327,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserProfileWithTimeout = useCallback(
     async (authUser: AuthUser): Promise<UserProfile> => {
-      const TIMEOUT_MS = 10000
+      const TIMEOUT_MS = 30000
       try {
         const result = await Promise.race([
           loadUserProfile(authUser),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Profile load timeout')), TIMEOUT_MS),
+            setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), TIMEOUT_MS),
           ),
         ])
         return result
