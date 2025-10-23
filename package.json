@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build && cp -R .next/static .next/standalone/.next && if [ -d public ]; then cp -R public .next/standalone/public; fi",
+    "build": "next build && (robocopy .next\\static .next\\standalone\\.next\\static /E || ver > nul) && (robocopy public .next\\standalone\\public /E || ver > nul)",
     "start": "node start-server.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
@@ -19,6 +19,7 @@
     "@radix-ui/react-avatar": "^1.1.10",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/auth-helpers-react": "^0.5.0",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.6.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
