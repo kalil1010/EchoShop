@@ -5,14 +5,14 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import SystemOwnerVendorRequests from '@/components/vendor/SystemOwnerVendorRequests'
-import type { AdminVendorRequest } from './types'
+import type { OwnerVendorRequest } from './types'
 
 interface VendorRequestsPanelProps {
   defaultStatus?: 'pending' | 'approved' | 'rejected'
 }
 
 export default function VendorRequestsPanel({ defaultStatus }: VendorRequestsPanelProps) {
-  const [requests, setRequests] = useState<AdminVendorRequest[] | null>(null)
+  const [requests, setRequests] = useState<OwnerVendorRequest[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -31,7 +31,7 @@ export default function VendorRequestsPanel({ defaultStatus }: VendorRequestsPan
         throw new Error(payload?.error ?? 'Failed to load vendor requests.')
       }
       const payload = await response.json()
-      const list: AdminVendorRequest[] = Array.isArray(payload?.requests) ? payload.requests : []
+      const list: OwnerVendorRequest[] = Array.isArray(payload?.requests) ? payload.requests : []
       setRequests(list)
       setRefreshKey((key) => key + 1)
     } catch (requestError) {

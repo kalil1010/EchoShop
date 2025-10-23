@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 
-type ToastVariant = 'default' | 'success' | 'error' | 'warning'
+type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'destructive'
 
 export type Toast = {
   id: string
@@ -61,7 +61,7 @@ export function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismis
           className={cn(
             'pointer-events-auto w-80 max-w-[90vw] rounded-md border bg-card p-3 text-card-foreground shadow',
             t.variant === 'success' && 'border-green-200 bg-green-50 text-green-800',
-            t.variant === 'error' && 'border-red-200 bg-red-50 text-red-800',
+            (t.variant === 'error' || t.variant === 'destructive') && 'border-red-200 bg-red-50 text-red-800',
             t.variant === 'warning' && 'border-yellow-200 bg-yellow-50 text-yellow-800'
           )}
         >

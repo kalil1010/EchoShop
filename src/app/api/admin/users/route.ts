@@ -143,7 +143,7 @@ export async function PATCH(request: NextRequest) {
     const targetRole = normaliseRole(targetProfile.role)
     const targetIsSuperAdmin = Boolean(targetProfile.is_super_admin)
 
-    if ((requestedRole === 'admin' || targetRole === 'admin') && !actorProfile.is_super_admin) {
+    if ((requestedRole === 'admin' || targetRole === 'admin') && !actorProfile.isSuperAdmin) {
       throw new PermissionError(
         'forbidden',
         'Only the super admin may modify admin privileges.',

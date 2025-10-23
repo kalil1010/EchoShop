@@ -22,17 +22,19 @@ const ROLE_LABELS: Record<string, string> = {
   user: 'User',
   vendor: 'Vendor',
   owner: 'Owner',
+  admin: 'Admin',
 }
 
-const ROLE_OPTIONS: Array<{ value: 'user' | 'vendor' | 'owner'; label: string }> = [
+const ROLE_OPTIONS: Array<{ value: 'user' | 'vendor' | 'owner' | 'admin'; label: string }> = [
   { value: 'user', label: 'User' },
   { value: 'vendor', label: 'Vendor' },
   { value: 'owner', label: 'Owner' },
+  { value: 'admin', label: 'Admin' },
 ]
 
-const normaliseRole = (value: string | null | undefined): 'user' | 'vendor' | 'owner' => {
+const normaliseRole = (value: string | null | undefined): 'user' | 'vendor' | 'owner' | 'admin' => {
   const key = (value ?? 'user').toLowerCase()
-  if (key === 'vendor' || key === 'owner') return key
+  if (key === 'vendor' || key === 'owner' || key === 'admin') return key
   return 'user'
 }
 
@@ -88,7 +90,7 @@ export default function UserManagement({
     })
   }, [users, searchTerm])
 
-  const handleRoleChange = async (user: OwnerUserRecord, nextRole: 'user' | 'vendor' | 'owner') => {
+  const handleRoleChange = async (user: OwnerUserRecord, nextRole: 'user' | 'vendor' | 'owner' | 'admin') => {
     if (user.id === updatingUserId || normaliseRole(user.role) === nextRole) {
       return
     }
@@ -216,7 +218,7 @@ export default function UserManagement({
                       className="w-36 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
                       value={role}
                       onChange={(event) =>
-                        handleRoleChange(user, event.target.value as 'user' | 'vendor' | 'admin')
+                        handleRoleChange(user, event.target.value as any)
                       }
                       disabled={isLocked || updatingUserId === user.id}
                     >

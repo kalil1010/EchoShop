@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
     const { profile } = await requireRole(supabase, 'admin')
 
-    if (!profile.is_super_admin) {
+    if (!profile.isSuperAdmin) {
       throw new PermissionError(
         'forbidden',
         'Only the super admin can send admin invitations.',
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
         .from('admin_invitations')
         .insert({
           invited_email: email,
-          invited_by: profile.id,
+          invited_by: profile.uid,
           invitation_token: token,
           status: 'pending',
           expires_at: expiresAtIso,
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase
         .from('admin_invitations')
         .update({
-          invited_by: profile.id,
+          invited_by: profile.uid,
           status: 'pending',
           invitation_token: token,
           expires_at: expiresAtIso,
