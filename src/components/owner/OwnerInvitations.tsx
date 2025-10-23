@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import type { AdminInvitationRecord } from './types'
+import type { OwnerInvitationRecord } from './types'
 
 const statusTone: Record<string, string> = {
   pending: 'text-amber-600',
@@ -21,9 +21,9 @@ const formatDate = (value: string | null | undefined) => {
   return date.toLocaleString()
 }
 
-export default function AdminInvitations() {
+export default function OwnerInvitations() {
   const { toast } = useToast()
-  const [invitations, setInvitations] = useState<AdminInvitationRecord[]>([])
+  const [invitations, setInvitations] = useState<OwnerInvitationRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pendingRequest, setPendingRequest] = useState(false)
@@ -34,13 +34,13 @@ export default function AdminInvitations() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/invitations', { credentials: 'include' })
+      const response = await fetch('/api/owner/invitations', { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload?.error ?? 'Failed to load invitations.')
       }
       const payload = await response.json()
-      const list: AdminInvitationRecord[] = Array.isArray(payload?.invitations) ? payload.invitations : []
+      const list: OwnerInvitationRecord[] = Array.isArray(payload?.invitations) ? payload.invitations : []
       setInvitations(list)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load invitations.')
@@ -59,7 +59,7 @@ export default function AdminInvitations() {
 
     setPendingRequest(true)
     try {
-      const response = await fetch('/api/admin/invitations', {
+      const response = await fetch('/api/owner/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -73,7 +73,7 @@ export default function AdminInvitations() {
       setExpiresInDays(7)
       toast({
         title: 'Invitation sent',
-        description: 'The admin invitation email has been generated successfully.',
+        description: 'The owner invitation email has been generated successfully.',
       })
       await fetchInvitations()
     } catch (requestError) {
@@ -93,7 +93,7 @@ export default function AdminInvitations() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-slate-800">
-            Invite a new admin
+            Invite a new owner
           </CardTitle>
         </CardHeader>
         <CardContent>

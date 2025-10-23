@@ -4,10 +4,10 @@ import React from 'react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import type { AdminAnalyticsSnapshot } from './types'
+import type { OwnerAnalyticsSnapshot } from './types'
 
 interface SystemAnalyticsProps {
-  analytics: AdminAnalyticsSnapshot | null
+  analytics: OwnerAnalyticsSnapshot | null
   loading: boolean
   error: string | null
   onRetry: () => void

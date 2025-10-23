@@ -1,11 +1,11 @@
 import type { VendorRequest } from '@/types/vendor'
 
-export interface AdminAnalyticsSnapshot {
+export interface OwnerAnalyticsSnapshot {
   metrics: {
     totals: {
       users: number
       vendors: number
-      admins: number
+      owners: number
     }
     vendorRequests: {
       pending: number
@@ -30,7 +30,7 @@ export interface AdminAnalyticsSnapshot {
   }>
 }
 
-export interface AdminUserRecord {
+export interface OwnerUserRecord {
   id: string
   email: string | null
   displayName: string | null
@@ -47,7 +47,7 @@ export interface AdminUserRecord {
   updatedAt?: string | null
 }
 
-export interface AdminInvitationRecord {
+export interface OwnerInvitationRecord {
   id: string
   invitedEmail: string
   invitedBy: string
@@ -62,6 +62,6 @@ export interface AdminInvitationRecord {
   } | null
 }
 
-export type AdminVendorRequest = VendorRequest & {
+export type OwnerVendorRequest = VendorRequest & {
   displayName?: string | null
 }

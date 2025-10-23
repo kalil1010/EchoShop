@@ -78,9 +78,22 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL('/dashboard', req.url))
       }
     }
+
+    if (pathname.startsWith('/api/admin')) {
+      if (role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    if (pathname.startsWith('/api/vendor')) {
+      if (role !== 'vendor') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
   } else {
     // Redirect unauthenticated users trying to access protected routes
-    if (pathname.startsWith('/downtown') || pathname.startsWith('/atlas')) {
+    if (pathname.startsWith('/downtown') || pathname.startsWith('/atlas') || pathname.startsWith('/api/admin') || pathname.startsWith('/api/vendor')) {
       return NextResponse.redirect(new URL('/auth', req.url))
     }
   }
@@ -102,15 +115,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-    // Apply to specific protected routes
-    '/downtown/:path*',
-    '/atlas/:path*',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }
 

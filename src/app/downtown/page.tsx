@@ -1,38 +1,43 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { OwnerLoginForm } from '@/components/owner/OwnerLoginForm'
+import { createRouteClient } from '@/lib/supabaseServer'
 
-import { useAuth } from '@/contexts/AuthContext'
-import AdminDashboardLayout from '@/components/admin/AdminDashboardLayout'
+export const metadata = {
+  title: 'ZMODA Downtown Entry',
+  description: 'Secure access for verified ZMODA owners.',
+}
 
-export default function DowntownPage() {
-  const { userProfile, loading } = useAuth()
-  const router = useRouter()
+const normaliseRole = (value: string | null | undefined): string => value?.toLowerCase() ?? ''
 
-  useEffect(() => {
-    if (loading) return
-    const role = userProfile?.role?.toLowerCase()
-    if (role !== 'admin') {
-      if (role === 'vendor') {
-        router.replace('/atlas')
-      } else {
-        router.replace('/vendor/hub')
-      }
+export default async function DowntownEntryPage() {
+  const supabase = createRouteClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle<{ role: string | null }>()
+
+    const role = normaliseRole(profile?.role)
+    if (role === 'owner') {
+      redirect('/downtown/dashboard')
     }
-  }, [loading, userProfile, router])
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-purple-200 border-t-purple-600" />
-      </div>
-    )
+    if (role === 'vendor') {
+      redirect('/atlas/hub?from=owner-portal')
+    }
+
+    redirect('/dashboard')
   }
 
   return (
-    <main className="container mx-auto max-w-6xl px-4 py-8">
-      <AdminDashboardLayout />
-    </main>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+      <OwnerLoginForm />
+    </div>
   )
 }

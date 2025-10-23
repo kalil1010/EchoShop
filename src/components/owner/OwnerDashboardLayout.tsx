@@ -9,10 +9,10 @@ import UserManagement from './UserManagement'
 import VendorRequestsPanel from './VendorRequestsPanel'
 import VendorManagement from './VendorManagement'
 import SystemAnalytics from './SystemAnalytics'
-import AdminInvitations from './AdminInvitations'
-import type { AdminAnalyticsSnapshot } from './types'
+import OwnerInvitations from './OwnerInvitations'
+import type { OwnerAnalyticsSnapshot } from './types'
 
-type AdminTab =
+type OwnerTab =
   | 'overview'
   | 'users'
   | 'vendors'
@@ -20,7 +20,7 @@ type AdminTab =
   | 'invitations'
   | 'analytics'
 
-const TABS: Array<{ key: AdminTab; label: string }> = [
+const TABS: Array<{ key: OwnerTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'users', label: 'Users' },
   { key: 'vendors', label: 'Vendors' },
@@ -29,7 +29,7 @@ const TABS: Array<{ key: AdminTab; label: string }> = [
   { key: 'analytics', label: 'Analytics' },
 ]
 
-const adaptAnalytics = (payload: any): AdminAnalyticsSnapshot => {
+const adaptAnalytics = (payload: any): OwnerAnalyticsSnapshot => {
   const metrics = payload?.metrics ?? {}
   const recentUsers = Array.isArray(payload?.recentUsers)
     ? payload.recentUsers.map((user: any) => ({
@@ -53,7 +53,7 @@ const adaptAnalytics = (payload: any): AdminAnalyticsSnapshot => {
       totals: {
         users: Number(metrics?.totals?.users ?? 0),
         vendors: Number(metrics?.totals?.vendors ?? 0),
-        admins: Number(metrics?.totals?.admins ?? 0),
+        owners: Number(metrics?.totals?.owners ?? 0),
       },
       vendorRequests: {
         pending: Number(metrics?.vendorRequests?.pending ?? 0),
@@ -69,9 +69,9 @@ const adaptAnalytics = (payload: any): AdminAnalyticsSnapshot => {
   }
 }
 
-export default function AdminDashboardLayout() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview')
-  const [analytics, setAnalytics] = useState<AdminAnalyticsSnapshot | null>(null)
+export default function OwnerDashboardLayout() {
+  const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
+  const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
 
@@ -79,7 +79,7 @@ export default function AdminDashboardLayout() {
     setAnalyticsLoading(true)
     setAnalyticsError(null)
     try {
-      const response = await fetch('/api/admin/analytics', { credentials: 'include' })
+      const response = await fetch('/api/owner/analytics', { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload?.error ?? 'Failed to load analytics.')
@@ -136,7 +136,7 @@ export default function AdminDashboardLayout() {
       case 'requests':
         return <VendorRequestsPanel defaultStatus="pending" />
       case 'invitations':
-        return <AdminInvitations />
+        return <OwnerInvitations />
       case 'analytics':
         return (
           <SystemAnalytics
@@ -154,7 +154,7 @@ export default function AdminDashboardLayout() {
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Admin control center</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Owner control center</h1>
         {headerDescription ? (
           <p className="text-sm text-slate-600">{headerDescription}</p>
         ) : null}

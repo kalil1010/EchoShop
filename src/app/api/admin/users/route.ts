@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 
 export const runtime = 'nodejs'
 
@@ -66,19 +65,8 @@ const buildSearchPattern = (value: string): string => `%${value.replace(/[%_]/g,
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: actorProfile, error: actorError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
-
-    if (actorError) throw actorError
-    if (normaliseRole(actorProfile?.role) !== 'admin') {
-      throw new PermissionError('forbidden', 'Only admins can list users.')
-    }
+    await requireRole(supabase, 'admin')
 
     const url = request.nextUrl
     const roleFilter = url.searchParams.get('role')
@@ -122,23 +110,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: actorProfile, error: actorError } = await supabase
-      .from('profiles')
-      .select('role, is_super_admin')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null; is_super_admin: boolean | null }>()
-
-    if (actorError) throw actorError
-
-    const actorRole = normaliseRole(actorProfile?.role)
-    const actorIsSuperAdmin = Boolean(actorProfile?.is_super_admin)
-
-    if (actorRole !== 'admin') {
-      throw new PermissionError('forbidden', 'Only admins can update user roles.')
-    }
+    const { profile: actorProfile } = await requireRole(supabase, 'admin')
 
     const payload = (await request.json().catch(() => ({}))) as {
       userId?: string
@@ -170,7 +143,7 @@ export async function PATCH(request: NextRequest) {
     const targetRole = normaliseRole(targetProfile.role)
     const targetIsSuperAdmin = Boolean(targetProfile.is_super_admin)
 
-    if ((requestedRole === 'admin' || targetRole === 'admin') && !actorIsSuperAdmin) {
+    if ((requestedRole === 'admin' || targetRole === 'admin') && !actorProfile.is_super_admin) {
       throw new PermissionError(
         'forbidden',
         'Only the super admin may modify admin privileges.',

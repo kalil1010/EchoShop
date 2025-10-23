@@ -4,10 +4,10 @@ import React from 'react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import type { AdminAnalyticsSnapshot } from './types'
+import type { OwnerAnalyticsSnapshot } from './types'
 
 interface SystemStatusOverviewProps {
-  analytics: AdminAnalyticsSnapshot | null
+  analytics: OwnerAnalyticsSnapshot | null
   loading: boolean
   error: string | null
   onRetry: () => void
@@ -93,7 +93,7 @@ export default function SystemStatusOverview({
 
   const {
     metrics: {
-      totals: { users, vendors, admins },
+      totals: { users, vendors, owners },
       vendorRequests: { pending, approved },
       products: { total: totalProducts, active: activeProducts },
     },
@@ -103,7 +103,7 @@ export default function SystemStatusOverview({
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Total users" value={users} tone="purple" />
       <MetricCard label="Active vendors" value={vendors} tone="green" />
-      <MetricCard label="Team admins" value={admins} tone="blue" />
+      <MetricCard label="Active owners" value={owners} tone="blue" />
       <MetricCard label="Active products" value={activeProducts} tone="amber" />
       <MetricCard label="Vendor products total" value={totalProducts} tone="purple" />
       <MetricCard label="Pending vendor requests" value={pending} tone="amber" />

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequest } from '@/types/vendor'
 
@@ -10,22 +9,8 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: adminProfile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
-
-    if (profileError) {
-      throw profileError
-    }
-
-    if (adminProfile?.role?.toLowerCase() !== 'admin') {
-      throw new PermissionError('forbidden', 'Only system owners may view vendor requests.')
-    }
+    await requireRole(supabase, 'admin')
 
     const status = request.nextUrl.searchParams.get('status')?.toLowerCase()
     const query = supabase

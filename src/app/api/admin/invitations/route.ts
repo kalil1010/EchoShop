@@ -1,9 +1,8 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 
 export const runtime = 'nodejs'
 
@@ -23,9 +22,6 @@ type InvitationRow = {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-const normaliseRole = (value: string | null | undefined): string =>
-  (value ?? 'user').toLowerCase()
 
 const mapInvitation = (row: InvitationRow) => {
   const inviterSource = Array.isArray(row.inviter) ? row.inviter[0] : row.inviter
@@ -49,19 +45,8 @@ const mapInvitation = (row: InvitationRow) => {
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: actorProfile, error: actorError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
-
-    if (actorError) throw actorError
-    if (normaliseRole(actorProfile?.role) !== 'admin') {
-      throw new PermissionError('forbidden', 'Only admins can view invitations.')
-    }
+    await requireRole(supabase, 'admin')
 
     const url = request.nextUrl
     const statusFilter = url.searchParams.get('status')?.toLowerCase()
@@ -93,21 +78,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
+    const { profile } = await requireRole(supabase, 'admin')
 
-    const { data: actorProfile, error: actorError } = await supabase
-      .from('profiles')
-      .select('role, is_super_admin')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null; is_super_admin: boolean | null }>()
-
-    if (actorError) throw actorError
-
-    const actorRole = normaliseRole(actorProfile?.role)
-    const actorIsSuperAdmin = Boolean(actorProfile?.is_super_admin)
-
-    if (actorRole !== 'admin' || !actorIsSuperAdmin) {
+    if (!profile.is_super_admin) {
       throw new PermissionError(
         'forbidden',
         'Only the super admin can send admin invitations.',
@@ -147,7 +121,7 @@ export async function POST(request: NextRequest) {
         .from('admin_invitations')
         .insert({
           invited_email: email,
-          invited_by: userId,
+          invited_by: profile.id,
           invitation_token: token,
           status: 'pending',
           expires_at: expiresAtIso,
@@ -170,7 +144,7 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase
         .from('admin_invitations')
         .update({
-          invited_by: userId,
+          invited_by: profile.id,
           status: 'pending',
           invitation_token: token,
           expires_at: expiresAtIso,

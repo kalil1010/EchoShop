@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequestStatus } from '@/types/vendor'
 
@@ -36,20 +35,8 @@ export async function PATCH(
   context: any,
 ) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: adminProfile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
-
-    if (profileError) throw profileError
-
-    if (adminProfile?.role?.toLowerCase() !== 'admin') {
-      throw new PermissionError('forbidden', 'Only system owners may manage vendor requests.')
-    }
+    const { user } = await requireRole(supabase, 'admin')
 
     const params = (context as { params?: { id?: string } })?.params ?? {}
     const requestId = params.id
@@ -106,7 +93,7 @@ export async function PATCH(
         admin_notes: adminNotes,
         decided_at: nowIso,
         reviewed_at: nowIso,
-        reviewed_by: userId,
+        reviewed_by: user.id,
         rejection_reason: rejectionReason,
       })
       .eq('id', requestId)
@@ -129,7 +116,7 @@ export async function PATCH(
           vendor_phone: requestRow.phone,
           vendor_website: requestRow.website,
           vendor_approved_at: nowIso,
-          vendor_approved_by: userId,
+          vendor_approved_by: user.id,
         })
         .eq('id', userToPromote)
 

@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
-import type { AdminUserRecord } from './types'
+import type { OwnerUserRecord } from './types'
 
-type RoleFilter = 'all' | 'user' | 'vendor' | 'admin'
+type RoleFilter = 'all' | 'user' | 'vendor' | 'owner'
 
 interface UserManagementProps {
   heading?: string
@@ -21,18 +21,18 @@ interface UserManagementProps {
 const ROLE_LABELS: Record<string, string> = {
   user: 'User',
   vendor: 'Vendor',
-  admin: 'Admin',
+  owner: 'Owner',
 }
 
-const ROLE_OPTIONS: Array<{ value: 'user' | 'vendor' | 'admin'; label: string }> = [
+const ROLE_OPTIONS: Array<{ value: 'user' | 'vendor' | 'owner'; label: string }> = [
   { value: 'user', label: 'User' },
   { value: 'vendor', label: 'Vendor' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'owner', label: 'Owner' },
 ]
 
-const normaliseRole = (value: string | null | undefined): 'user' | 'vendor' | 'admin' => {
+const normaliseRole = (value: string | null | undefined): 'user' | 'vendor' | 'owner' => {
   const key = (value ?? 'user').toLowerCase()
-  if (key === 'vendor' || key === 'admin') return key
+  if (key === 'vendor' || key === 'owner') return key
   return 'user'
 }
 
@@ -43,7 +43,7 @@ export default function UserManagement({
   emptyStateMessage = 'No users match this filter yet.',
 }: UserManagementProps) {
   const { toast } = useToast()
-  const [users, setUsers] = useState<AdminUserRecord[]>([])
+  const [users, setUsers] = useState<OwnerUserRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -58,7 +58,7 @@ export default function UserManagement({
         params.set('role', roleFilter)
       }
       const query = params.toString()
-      const response = await fetch(`/api/admin/users${query ? `?${query}` : ''}`, {
+      const response = await fetch(`/api/owner/users${query ? `?${query}` : ''}`, {
         credentials: 'include',
       })
       if (!response.ok) {
@@ -66,7 +66,7 @@ export default function UserManagement({
         throw new Error(payload?.error ?? 'Failed to load users.')
       }
       const payload = await response.json()
-      const list: AdminUserRecord[] = Array.isArray(payload?.users) ? payload.users : []
+      const list: OwnerUserRecord[] = Array.isArray(payload?.users) ? payload.users : []
       setUsers(list)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load users.')
@@ -88,14 +88,14 @@ export default function UserManagement({
     })
   }, [users, searchTerm])
 
-  const handleRoleChange = async (user: AdminUserRecord, nextRole: 'user' | 'vendor' | 'admin') => {
+  const handleRoleChange = async (user: OwnerUserRecord, nextRole: 'user' | 'vendor' | 'owner') => {
     if (user.id === updatingUserId || normaliseRole(user.role) === nextRole) {
       return
     }
 
     setUpdatingUserId(user.id)
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch('/api/owner/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -109,7 +109,7 @@ export default function UserManagement({
         throw new Error(payload?.error ?? 'Unable to update user role.')
       }
       const payload = await response.json()
-      const updated: AdminUserRecord | null =
+      const updated: OwnerUserRecord | null =
         payload?.user && typeof payload.user === 'object' ? payload.user : null
       if (updated) {
         setUsers((previous) =>
@@ -194,14 +194,14 @@ export default function UserManagement({
                   <div>
                     <p className="text-xs text-slate-500 uppercase tracking-wide">Role</p>
                     <p
-                      className={cn(
-                        'text-sm font-semibold',
-                        role === 'admin'
-                          ? 'text-purple-600'
-                          : role === 'vendor'
-                            ? 'text-emerald-600'
-                            : 'text-slate-600',
-                      )}
+                        className={cn(
+                          'text-sm font-semibold',
+                          role === 'owner'
+                            ? 'text-purple-600'
+                            : role === 'vendor'
+                              ? 'text-emerald-600'
+                              : 'text-slate-600',
+                        )}
                     >
                       {ROLE_LABELS[role]}
                       {user.isSuperAdmin ? ' • Super admin' : ''}

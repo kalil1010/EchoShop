@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 
 export const runtime = 'nodejs'
 
@@ -25,19 +24,8 @@ const toIso = (value: string | null | undefined): string | null => {
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
-
-    const { data: actorProfile, error: actorError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
-
-    if (actorError) throw actorError
-    if (normaliseRole(actorProfile?.role) !== 'admin') {
-      throw new PermissionError('forbidden', 'Only admins can access analytics.')
-    }
+    await requireRole(supabase, 'admin')
 
     const countProfiles = async (
       mutate?: (query: any) => any,

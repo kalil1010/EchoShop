@@ -1,4 +1,5 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import type { UserProfile } from '@/types/user'
 
 export type PermissionReason = 'auth' | 'forbidden'
 
@@ -79,10 +80,44 @@ export async function requireSessionUser(supabase: SupabaseClient, expectedUserI
   return sessionUser.id
 }
 
+export async function requireRole(
+  supabase: SupabaseClient,
+  allowedRoles: string | string[]
+): Promise<{ user: any; profile: UserProfile }> {
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error) {
+    throw mapSupabaseError(error)
+  }
+  if (!session) {
+    throw new PermissionError('auth', 'You must be logged in to continue.')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single()
+
+  if (profileError) {
+    throw mapSupabaseError(profileError)
+  }
+
+  if (!profile) {
+    throw new PermissionError('forbidden', 'User profile not found.')
+  }
+
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
+  if (!roles.includes(profile.role)) {
+    throw new PermissionError('forbidden', 'You do not have permission to access this resource.')
+  }
+
+  return { user: session.user, profile }
+}
+
 export function sanitizeText(input: string, options?: { maxLength?: number; allowNewlines?: boolean }): string {
   const maxLength = options?.maxLength ?? 280
   const allowNewlines = options?.allowNewlines ?? false
-  const pattern = allowNewlines ? /[^\x20-\x7E\n\r]/g : /[^\x20-\x7E]/g
+  const pattern = allowNewlines ? /[^ -~\n\r]/g : /[^ -~]/g
   return input
     .normalize('NFKC')
     .replace(pattern, '')

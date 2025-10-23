@@ -5,25 +5,22 @@ import { useRouter } from 'next/navigation'
 
 import VendorDashboardLayout from '@/components/vendor/VendorDashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
+import { VendorLoginForm } from '@/components/vendor/VendorLoginForm'
 
 export default function AtlasPage() {
-  const { userProfile, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (loading) return
-    const role = userProfile?.role?.toLowerCase()
-    const hasApproval = Boolean(userProfile?.vendorApprovedAt)
-
-    if (role === 'admin') {
-      router.replace('/downtown')
-      return
+    if (user && profile && profile.role !== 'vendor') {
+      if (profile.role === 'admin') {
+        router.replace('/downtown')
+      } else {
+        router.replace('/vendor/hub')
+      }
     }
-
-    if (role !== 'vendor' || !hasApproval) {
-      router.replace('/vendor/hub')
-    }
-  }, [loading, userProfile, router])
+  }, [loading, user, profile, router])
 
   if (loading) {
     return (
@@ -33,15 +30,21 @@ export default function AtlasPage() {
     )
   }
 
-  const role = userProfile?.role?.toLowerCase()
-  const hasApproval = Boolean(userProfile?.vendorApprovedAt)
-  if (role !== 'vendor' || !hasApproval) {
-    return null
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <VendorLoginForm />
+      </div>
+    )
   }
 
-  return (
-    <main className="container mx-auto max-w-6xl px-4 py-8">
-      <VendorDashboardLayout />
-    </main>
-  )
+  if (profile?.role === 'vendor') {
+    return (
+      <main className="container mx-auto max-w-6xl px-4 py-8">
+        <VendorDashboardLayout />
+      </main>
+    )
+  }
+
+  return null
 }

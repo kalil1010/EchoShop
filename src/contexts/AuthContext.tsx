@@ -13,12 +13,19 @@ import type { Session, User } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 
+type SignInResult = {
+  user: AuthUser
+  profile: UserProfile
+  session: Session | null
+}
+
 interface AuthContextType {
   user: AuthUser | null
   userProfile: UserProfile | null
+  profile: UserProfile | null
   loading: boolean
   session: Session | null
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<SignInResult>
   signUp: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
@@ -69,7 +76,8 @@ const DEFAULT_ROLE: UserRole = 'user'
 const ROLE_MAP: Record<string, UserRole> = {
   user: 'user',
   vendor: 'vendor',
-  admin: 'admin',
+  owner: 'owner',
+  admin: 'owner',
 }
 
 function normaliseRole(value: unknown): UserRole {
@@ -457,9 +465,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, loadUserProfileWithTimeout])
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
-      if (!supabase) throw new Error('Supabase is not properly configured')
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+    async (email: string, password: string): Promise<SignInResult> => {
+      if (!supabase) {
+        throw new Error('Supabase is not properly configured')
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
         if (message.includes('email logins are disabled')) {
@@ -467,10 +478,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'Email/password sign-ins are disabled for this account. Please use the Google option instead.',
           )
         }
+        if (message.includes('invalid login credentials')) {
+          throw new Error('The email or password you entered is incorrect.')
+        }
         throw error
       }
+
+      const session = data.session ?? null
+      const supabaseUser = data.user ?? session?.user ?? null
+      if (!supabaseUser) {
+        throw new Error('Unable to retrieve Supabase user after sign-in.')
+      }
+
+      const authUser = mapAuthUser(supabaseUser)
+      setSession(session)
+      setUser(authUser)
+      const profile = await loadUserProfileWithTimeout(authUser)
+
+      return { user: authUser, profile, session }
     },
-    [supabase],
+    [supabase, loadUserProfileWithTimeout],
   )
 
   const signUp = useCallback(
@@ -594,15 +621,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase, user, userProfile, applyProfileToState],
   )
 
-  const isVendor = Boolean(
-    userProfile && (userProfile.role === 'vendor' || userProfile.role === 'admin'),
-  )
+  const isVendor = Boolean(userProfile && userProfile.role === 'vendor')
 
   const isSupabaseEnabled = Boolean(supabase)
 
   const contextValue: AuthContextType = {
     user,
     userProfile,
+    profile: userProfile,
     loading,
     session,
     signIn,
