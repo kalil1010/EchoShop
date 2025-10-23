@@ -115,15 +115,16 @@ export default function OwnerDashboardPage() {
         >((resolve, reject) => {
           timeoutId = setTimeout(() => reject(timeoutError), PROFILE_TIMEOUT_MS)
 
-          profileRequest
-            .then((result) => {
+          profileRequest.then(
+            (result) => {
               clearTimeout(timeoutId)
               resolve(result)
-            })
-            .catch((err) => {
+            },
+            (err) => {
               clearTimeout(timeoutId)
               reject(err)
-            })
+            },
+          )
         })
 
         if (profileResponse.error) {
