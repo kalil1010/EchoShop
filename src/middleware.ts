@@ -1,8 +1,91 @@
-import type { NextRequest } from 'next/server'
-import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { type NextRequest, NextResponse } from 'next/server'
 
-// Enforce HTTPS in production behind common proxies (Render, Railway, etc.)
-export function middleware(req: NextRequest) {
+import type { UserProfile } from '@/types/user'
+
+const getSupabaseAdmin = () => {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return []
+        },
+        setAll(_cookiesToSet) {},
+      },
+    }
+  )
+}
+
+const getAuthenticatedUser = async (req: NextRequest) => {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options) {
+          req.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options) {
+          req.cookies.set({ name, value: '', ...options })
+        },
+      },
+    }
+  )
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  return session?.user ?? null
+}
+
+const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  const supabaseAdmin = getSupabaseAdmin()
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single()
+
+  if (error || !profile) {
+    console.error(`[middleware] User profile not found for ${userId}:`, error)
+    return null
+  }
+  return profile as UserProfile
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+  const user = await getAuthenticatedUser(req)
+
+  // Role-based route protection
+  if (user) {
+    const profile = await fetchUserProfile(user.id)
+    const role = profile?.role?.toLowerCase()
+
+    if (pathname.startsWith('/downtown')) {
+      if (role !== 'admin') {
+        return NextResponse.redirect(new URL('/dashboard', req.url))
+      }
+    }
+
+    if (pathname.startsWith('/atlas')) {
+      if (role !== 'vendor' || !profile?.vendorApprovedAt) {
+        return NextResponse.redirect(new URL('/dashboard', req.url))
+      }
+    }
+  } else {
+    // Redirect unauthenticated users trying to access protected routes
+    if (pathname.startsWith('/downtown') || pathname.startsWith('/atlas')) {
+      return NextResponse.redirect(new URL('/auth', req.url))
+    }
+  }
+
+  // Enforce HTTPS in production
   if (process.env.NODE_ENV === 'production') {
     const proto = req.headers.get('x-forwarded-proto')
     if (proto && proto !== 'https') {
@@ -11,11 +94,23 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(url, 308)
     }
   }
+
   return NextResponse.next()
 }
 
-// Apply everywhere; customize to skip assets if needed
 export const config = {
-  matcher: '/:path*',
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    // Apply to specific protected routes
+    '/downtown/:path*',
+    '/atlas/:path*',
+  ],
 }
 
