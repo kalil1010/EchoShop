@@ -1,13 +1,11 @@
 'use client'
-
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useToast } from '@/components/ui/toast'
+import { useToast } from './toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-
 export function OwnerLoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,27 +14,22 @@ export function OwnerLoginForm() {
   const { signIn, logout } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedEmail = email.trim().toLowerCase()
     const trimmedPassword = password.trim()
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setError('Please enter a valid email address.')
       toast({ variant: 'destructive', title: 'Invalid email', description: 'Double-check your email format and try again.' })
       return
     }
-
     if (trimmedPassword.length < 8) {
       setError('Password must be at least 8 characters long.')
       toast({ variant: 'destructive', title: 'Invalid password', description: 'Passwords must be at least 8 characters.' })
       return
     }
-
     setLoading(true)
     setError('')
-
     try {
       const { profile } = await signIn(trimmedEmail, trimmedPassword)
       if (profile.role !== 'owner') {
@@ -68,7 +61,6 @@ export function OwnerLoginForm() {
       setLoading(false)
     }
   }
-
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
@@ -78,9 +70,9 @@ export function OwnerLoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="email">
               Email
             </label>
             <Input
@@ -92,9 +84,8 @@ export function OwnerLoginForm() {
               required
             />
           </div>
-
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="password">
               Password
             </label>
             <Input
@@ -106,10 +97,8 @@ export function OwnerLoginForm() {
               required
             />
           </div>
-
           {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button className="w-full" disabled={loading} type="submit">
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
