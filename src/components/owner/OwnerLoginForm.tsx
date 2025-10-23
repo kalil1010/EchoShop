@@ -1,8 +1,7 @@
 'use client'
-
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useToast } from '@/components/ui/toast'
+import { useToast } from '../ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,6 +38,7 @@ export function OwnerLoginForm() {
 
     try {
       const { profile } = await signIn(trimmedEmail, trimmedPassword)
+
       if (profile.role !== 'owner') {
         await logout().catch(() => undefined)
         const guidance =
@@ -49,11 +49,13 @@ export function OwnerLoginForm() {
           `This portal is reserved for ZMODA owners. ${guidance}`,
         )
       }
+
       toast({
         variant: 'success',
         title: 'Signed in',
         description: `Welcome back${profile.displayName ? `, ${profile.displayName}` : ''}!`,
       })
+
       router.replace('/downtown/dashboard')
     } catch (unknownError) {
       const message =
@@ -78,9 +80,9 @@ export function OwnerLoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="email">
               Email
             </label>
             <Input
@@ -92,9 +94,8 @@ export function OwnerLoginForm() {
               required
             />
           </div>
-
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="password">
               Password
             </label>
             <Input
@@ -106,10 +107,8 @@ export function OwnerLoginForm() {
               required
             />
           </div>
-
           {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button className="w-full" disabled={loading} type="submit">
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
