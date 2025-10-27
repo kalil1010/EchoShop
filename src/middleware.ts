@@ -69,6 +69,9 @@ export async function middleware(req: NextRequest) {
 
     if (pathname.startsWith('/downtown')) {
       if (role !== 'owner') {
+        console.warn(
+          `[middleware] Redirecting non-owner user ${user.id} away from ${pathname}. role=${role ?? 'unknown'}`,
+        )
         return NextResponse.redirect(new URL('/dashboard', req.url))
       }
     }

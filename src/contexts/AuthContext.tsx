@@ -17,9 +17,21 @@ type SignInResult = {
   user: AuthUser
   profile: UserProfile
   session: Session | null
+  profileStatus: ProfileLoadState
+  profileIssueMessage: string | null
+  profileError: Error | null
+  isProfileFallback: boolean
 }
 
 type ProfileLoadState = 'idle' | 'loading' | 'ready' | 'degraded' | 'error'
+
+interface ProfileLoadResult {
+  profile: UserProfile
+  status: ProfileLoadState
+  fallback: boolean
+  error: Error | null
+  message: string | null
+}
 
 interface AuthContextType {
   user: AuthUser | null
@@ -357,17 +369,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const loadUserProfile = useCallback(
-    async (authUser: AuthUser): Promise<UserProfile> => {
+    async (authUser: AuthUser): Promise<ProfileLoadResult> => {
       if (!supabase) {
         const fallback = buildBootstrapProfile(authUser)
-        console.warn('[AuthContext] Supabase client unavailable. Using fallback profile.')
-        setProfileStatus('degraded')
-        setProfileError(normaliseError(new Error('SUPABASE_UNAVAILABLE'), 'Supabase unavailable'))
-        setProfileIssueMessage(
-          'We could not connect to the profile service. Showing a limited profile until connectivity is restored.',
+        const unavailableError = normaliseError(
+          new Error('SUPABASE_UNAVAILABLE'),
+          'Supabase unavailable',
         )
+        console.warn('[AuthContext] Supabase client unavailable. Using fallback profile.')
+        const message =
+          'We could not connect to the profile service. Showing a limited profile until connectivity is restored.'
+        setProfileStatus('degraded')
+        setProfileError(unavailableError)
+        setProfileIssueMessage(message)
         setIsProfileFallback(true)
-        return applyProfileToState(fallback, authUser)
+        const profile = applyProfileToState(fallback, authUser)
+        return {
+          profile,
+          status: 'degraded',
+          fallback: true,
+          error: unavailableError,
+          message,
+        }
       }
 
       try {
@@ -402,7 +425,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfileError(null)
           setProfileIssueMessage(null)
           setIsProfileFallback(false)
-          return applyProfileToState(mapped, authUser)
+          const profile = applyProfileToState(mapped, authUser)
+          return {
+            profile,
+            status: 'ready',
+            fallback: false,
+            error: null,
+            message: null,
+          }
         }
 
         console.warn(
@@ -410,6 +440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         )
         const bootstrap = buildBootstrapProfile(authUser)
         let upsertFailed = false
+        let upsertError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(bootstrap), authUser, 'missing-profile')
         } catch (upsertError) {
@@ -420,6 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             upsertError,
           )
           upsertFailed = true
+          upsertError = normalisedUpsertError
         }
 
         console.debug('[AuthContext] Bootstrap profile applied for', authUser.uid)
@@ -427,11 +459,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!upsertFailed) {
           setProfileError(null)
         }
-        setProfileIssueMessage(
-          'We could not find your saved profile yet. A temporary profile is in place, so some personalised features may be limited.',
-        )
+        const message =
+          'We could not find your saved profile yet. A temporary profile is in place, so some personalised features may be limited.'
+        setProfileIssueMessage(message)
         setIsProfileFallback(true)
-        return applyProfileToState(bootstrap, authUser)
+        const profile = applyProfileToState(bootstrap, authUser)
+        return {
+          profile,
+          status: 'degraded',
+          fallback: true,
+          error: upsertError,
+          message,
+        }
       } catch (error) {
         console.error(
           `[AuthContext] Unhandled error in loadUserProfile for ${authUser.uid}:`,
@@ -439,6 +478,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         )
         const normalised = normaliseError(error, 'Profile fetch failed')
         const fallback = buildBootstrapProfile(authUser)
+        let upsertFallbackError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(fallback), authUser, 'fetch-error')
         } catch (upsertError) {
@@ -446,21 +486,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             `[AuthContext] Fallback profile upsert failed after fetch error for ${authUser.uid}:`,
             upsertError,
           )
+          upsertFallbackError = normaliseError(upsertError, 'Profile upsert failed after fetch error')
         }
         setProfileStatus('error')
         setProfileError(normalised)
-        setProfileIssueMessage(
-          'We hit an error loading your profile. Showing a limited version so you can keep working—please try again shortly.',
-        )
+        const message =
+          'We hit an error loading your profile. Showing a limited version so you can keep working—please try again shortly.'
+        setProfileIssueMessage(message)
         setIsProfileFallback(true)
-        return applyProfileToState(fallback, authUser)
+        const profile = applyProfileToState(fallback, authUser)
+        return {
+          profile,
+          status: 'error',
+          fallback: true,
+          error: upsertFallbackError ?? normalised,
+          message,
+        }
       }
     },
     [supabase, applyProfileToState, upsertProfileWithRetry],
   )
 
   const loadUserProfileWithTimeout = useCallback(
-    async (authUser: AuthUser): Promise<UserProfile> => {
+    async (authUser: AuthUser): Promise<ProfileLoadResult> => {
       const TIMEOUT_MS = resolveProfileTimeout()
       setProfileStatus('loading')
       setProfileError(null)
@@ -487,7 +535,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfileIssueMessage(issueMessage)
         setIsProfileFallback(true)
         const fallback = buildBootstrapProfile(authUser)
-        return applyProfileToState(fallback, authUser)
+        const profile = applyProfileToState(fallback, authUser)
+        return {
+          profile,
+          status: 'error',
+          fallback: true,
+          error: normalised,
+          message: issueMessage,
+        }
       } finally {
         if (timeoutId) {
           clearTimeout(timeoutId)
@@ -506,7 +561,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetProfileState()
       return null
     }
-    return loadUserProfileWithTimeout(currentUser)
+    const outcome = await loadUserProfileWithTimeout(currentUser)
+    return outcome.profile
   }, [supabase, user, loadUserProfileWithTimeout, resetProfileState])
 
   useEffect(() => {
@@ -514,7 +570,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setUserProfile(null)
       setSession(null)
-       resetProfileState()
+      resetProfileState()
       setLoading(false)
       return
     }
@@ -679,9 +735,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const authUser = mapAuthUser(supabaseUser)
       setSession(session)
       setUser(authUser)
-      const profile = await loadUserProfileWithTimeout(authUser)
+      const profileOutcome = await loadUserProfileWithTimeout(authUser)
 
-      return { user: authUser, profile, session }
+      return {
+        user: authUser,
+        profile: profileOutcome.profile,
+        session,
+        profileStatus: profileOutcome.status,
+        profileIssueMessage: profileOutcome.message,
+        profileError: profileOutcome.error,
+        isProfileFallback: profileOutcome.fallback,
+      }
     },
     [supabase, loadUserProfileWithTimeout],
   )
