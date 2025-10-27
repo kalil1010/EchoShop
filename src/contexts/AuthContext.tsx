@@ -19,6 +19,8 @@ type SignInResult = {
   session: Session | null
 }
 
+type ProfileLoadState = 'idle' | 'loading' | 'ready' | 'degraded' | 'error'
+
 interface AuthContextType {
   user: AuthUser | null
   userProfile: UserProfile | null
@@ -31,6 +33,10 @@ interface AuthContextType {
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
   isSupabaseEnabled: boolean
   isVendor: boolean
+  profileStatus: ProfileLoadState
+  profileError: Error | null
+  profileIssueMessage: string | null
+  isProfileFallback: boolean
   refreshProfile: () => Promise<UserProfile | null>
 }
 
@@ -117,6 +123,32 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
 function extractUserId(rawId: string | null | undefined): string {
   if (!rawId) return ''
   return rawId
+}
+
+function normaliseError(value: unknown, fallbackMessage: string): Error {
+  if (value instanceof Error) return value
+  if (
+    value &&
+    typeof value === 'object' &&
+    'message' in value &&
+    typeof (value as { message?: unknown }).message === 'string'
+  ) {
+    return new Error((value as { message: string }).message)
+  }
+  return new Error(fallbackMessage)
+}
+
+const DEFAULT_PROFILE_TIMEOUT_MS = 45000
+
+function resolveProfileTimeout(): number {
+  const raw = process.env.NEXT_PUBLIC_PROFILE_TIMEOUT
+  if (typeof raw === 'string') {
+    const parsed = Number(raw)
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  return DEFAULT_PROFILE_TIMEOUT_MS
 }
 
 async function withRetry<T>(
@@ -215,6 +247,37 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
   })
 }
 
+function profileToRow(profile: UserProfile): Partial<ProfileRow> {
+  return {
+    id: profile.uid,
+    email: profile.email,
+    display_name: profile.displayName ?? null,
+    photo_url: profile.photoURL ?? null,
+    photo_path: profile.photoPath ?? null,
+    gender: profile.gender ?? null,
+    age: profile.age ?? null,
+    height: profile.height ?? null,
+    weight: profile.weight ?? null,
+    body_shape: profile.bodyShape ?? null,
+    foot_size: profile.footSize ?? null,
+    favorite_colors: profile.favoriteColors ?? [],
+    disliked_colors: profile.dislikedColors ?? [],
+    favorite_styles: profile.favoriteStyles ?? [],
+    is_super_admin: profile.isSuperAdmin ?? null,
+    vendor_business_name: profile.vendorBusinessName ?? null,
+    vendor_business_description: profile.vendorBusinessDescription ?? null,
+    vendor_business_address: profile.vendorBusinessAddress ?? null,
+    vendor_contact_email: profile.vendorContactEmail ?? null,
+    vendor_phone: profile.vendorPhone ?? null,
+    vendor_website: profile.vendorWebsite ?? null,
+    vendor_approved_at: profile.vendorApprovedAt ? profile.vendorApprovedAt.toISOString() : null,
+    vendor_approved_by: profile.vendorApprovedBy ?? null,
+    role: profile.role,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+  }
+}
+
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext)
   if (!context) {
@@ -237,6 +300,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileStatus, setProfileStatus] = useState<ProfileLoadState>('idle')
+  const [profileError, setProfileError] = useState<Error | null>(null)
+  const [profileIssueMessage, setProfileIssueMessage] = useState<string | null>(null)
+  const [isProfileFallback, setIsProfileFallback] = useState(false)
+
+  const resetProfileState = useCallback(() => {
+    setProfileStatus('idle')
+    setProfileError(null)
+    setProfileIssueMessage(null)
+    setIsProfileFallback(false)
+  }, [])
+
+  const upsertProfileWithRetry = useCallback(
+    async (row: Partial<ProfileRow>, authUser: AuthUser, reason: string) => {
+      if (!supabase) return
+      let attempt = 0
+      await withRetry(
+        async () => {
+          attempt += 1
+          const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+          if (error) {
+            console.error(
+              `[AuthContext] Profile upsert attempt ${attempt} failed for ${authUser.uid} (${reason}).`,
+              error,
+            )
+            throw error
+          }
+          return attempt
+        },
+        2,
+        1500,
+      )
+      console.debug(
+        `[AuthContext] Profile upsert succeeded for ${authUser.uid} after ${attempt} attempt(s) (${reason}).`,
+      )
+    },
+    [supabase],
+  )
 
   const applyProfileToState = useCallback(
     (profile: UserProfile, sourceUser: AuthUser) => {
@@ -260,6 +361,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!supabase) {
         const fallback = buildBootstrapProfile(authUser)
         console.warn('[AuthContext] Supabase client unavailable. Using fallback profile.')
+        setProfileStatus('degraded')
+        setProfileError(normaliseError(new Error('SUPABASE_UNAVAILABLE'), 'Supabase unavailable'))
+        setProfileIssueMessage(
+          'We could not connect to the profile service. Showing a limited profile until connectivity is restored.',
+        )
+        setIsProfileFallback(true)
         return applyProfileToState(fallback, authUser)
       }
 
@@ -272,8 +379,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle<ProfileRow>()
 
           if (response.error && response.error.code !== 'PGRST116') {
-            console.error('[AuthContext] Profile fetch error:', response.error)
+            console.error(
+              `[AuthContext] Profile fetch error for ${authUser.uid}:`,
+              response.error,
+            )
             throw response.error
+          }
+
+          if (!response.data) {
+            console.debug(
+              `[AuthContext] Profile fetch returned no data for ${authUser.uid}.`,
+            )
           }
 
           return response
@@ -282,81 +398,123 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data) {
           const mapped = mapProfileRow(data, authUser)
           console.debug('[AuthContext] Profile loaded successfully for', authUser.uid)
+          setProfileStatus('ready')
+          setProfileError(null)
+          setProfileIssueMessage(null)
+          setIsProfileFallback(false)
           return applyProfileToState(mapped, authUser)
         }
 
+        console.warn(
+          `[AuthContext] No profile found for ${authUser.uid}. Seeding bootstrap profile.`,
+        )
         const bootstrap = buildBootstrapProfile(authUser)
-        const row: Partial<ProfileRow> = {
-          id: authUser.uid,
-          email: authUser.email,
-          display_name: bootstrap.displayName ?? null,
-          photo_url: bootstrap.photoURL ?? null,
-          photo_path: bootstrap.photoPath ?? null,
-          gender: bootstrap.gender ?? null,
-          age: bootstrap.age ?? null,
-          height: bootstrap.height ?? null,
-          weight: bootstrap.weight ?? null,
-          body_shape: bootstrap.bodyShape ?? null,
-          foot_size: bootstrap.footSize ?? null,
-          favorite_colors: bootstrap.favoriteColors ?? [],
-          disliked_colors: bootstrap.dislikedColors ?? [],
-          favorite_styles: bootstrap.favoriteStyles ?? [],
-          role: bootstrap.role,
-          created_at: bootstrap.createdAt.toISOString(),
-          updated_at: bootstrap.updatedAt.toISOString(),
-        }
-
-        const { error: upsertError } = await supabase
-          .from('profiles')
-          .upsert(row, { onConflict: 'id' })
-
-        if (upsertError) {
-          console.error('[AuthContext] Profile upsert error:', upsertError)
+        let upsertFailed = false
+        try {
+          await upsertProfileWithRetry(profileToRow(bootstrap), authUser, 'missing-profile')
+        } catch (upsertError) {
+          const normalisedUpsertError = normaliseError(upsertError, 'Profile upsert failed')
+          setProfileError(normalisedUpsertError)
+          console.error(
+            `[AuthContext] Unable to seed bootstrap profile for ${authUser.uid} after missing profile.`,
+            upsertError,
+          )
+          upsertFailed = true
         }
 
         console.debug('[AuthContext] Bootstrap profile applied for', authUser.uid)
+        setProfileStatus('degraded')
+        if (!upsertFailed) {
+          setProfileError(null)
+        }
+        setProfileIssueMessage(
+          'We could not find your saved profile yet. A temporary profile is in place, so some personalised features may be limited.',
+        )
+        setIsProfileFallback(true)
         return applyProfileToState(bootstrap, authUser)
       } catch (error) {
-        console.error('[AuthContext] Unhandled error in loadUserProfile:', error)
+        console.error(
+          `[AuthContext] Unhandled error in loadUserProfile for ${authUser.uid}:`,
+          error,
+        )
+        const normalised = normaliseError(error, 'Profile fetch failed')
         const fallback = buildBootstrapProfile(authUser)
+        try {
+          await upsertProfileWithRetry(profileToRow(fallback), authUser, 'fetch-error')
+        } catch (upsertError) {
+          console.error(
+            `[AuthContext] Fallback profile upsert failed after fetch error for ${authUser.uid}:`,
+            upsertError,
+          )
+        }
+        setProfileStatus('error')
+        setProfileError(normalised)
+        setProfileIssueMessage(
+          'We hit an error loading your profile. Showing a limited version so you can keep working—please try again shortly.',
+        )
+        setIsProfileFallback(true)
         return applyProfileToState(fallback, authUser)
       }
     },
-    [supabase, applyProfileToState],
+    [supabase, applyProfileToState, upsertProfileWithRetry],
   )
 
   const loadUserProfileWithTimeout = useCallback(
     async (authUser: AuthUser): Promise<UserProfile> => {
-      const TIMEOUT_MS = 30000
+      const TIMEOUT_MS = resolveProfileTimeout()
+      setProfileStatus('loading')
+      setProfileError(null)
+      setProfileIssueMessage(null)
+      setIsProfileFallback(false)
+      let timeoutId: ReturnType<typeof setTimeout> | undefined
       try {
         const result = await Promise.race([
           loadUserProfile(authUser),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), TIMEOUT_MS),
-          ),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), TIMEOUT_MS)
+          }),
         ])
         return result
       } catch (error) {
         console.error('[AuthContext] Profile load failed or timed out:', error)
+        const normalised = normaliseError(error, 'Profile load failed')
+        setProfileStatus('error')
+        setProfileError(normalised)
+        const issueMessage =
+          normalised.message === 'PROFILE_TIMEOUT'
+            ? 'Loading your profile is taking longer than expected. This can happen during a cold start. You can retry now.'
+            : 'We encountered an unexpected issue while loading your profile. A limited profile is available; please retry when you are ready.'
+        setProfileIssueMessage(issueMessage)
+        setIsProfileFallback(true)
         const fallback = buildBootstrapProfile(authUser)
         return applyProfileToState(fallback, authUser)
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
       }
     },
     [loadUserProfile, applyProfileToState],
   )
 
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
-    if (!supabase) return null
+    if (!supabase) {
+      return null
+    }
     const currentUser = user
-    if (!currentUser) return null
+    if (!currentUser) {
+      resetProfileState()
+      return null
+    }
     return loadUserProfileWithTimeout(currentUser)
-  }, [supabase, user, loadUserProfileWithTimeout])
+  }, [supabase, user, loadUserProfileWithTimeout, resetProfileState])
 
   useEffect(() => {
     if (!supabase) {
       setUser(null)
       setUserProfile(null)
       setSession(null)
+       resetProfileState()
       setLoading(false)
       return
     }
@@ -378,6 +536,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(null)
               setUserProfile(null)
               setSession(null)
+              resetProfileState()
             }
             return
           }
@@ -396,6 +555,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null)
           setUserProfile(null)
+          resetProfileState()
         }
       } catch (error) {
         console.warn('Failed to bootstrap Supabase session:', error)
@@ -403,6 +563,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null)
           setUserProfile(null)
           setSession(null)
+          resetProfileState()
         }
       } finally {
         if (isMounted) {
@@ -422,6 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null)
         setUser(null)
         setUserProfile(null)
+        resetProfileState()
         setLoading(false)
         return
       }
@@ -437,6 +599,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null)
           setUserProfile(null)
+          resetProfileState()
         }
       } catch (error) {
         console.error('[AuthContext] Auth state change failed:', error)
@@ -451,7 +614,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false
       listener.subscription.unsubscribe()
     }
-  }, [supabase, loadUserProfileWithTimeout])
+  }, [supabase, loadUserProfileWithTimeout, resetProfileState])
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return
@@ -473,9 +636,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null)
           setUserProfile(null)
+          resetProfileState()
         }
       } catch (error) {
         console.warn('[auth] storage sync failed', error)
+        resetProfileState()
       } finally {
         setLoading(false)
       }
@@ -483,7 +648,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
-  }, [supabase, loadUserProfileWithTimeout])
+  }, [supabase, loadUserProfileWithTimeout, resetProfileState])
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<SignInResult> => {
@@ -596,7 +761,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null)
     setUser(null)
     setUserProfile(null)
-  }, [supabase])
+    resetProfileState()
+  }, [supabase, resetProfileState])
 
   const updateUserProfile = useCallback(
     async (profileUpdates: Partial<UserProfile>) => {
@@ -658,6 +824,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateUserProfile,
     isSupabaseEnabled,
     isVendor,
+    profileStatus,
+    profileError,
+    profileIssueMessage,
+    isProfileFallback,
     refreshProfile,
   }
 

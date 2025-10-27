@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useState, type ComponentType } from 'react'
 import { Sparkles, Shirt, MessageCircle, User, Cloud, Palette, ArrowRight, CheckCircle } from 'lucide-react'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -92,8 +92,35 @@ const benefits = [
 ]
 
 export default function Home() {
-  const { user, userProfile, loading } = useAuth()
+  const {
+    user,
+    userProfile,
+    loading,
+    profileStatus,
+    profileIssueMessage,
+    isProfileFallback,
+    refreshProfile,
+  } = useAuth()
   const [emergencyShow, setEmergencyShow] = useState(false)
+  const [retryingProfile, setRetryingProfile] = useState(false)
+
+  const showProfileIssue =
+    Boolean(
+      user &&
+        profileIssueMessage &&
+        (profileStatus === 'error' || profileStatus === 'degraded' || isProfileFallback),
+    )
+
+  const handleRetryProfile = useCallback(async () => {
+    setRetryingProfile(true)
+    try {
+      await refreshProfile()
+    } catch (error) {
+      console.warn('[Home] Profile retry failed:', error)
+    } finally {
+      setRetryingProfile(false)
+    }
+  }, [refreshProfile])
 
   useEffect(() => {
     if (!loading) {
@@ -127,6 +154,31 @@ export default function Home() {
 
   return (
     <div className='container mx-auto px-4 py-12'>
+      {showProfileIssue && (
+        <div className='mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm'>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+            <div>
+              <p className='font-semibold'>Profile sync is delayed.</p>
+              <p className='mt-1 text-amber-800'>{profileIssueMessage}</p>
+              {isProfileFallback && (
+                <p className='mt-1 text-amber-700'>
+                  We&apos;re temporarily using a basic profile, so recommendations may be less personalised until sync completes.
+                </p>
+              )}
+            </div>
+            <Button
+              onClick={handleRetryProfile}
+              variant='outline'
+              className='border-amber-300 text-amber-900 hover:bg-amber-100 hover:text-amber-900'
+              size='sm'
+              disabled={retryingProfile || profileStatus === 'loading'}
+            >
+              {retryingProfile || profileStatus === 'loading' ? 'Retrying...' : 'Retry profile sync'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <section className='grid gap-12 lg:grid-cols-[minmax(0,1fr),minmax(0,1.2fr)] lg:items-center'>
         <div>
           <span className='inline-flex items-center gap-2 rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-600'>
