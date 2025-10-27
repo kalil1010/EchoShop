@@ -13,15 +13,16 @@ const hasActiveRequest = (requests: VendorRequest[]): boolean =>
 
 export function Footer() {
   const { user, userProfile, loading } = useAuth()
-  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
-  if (normalisedRole === 'owner') {
-    return null
-  }
   const [checkingRequest, setCheckingRequest] = useState(false)
   const [hasVendorRequest, setHasVendorRequest] = useState(false)
   const [showApplication, setShowApplication] = useState(false)
+  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  const isOwner = normalisedRole === 'owner'
 
   useEffect(() => {
+    if (isOwner) {
+      return
+    }
     if (!user || loading) {
       setHasVendorRequest(false)
       setCheckingRequest(false)
@@ -57,7 +58,7 @@ export function Footer() {
     return () => {
       isMounted = false
     }
-  }, [user, userProfile, loading])
+  }, [user, userProfile, loading, isOwner])
 
   const canApply =
     Boolean(user) &&
@@ -68,6 +69,10 @@ export function Footer() {
   const handleApplicationSubmitted = () => {
     setHasVendorRequest(true)
     setShowApplication(false)
+  }
+
+  if (isOwner) {
+    return null
   }
 
   return (
