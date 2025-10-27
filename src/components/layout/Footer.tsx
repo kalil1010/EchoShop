@@ -13,6 +13,10 @@ const hasActiveRequest = (requests: VendorRequest[]): boolean =>
 
 export function Footer() {
   const { user, userProfile, loading } = useAuth()
+  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  if (normalisedRole === 'owner') {
+    return null
+  }
   const [checkingRequest, setCheckingRequest] = useState(false)
   const [hasVendorRequest, setHasVendorRequest] = useState(false)
   const [showApplication, setShowApplication] = useState(false)

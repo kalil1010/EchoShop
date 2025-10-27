@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import '../styles/globals.css'
 import 'react-image-crop/dist/ReactCrop.css'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { OwnerPortalRedirect } from '@/components/auth/OwnerPortalRedirect'
 import { Navigation } from '@/components/layout/Navigation'
 import { Footer } from '@/components/layout/Footer'
 import { ToastProvider } from '@/components/ui/toast'
@@ -27,6 +28,7 @@ export default function RootLayout({
         <div className="min-h-screen bg-background">
           <ToastProvider>
             <AuthProvider>
+              <OwnerPortalRedirect />
               <OnboardingProvider>
                 <Navigation />
                 <main className="pb-8">

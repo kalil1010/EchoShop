@@ -32,6 +32,11 @@ export function Navigation() {
   const { user, userProfile, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  if (normalisedRole === 'owner') {
+    return null
+  }
+
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { href: '/', label: 'Home', icon: Home },

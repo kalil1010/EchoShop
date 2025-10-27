@@ -6,6 +6,7 @@ import { sendStylistMessage } from '@/lib/api'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface AssistantMessage {
   id: string
@@ -26,6 +27,12 @@ export function FloatingAssistant() {
   const [isLoading, setIsLoading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const { toast } = useToast()
+  const { user, userProfile } = useAuth()
+  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+
+  if (normalisedRole === 'owner') {
+    return null
+  }
 
   const initialMessage = useMemo<AssistantMessage>(() => ({
     id: 'assistant-welcome',

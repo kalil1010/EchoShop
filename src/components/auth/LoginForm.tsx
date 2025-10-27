@@ -53,7 +53,35 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     setError('')
 
     try {
-      await signIn(trimmedEmail, trimmedPassword)
+      const result = await signIn(trimmedEmail, trimmedPassword)
+      const { profile, profileStatus, profileIssueMessage, isProfileFallback } = result
+
+      if (profile.role === 'owner') {
+        const ownerMessage =
+          profileIssueMessage ??
+          (isProfileFallback
+            ? 'We could not fully sync your owner profile yet, but you can continue in the Downtown console.'
+            : 'Redirecting you to the Downtown owner console.')
+        toast({
+          variant: 'success',
+          title: 'Owner access granted',
+          description: ownerMessage,
+        })
+        router.replace('/downtown')
+        return
+      }
+
+      if (profileIssueMessage) {
+        toast({
+          variant: 'warning',
+          title:
+            profileStatus === 'error'
+              ? 'Profile sync is delayed'
+              : 'Some profile data is still syncing',
+          description: profileIssueMessage,
+        })
+      }
+
       const name = trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Welcome back, ${name}! Redirecting...`)
       toast({ variant: 'success', title: 'Signed in', description: `Welcome back, ${name}!` })

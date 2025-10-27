@@ -89,7 +89,18 @@ export function VendorLoginForm() {
     setLoading(true)
 
     try {
-      await signIn(trimmedEmail, trimmedPassword)
+      const result = await signIn(trimmedEmail, trimmedPassword)
+
+      if (result.profile.role === 'owner') {
+        await logout().catch(() => undefined)
+        setError('Owner accounts cannot access the vendor portal. Please use the Downtown console instead.')
+        toast({
+          variant: 'warning',
+          title: 'Use owner console',
+          description: 'This email belongs to an owner account. You have been signed out here—continue via /downtown.',
+        })
+        return
+      }
 
       const hasVendorAccess = await verifyVendorRole()
       if (!hasVendorAccess) {

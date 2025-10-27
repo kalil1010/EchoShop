@@ -66,9 +66,24 @@ export async function middleware(req: NextRequest) {
   if (user) {
     const profile = await fetchUserProfile(user.id)
     const role = profile?.role?.toLowerCase()
+    const isOwner = role === 'owner'
+
+    if (isOwner) {
+      const inDowntown = pathname === '/downtown' || pathname.startsWith('/downtown/')
+      const isApiRequest = pathname.startsWith('/api')
+
+      if (!inDowntown && !isApiRequest) {
+        if (pathname !== '/downtown') {
+          console.info(
+            `[middleware] Owner ${user.id} requested ${pathname}. Redirecting to /downtown.`,
+          )
+        }
+        return NextResponse.redirect(new URL('/downtown', req.url))
+      }
+    }
 
     if (pathname.startsWith('/downtown')) {
-      if (role !== 'owner') {
+      if (!isOwner) {
         console.warn(
           `[middleware] Redirecting non-owner user ${user.id} away from ${pathname}. role=${role ?? 'unknown'}`,
         )
