@@ -68,7 +68,7 @@ export async function middleware(req: NextRequest) {
     const role = profile?.role?.toLowerCase()
 
     if (pathname.startsWith('/downtown')) {
-      if (role !== 'admin') {
+      if (role !== 'owner') {
         return NextResponse.redirect(new URL('/dashboard', req.url))
       }
     }
@@ -122,4 +122,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }
-
