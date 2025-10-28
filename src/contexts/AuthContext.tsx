@@ -107,6 +107,9 @@ function normaliseRole(value: unknown): UserRole {
 }
 
 function sanitiseProfile(profile: UserProfile): UserProfile {
+  const toArray = (input: string[] | null | undefined): string[] =>
+    Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : []
+
   return {
     ...profile,
     displayName: profile.displayName ?? undefined,
@@ -114,9 +117,9 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     photoPath: profile.photoPath ?? undefined,
     bodyShape: profile.bodyShape ?? undefined,
     footSize: profile.footSize ?? undefined,
-    favoriteColors: profile.favoriteColors ?? [],
-    dislikedColors: profile.dislikedColors ?? [],
-    favoriteStyles: profile.favoriteStyles ?? [],
+    favoriteColors: toArray(profile.favoriteColors),
+    dislikedColors: toArray(profile.dislikedColors),
+    favoriteStyles: toArray(profile.favoriteStyles),
     isSuperAdmin: Boolean(profile.isSuperAdmin),
     vendorBusinessName: profile.vendorBusinessName?.trim() || undefined,
     vendorBusinessDescription: profile.vendorBusinessDescription?.trim() || undefined,
@@ -409,7 +412,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const message = getErrorMessage(error)
         if (code && code.toUpperCase() === 'PGRST204') {
           const devError = new Error(
-            'Profile upsert failed: frontend expects a field that is not present in the database schema. Please sync DB and code.',
+            'Profile upsert failed: mismatch between frontend payload and DB schema. Please sync columns and types.',
           )
           if (error instanceof Error) {
             ;(devError as Error & { cause?: unknown }).cause = error
@@ -419,7 +422,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         if (message.toLowerCase().includes('column') && message.toLowerCase().includes('not found')) {
           const schemaError = new Error(
-            'Profile upsert failed because a referenced column is missing in the database. Please verify the profiles table schema.',
+            'Profile upsert failed: mismatch between frontend payload and DB schema. Please sync columns and types.',
           )
           if (error instanceof Error) {
             ;(schemaError as Error & { cause?: unknown }).cause = error

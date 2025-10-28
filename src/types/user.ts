@@ -1,5 +1,9 @@
 export type UserRole = 'user' | 'vendor' | 'owner' | 'admin'
 
+/**
+ * Mirrors the columns exposed by the `profiles` table.
+ * Maintain 1:1 parity with Supabase schema (see AuthContext.profileToRow).
+ */
 export interface UserProfile {
   uid: string
   email: string
