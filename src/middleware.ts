@@ -92,7 +92,7 @@ export async function middleware(req: NextRequest) {
     }
 
     if (pathname.startsWith('/atlas')) {
-      if (role !== 'vendor' || !profile?.vendorApprovedAt) {
+      if (role !== 'vendor') {
         return NextResponse.redirect(new URL('/dashboard', req.url))
       }
     }

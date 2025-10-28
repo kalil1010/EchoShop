@@ -20,11 +20,7 @@ export default function DashboardPage() {
     if (role === 'admin') {
       router.replace('/downtown')
     } else if (role === 'vendor') {
-      if (userProfile.vendorApprovedAt) {
-        router.replace('/atlas')
-      } else {
-        router.replace('/vendor/hub')
-      }
+      router.replace('/atlas')
     } else {
       router.replace('/vendor/hub')
     }

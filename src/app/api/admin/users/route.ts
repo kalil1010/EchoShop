@@ -16,8 +16,6 @@ type ProfileRow = {
   vendor_contact_email: string | null
   vendor_phone: string | null
   vendor_website: string | null
-  vendor_approved_at: string | null
-  vendor_approved_by: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -33,8 +31,6 @@ type ProfileSummary = {
   vendorContactEmail?: string | null
   vendorPhone?: string | null
   vendorWebsite?: string | null
-  vendorApprovedAt?: string | null
-  vendorApprovedBy?: string | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -55,8 +51,6 @@ const mapProfileRow = (row: ProfileRow): ProfileSummary => ({
   vendorContactEmail: row.vendor_contact_email,
   vendorPhone: row.vendor_phone,
   vendorWebsite: row.vendor_website,
-  vendorApprovedAt: row.vendor_approved_at,
-  vendorApprovedBy: row.vendor_approved_by,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
@@ -75,7 +69,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('profiles')
       .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, vendor_approved_at, vendor_approved_by, created_at, updated_at',
+        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
       )
       .order('created_at', { ascending: false })
 
@@ -171,7 +165,7 @@ export async function PATCH(request: NextRequest) {
       })
       .eq('id', targetId)
       .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, vendor_approved_at, vendor_approved_by, created_at, updated_at',
+        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
       )
       .maybeSingle<ProfileRow>()
 

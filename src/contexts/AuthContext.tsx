@@ -74,8 +74,6 @@ interface ProfileRow {
   vendor_contact_email: string | null
   vendor_phone: string | null
   vendor_website: string | null
-  vendor_approved_at: string | null
-  vendor_approved_by: string | null
   role: string | null
   created_at: string | null
   updated_at: string | null
@@ -126,8 +124,6 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     vendorContactEmail: profile.vendorContactEmail?.trim() || undefined,
     vendorPhone: profile.vendorPhone?.trim() || undefined,
     vendorWebsite: profile.vendorWebsite?.trim() || undefined,
-    vendorApprovedAt: profile.vendorApprovedAt ? toDate(profile.vendorApprovedAt) : undefined,
-    vendorApprovedBy: profile.vendorApprovedBy ?? undefined,
     role: normaliseRole(profile.role),
   }
 }
@@ -288,8 +284,6 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     vendorContactEmail: row.vendor_contact_email ?? undefined,
     vendorPhone: row.vendor_phone ?? undefined,
     vendorWebsite: row.vendor_website ?? undefined,
-    vendorApprovedAt: row.vendor_approved_at ? toDate(row.vendor_approved_at) : undefined,
-    vendorApprovedBy: row.vendor_approved_by ?? undefined,
     role: normaliseRole(row.role ?? fallback.role),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
@@ -320,8 +314,6 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     vendorContactEmail: undefined,
     vendorPhone: undefined,
     vendorWebsite: undefined,
-    vendorApprovedAt: undefined,
-    vendorApprovedBy: undefined,
     role: normaliseRole(user.role),
     createdAt: now,
     updatedAt: now,
@@ -351,8 +343,6 @@ function profileToRow(profile: UserProfile): Partial<ProfileRow> {
     vendor_contact_email: profile.vendorContactEmail ?? null,
     vendor_phone: profile.vendorPhone ?? null,
     vendor_website: profile.vendorWebsite ?? null,
-    vendor_approved_at: profile.vendorApprovedAt ? profile.vendorApprovedAt.toISOString() : null,
-    vendor_approved_by: profile.vendorApprovedBy ?? null,
     role: profile.role,
     created_at: profile.createdAt.toISOString(),
     updated_at: profile.updatedAt.toISOString(),
@@ -397,25 +387,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (row: Partial<ProfileRow>, authUser: AuthUser, reason: string): Promise<void> => {
       if (!supabase) return
       let attempt = 0
-      await withRetry(
-        async () => {
-          attempt += 1
-          const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
-          if (error) {
-            console.error(
-              `[AuthContext] Profile upsert attempt ${attempt} failed for ${authUser.uid} (${reason}).`,
-              error,
-            )
-            throw error
+      const performUpsert = async () => {
+        attempt += 1
+        const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+        if (error) {
+          console.error(
+            `[AuthContext] Profile upsert attempt ${attempt} failed for ${authUser.uid} (${reason}).`,
+            error,
+          )
+          throw error
+        }
+        return attempt
+      }
+      try {
+        await withRetry(performUpsert, 2, 1500)
+        console.debug(
+          `[AuthContext] Profile upsert succeeded for ${authUser.uid} after ${attempt} attempt(s) (${reason}).`,
+        )
+      } catch (error) {
+        const code = getErrorCode(error)
+        const message = getErrorMessage(error)
+        if (code && code.toUpperCase() === 'PGRST204') {
+          const devError = new Error(
+            'Profile upsert failed: frontend expects a field that is not present in the database schema. Please sync DB and code.',
+          )
+          if (error instanceof Error) {
+            ;(devError as Error & { cause?: unknown }).cause = error
+            copyErrorMetadata(error, devError)
           }
-          return attempt
-        },
-        2,
-        1500,
-      )
-      console.debug(
-        `[AuthContext] Profile upsert succeeded for ${authUser.uid} after ${attempt} attempt(s) (${reason}).`,
-      )
+          throw devError
+        }
+        if (message.toLowerCase().includes('column') && message.toLowerCase().includes('not found')) {
+          const schemaError = new Error(
+            'Profile upsert failed because a referenced column is missing in the database. Please verify the profiles table schema.',
+          )
+          if (error instanceof Error) {
+            ;(schemaError as Error & { cause?: unknown }).cause = error
+            copyErrorMetadata(error, schemaError)
+          }
+          throw schemaError
+        }
+        throw error instanceof Error ? error : new Error('Profile upsert failed.')
+      }
     },
     [supabase],
   )

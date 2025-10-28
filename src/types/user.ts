@@ -23,8 +23,6 @@ export interface UserProfile {
   vendorContactEmail?: string
   vendorPhone?: string
   vendorWebsite?: string
-  vendorApprovedAt?: Date
-  vendorApprovedBy?: string
   createdAt: Date
   updatedAt: Date
 }

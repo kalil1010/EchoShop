@@ -41,8 +41,6 @@ export interface OwnerUserRecord {
   vendorContactEmail?: string | null
   vendorPhone?: string | null
   vendorWebsite?: string | null
-  vendorApprovedAt?: string | null
-  vendorApprovedBy?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
