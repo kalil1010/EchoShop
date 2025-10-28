@@ -137,20 +137,89 @@ function extractUserId(rawId: string | null | undefined): string {
   return rawId
 }
 
+type ErrorWithCode = Error & { code?: string }
+
+function copyErrorMetadata(source: unknown, target: Error) {
+  if (
+    source &&
+    typeof source === 'object' &&
+    'code' in source &&
+    typeof (source as { code?: unknown }).code === 'string'
+  ) {
+    ;(target as ErrorWithCode).code = (source as { code: string }).code
+  }
+}
+
 function normaliseError(value: unknown, fallbackMessage: string): Error {
-  if (value instanceof Error) return value
+  if (value instanceof Error) {
+    copyErrorMetadata(value, value)
+    return value
+  }
   if (
     value &&
     typeof value === 'object' &&
     'message' in value &&
     typeof (value as { message?: unknown }).message === 'string'
   ) {
-    return new Error((value as { message: string }).message)
+    const error = new Error((value as { message: string }).message)
+    copyErrorMetadata(value, error)
+    return error
   }
   return new Error(fallbackMessage)
 }
 
+function getErrorCode(error: unknown): string | null {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code
+  }
+  return null
+}
+
+function getErrorMessage(error: unknown): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message
+  }
+  return error instanceof Error ? error.message : ''
+}
+
+function isPermissionError(error: unknown): boolean {
+  const code = getErrorCode(error)
+  const message = getErrorMessage(error).toLowerCase()
+  if (code && ['42501', 'PGRST116', 'PGRST301', 'PGRST302'].includes(code.toUpperCase())) {
+    return true
+  }
+  return message.includes('permission') || message.includes('rls')
+}
+
+function isTimeoutError(error: unknown): boolean {
+  const code = getErrorCode(error)
+  if (code && ['57014'].includes(code.toUpperCase())) {
+    return true
+  }
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('profile_timeout')
+  )
+}
+
 const DEFAULT_PROFILE_TIMEOUT_MS = 45000
+
+const PERMISSION_ISSUE_MESSAGE =
+  'Profile loading failed due to database permission issues. Please contact support or retry later.'
+const TIMEOUT_ISSUE_MESSAGE =
+  'Loading your profile is taking longer than expected. This may be due to a database timeout. Please retry shortly or contact support.'
 
 function resolveProfileTimeout(): number {
   const raw = process.env.NEXT_PUBLIC_PROFILE_TIMEOUT
@@ -325,7 +394,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const upsertProfileWithRetry = useCallback(
-    async (row: Partial<ProfileRow>, authUser: AuthUser, reason: string) => {
+    async (row: Partial<ProfileRow>, authUser: AuthUser, reason: string): Promise<void> => {
       if (!supabase) return
       let attempt = 0
       await withRetry(
@@ -455,12 +524,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.debug('[AuthContext] Bootstrap profile applied for', authUser.uid)
-        setProfileStatus('degraded')
+        const permissionIssue = upsertFailed && upsertError ? isPermissionError(upsertError) : false
+        const degradedMessage =
+          'We could not find your saved profile yet. A temporary profile is in place, so some personalised features may be limited.'
+        const message = permissionIssue ? PERMISSION_ISSUE_MESSAGE : degradedMessage
+        setProfileStatus(permissionIssue ? 'error' : 'degraded')
         if (!upsertFailed) {
           setProfileError(null)
         }
-        const message =
-          'We could not find your saved profile yet. A temporary profile is in place, so some personalised features may be limited.'
         setProfileIssueMessage(message)
         setIsProfileFallback(true)
         const profile = applyProfileToState(bootstrap, authUser)
@@ -489,9 +560,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           upsertFallbackError = normaliseError(upsertError, 'Profile upsert failed after fetch error')
         }
         setProfileStatus('error')
-        setProfileError(normalised)
-        const message =
-          'We hit an error loading your profile. Showing a limited version so you can keep working—please try again shortly.'
+        const permissionIssue = isPermissionError(upsertFallbackError ?? normalised)
+        setProfileError(permissionIssue ? upsertFallbackError ?? normalised : normalised)
+        const message = permissionIssue
+          ? PERMISSION_ISSUE_MESSAGE
+          : 'We hit an error loading your profile. Showing a limited version so you can keep working—please try again shortly.'
         setProfileIssueMessage(message)
         setIsProfileFallback(true)
         const profile = applyProfileToState(fallback, authUser)
@@ -527,10 +600,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('[AuthContext] Profile load failed or timed out:', error)
         const normalised = normaliseError(error, 'Profile load failed')
         setProfileStatus('error')
+        const permissionIssue = isPermissionError(error)
+        const timeoutIssue =
+          normalised.message === 'PROFILE_TIMEOUT' || isTimeoutError(error)
         setProfileError(normalised)
-        const issueMessage =
-          normalised.message === 'PROFILE_TIMEOUT'
-            ? 'Loading your profile is taking longer than expected. This can happen during a cold start. You can retry now.'
+        const issueMessage = permissionIssue
+          ? PERMISSION_ISSUE_MESSAGE
+          : timeoutIssue
+            ? TIMEOUT_ISSUE_MESSAGE
             : 'We encountered an unexpected issue while loading your profile. A limited profile is available; please retry when you are ready.'
         setProfileIssueMessage(issueMessage)
         setIsProfileFallback(true)
