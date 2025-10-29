@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { ThumbsUp, ThumbsDown, Heart, Bookmark } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { fireConfetti } from '@/lib/confetti'

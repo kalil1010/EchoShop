@@ -44,7 +44,7 @@ export function Navigation() {
       { href: '/profile', label: 'Profile', icon: User, requiresAuth: true, tourId: 'nav-profile' },
     ];
     return items;
-  }, [userProfile?.role]);
+  }, []);
 
   const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
   if (normalisedRole === 'owner') {

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     for (const row of statusRows ?? []) {
       const key = (row.status ?? '').toLowerCase()
-      if (counts[key as typeof STATUS_KEYS[number]] !== undefined) {
+      if ((STATUS_KEYS as readonly string[]).includes(key)) {
         counts[key as typeof STATUS_KEYS[number]] += 1
       } else {
         counts.other += 1

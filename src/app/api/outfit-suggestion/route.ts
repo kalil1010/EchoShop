@@ -248,7 +248,7 @@ Provide a detailed outfit recommendation and clear style notes. Reference the it
 
     const response = await callMistralAI(prompt, systemPrompt, { responseFormat: { type: 'json_object' } })
 
-    const tryParse = (text: string): any | null => {
+    const tryParse = (text: string): unknown => {
       try {
         return JSON.parse(text)
       } catch {}
@@ -261,31 +261,37 @@ Provide a detailed outfit recommendation and clear style notes. Reference the it
       return null
     }
 
-    const toPiece = (raw: any, label: string): PieceRecommendation => {
+    const toPiece = (raw: unknown, label: string): PieceRecommendation => {
       if (!raw) {
         return { summary: label, source: 'closet' }
       }
       if (typeof raw === 'string') {
         return { summary: raw, source: 'closet' }
       }
-      const candidate = typeof raw.summary === 'string' && raw.summary.trim().length > 0
-        ? raw.summary
-        : typeof raw.item === 'string' && raw.item.trim().length > 0
-          ? raw.item
-          : typeof raw.description === 'string' && raw.description.trim().length > 0
-            ? raw.description
-            : typeof raw.text === 'string' && raw.text.trim().length > 0
-              ? raw.text
-              : ''
-      const summary = candidate || label
-      let color = typeof raw.color === 'string' ? raw.color : typeof raw.colour === 'string' ? raw.colour : undefined
-      const sourceValue = typeof raw.source === 'string' ? raw.source.toLowerCase() : undefined
-      let source: OutfitSource = sourceValue === 'online' ? 'online' : 'closet'
-      let onlinePieceId = typeof raw.onlinePieceId === 'string' ? raw.onlinePieceId : undefined
-      if (!onlinePieceId && typeof raw.id === 'string') {
-        onlinePieceId = raw.id
+      if (typeof raw !== 'object') {
+        return { summary: label, source: 'closet' }
       }
-      let sourceUrl = typeof raw.sourceUrl === 'string' ? raw.sourceUrl : undefined
+      const candidateRaw = raw as Record<string, unknown>
+      const candidateSummary = (() => {
+        const summaryValue = candidateRaw.summary
+        if (typeof summaryValue === 'string' && summaryValue.trim().length > 0) return summaryValue
+        const itemValue = candidateRaw.item
+        if (typeof itemValue === 'string' && itemValue.trim().length > 0) return itemValue
+        const descriptionValue = candidateRaw.description
+        if (typeof descriptionValue === 'string' && descriptionValue.trim().length > 0) return descriptionValue
+        const textValue = candidateRaw.text
+        if (typeof textValue === 'string' && textValue.trim().length > 0) return textValue
+        return ''
+      })()
+      const summary = candidateSummary || label
+      let color = typeof candidateRaw.color === 'string' ? candidateRaw.color : typeof (candidateRaw.colour as string) === 'string' ? (candidateRaw.colour as string) : undefined
+      const sourceValue = typeof candidateRaw.source === 'string' ? (candidateRaw.source as string).toLowerCase() : undefined
+      let source: OutfitSource = sourceValue === 'online' ? 'online' : 'closet'
+      let onlinePieceId = typeof candidateRaw.onlinePieceId === 'string' ? (candidateRaw.onlinePieceId as string) : undefined
+      if (!onlinePieceId && typeof candidateRaw.id === 'string') {
+        onlinePieceId = candidateRaw.id as string
+      }
+      let sourceUrl = typeof candidateRaw.sourceUrl === 'string' ? (candidateRaw.sourceUrl as string) : undefined
 
       let matched = onlinePieceId ? onlineLookup.get(onlinePieceId) : undefined
       if (!matched && source === 'online') {
@@ -319,14 +325,24 @@ Provide a detailed outfit recommendation and clear style notes. Reference the it
       }
     }
 
-    const buildResponse = (raw: any): StructuredOutfit | null => {
+    const buildResponse = (raw: unknown): StructuredOutfit | null => {
       if (!raw || typeof raw !== 'object') return null
-      const candidate = raw.top && raw.bottom && raw.footwear ? raw : raw.outfitRecommendation || raw.outfit || raw.recommendation || raw
+      const rawRecord = raw as Record<string, unknown>
+      const candidateBase =
+        (rawRecord.top && rawRecord.bottom && rawRecord.footwear ? rawRecord : undefined) ??
+        (rawRecord.outfitRecommendation as Record<string, unknown> | undefined) ??
+        (rawRecord.outfit as Record<string, unknown> | undefined) ??
+        (rawRecord.recommendation as Record<string, unknown> | undefined)
+      const candidate = (candidateBase ?? rawRecord) as Record<string, unknown>
       const topPiece = toPiece(candidate.top, 'Top')
       const bottomPiece = toPiece(candidate.bottom, 'Bottom')
       const footwearPiece = toPiece(candidate.footwear, 'Footwear')
-      const accessoriesRaw = Array.isArray(candidate.accessories) ? candidate.accessories : Array.isArray(raw.accessories) ? raw.accessories : []
-      const accessoriesPieces = accessoriesRaw
+      const accessoriesSource: unknown[] = Array.isArray(candidate.accessories)
+        ? (candidate.accessories as unknown[])
+        : Array.isArray(rawRecord.accessories)
+          ? (rawRecord.accessories as unknown[])
+          : []
+      const accessoriesPieces = accessoriesSource
         .map((item: unknown, index: number): PieceRecommendation => toPiece(item, `Accessory ${index + 1}`))
         .filter((piece: PieceRecommendation) => Boolean(piece.summary))
       const outerwearPiece = candidate.outerwear ? toPiece(candidate.outerwear, 'Outerwear') : undefined
@@ -343,10 +359,11 @@ Provide a detailed outfit recommendation and clear style notes. Reference the it
         }
       }
       pushText(candidate.styleNotes)
-      pushText(raw.styleNotes)
+      pushText(rawRecord.styleNotes)
       pushText(candidate.notes)
-      pushText(raw.notes)
-      pushText(candidate.weatherAdaptation?.notes)
+      pushText(rawRecord.notes)
+      const weatherAdaptation = candidate.weatherAdaptation as { notes?: unknown } | undefined
+      pushText(weatherAdaptation?.notes)
       const styleNotes = noteCandidates.find(Boolean) || ''
 
       if (!topPiece.summary || !bottomPiece.summary || !footwearPiece.summary) {
@@ -376,10 +393,14 @@ Provide a detailed outfit recommendation and clear style notes. Reference the it
         targetGender,
       ),
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Outfit suggestion error:', error)
+    const message =
+      typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message: unknown }).message === 'string'
+        ? (error as { message: string }).message
+        : String(error)
     return NextResponse.json(
-      { error: 'Failed to generate outfit suggestion', details: error?.message || String(error) },
+      { error: 'Failed to generate outfit suggestion', details: message },
       { status: 500 },
     )
   }

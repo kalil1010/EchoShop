@@ -17,9 +17,9 @@ const isLikelySkinTone = (r: number, g: number, b: number): boolean => {
 }
 
 const hslFromRgb = (r: number, g: number, b: number): { h: number; s: number; l: number } => {
-  let rn = r / 255
-  let gn = g / 255
-  let bn = b / 255
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
   const max = Math.max(rn, gn, bn)
   const min = Math.min(rn, gn, bn)
   let h = 0
@@ -257,8 +257,6 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
   const bgHue = bgColor ? hslFromRgb(bgColor.r, bgColor.g, bgColor.b).h : null
 
   const colorCounts: Record<string, number> = {}
-  let total = 0
-
   // Focus on center area to emphasize garment (tighter ellipse ~50–55%)
   const cx = width / 2, cy = height / 2
   const tightRx = width * 0.22, tightRy = height * 0.22
@@ -326,7 +324,6 @@ function extractDominantColorsEnhanced(imageData: ImageData): ColorAnalysis {
       const centerWeight = inTightCenter ? 16 : inSoftCenter ? 4 : 0.4
       const weight = centerWeight * satW * lightBonus
       colorCounts[hex] = (colorCounts[hex] || 0) + weight
-      total += weight
     }
   }
 
@@ -402,7 +399,7 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 // Garment type detection using simple heuristics
-export function detectGarmentType(imageFile: File): Promise<string> {
+export function detectGarmentType(): Promise<string> {
   return new Promise((resolve) => {
     // This is a simplified version. In a real app, you'd use ML models
     // For now, we'll return a default and let users correct it
@@ -443,7 +440,8 @@ export function getMatchingColors(hex: string): { complementary: string; analogo
   const toHsl = (r: number, g: number, b: number) => {
     r /= 255; g /= 255; b /= 255
     const max = Math.max(r, g, b), min = Math.min(r, g, b)
-    let h = 0, s = 0, l = (max + min) / 2
+    let h = 0, s = 0
+    const l = (max + min) / 2
     if (max !== min) {
       const d = max - min
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
@@ -510,7 +508,8 @@ export function getRichPalette(hex: string): {
   const toHsl = (r: number, g: number, b: number) => {
     r /= 255; g /= 255; b /= 255
     const max = Math.max(r, g, b), min = Math.min(r, g, b)
-    let h = 0, s = 0, l = (max + min) / 2
+    let h = 0, s = 0
+    const l = (max + min) / 2
     if (max !== min) {
       const d = max - min
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
@@ -600,7 +599,8 @@ export function ensureReadableColor(hex: string, targetL = 0.55, minS = 0.5): st
   const toHsl = (r: number, g: number, b: number) => {
     r /= 255; g /= 255; b /= 255
     const max = Math.max(r, g, b), min = Math.min(r, g, b)
-    let h = 0, s = 0, l = (max + min) / 2
+    let h = 0, s = 0
+    const l = (max + min) / 2
     if (max !== min) {
       const d = max - min
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
@@ -641,5 +641,3 @@ export function ensureReadableColor(hex: string, targetL = 0.55, minS = 0.5): st
   const out = toRgb(hsl.h, newS, newL)
   return rgbToHex(out.r, out.g, out.b)
 }
-
-

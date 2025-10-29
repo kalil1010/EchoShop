@@ -97,22 +97,10 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
     setIndex((prev) => (prev + 1) % pieces.length)
   }, [pieces.length])
 
-  if (pieces.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center text-sm text-gray-500 shadow-lg">
-        We’re curating outfits for you—check back shortly for fresh picks from Egyptian boutiques.
-      </div>
-    )
-  }
-
-  const active = pieces[index]
-
   const [isLightboxOpen, setLightboxOpen] = useState(false)
-  const [imgSrc, setImgSrc] = useState(active.imageUrl || FALLBACK_IMAGE)
+  const [imgSrc, setImgSrc] = useState(FALLBACK_IMAGE)
 
-  useEffect(() => {
-    setImgSrc(active.imageUrl || FALLBACK_IMAGE)
-  }, [active.imageUrl])
+  const active = pieces[index] ?? null
 
   const handleOpenFullImage = useCallback(() => setLightboxOpen(true), [])
 
@@ -122,6 +110,22 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
       setLightboxOpen(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (!active) {
+      setImgSrc(FALLBACK_IMAGE)
+      return
+    }
+    setImgSrc(active.imageUrl || FALLBACK_IMAGE)
+  }, [active])
+
+  if (!active) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center text-sm text-gray-500 shadow-lg">
+        We’re curating outfits for you—check back shortly for fresh picks from Egyptian boutiques.
+      </div>
+    )
+  }
 
   const storeBadge = active.store.includes(' - ') ? active.store.split(' - ')[0].trim() : active.store
   const featureBadges = [

@@ -14,7 +14,16 @@ const SavePayloadSchema = z.object({
 const DeletePayloadSchema = z.object({
   storagePath: z.string().min(1, 'storagePath required'),
 })
-const mapRecord = (row: any) => ({
+type AvatarRenderRow = {
+  user_id: string
+  storage_path: string
+  public_url: string | null
+  prompt: string | null
+  purpose: string | null
+  created_at: string | null
+}
+
+const mapRecord = (row: AvatarRenderRow) => ({
   userId: row.user_id as string,
   storagePath: row.storage_path as string,
   publicUrl: (row.public_url as string | null) ?? null,
@@ -148,7 +157,7 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id)
       .eq('storage_path', payload.storagePath)
-      .maybeSingle()
+      .maybeSingle<AvatarRenderRow>()
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.warn('[avatar-gallery] failed to read existing avatar render:', fetchError)
@@ -180,7 +189,7 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id)
       .eq('storage_path', payload.storagePath)
-      .maybeSingle()
+      .maybeSingle<AvatarRenderRow>()
 
     if (error || !data) {
       console.error('[avatar-gallery] failed to load saved avatar render:', error)

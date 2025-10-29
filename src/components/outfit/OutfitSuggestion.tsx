@@ -92,7 +92,7 @@ export function OutfitSuggestion() {
       profileGender: userProfile?.gender,
       sessionPresent: Boolean(session),
     })
-  }, [user?.uid, user?.email, userProfile, session?.access_token])
+  }, [session, session?.access_token, user?.email, user?.uid, userProfile])
 
   const clearAvatarObjectUrl = useCallback(() => {
     if (avatarObjectUrlRef.current) {
@@ -146,7 +146,7 @@ export function OutfitSuggestion() {
     return () => {
       active = false
     }
-  }, [isAuthenticated, user?.uid, session?.access_token])
+  }, [isAuthenticated, session?.access_token, toast, user?.uid])
 
   const loadGallery = useCallback(async () => {
     if (!isAuthenticated || !user?.uid) {
@@ -169,7 +169,7 @@ export function OutfitSuggestion() {
     } finally {
       setGalleryLoading(false)
     }
-  }, [isAuthenticated, user?.uid])
+  }, [isAuthenticated, session?.access_token, user?.uid])
 
   const handleDeleteGalleryItem = useCallback(
     async (storagePath: string) => {
@@ -284,7 +284,7 @@ export function OutfitSuggestion() {
         setAvatarLoading(false)
       }
     },
-    [clearAvatarObjectUrl, toast, user?.uid, userProfile, isAuthenticated]
+    [clearAvatarObjectUrl, toast, user?.uid, userProfile, isAuthenticated, session?.access_token]
   )
 
 
@@ -497,7 +497,7 @@ export function OutfitSuggestion() {
               Outfit Request
             </CardTitle>
             <CardDescription>
-              Select your occasion(s) and we'll suggest the perfect outfit
+              Select your occasion(s) and we&apos;ll suggest the perfect outfit
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

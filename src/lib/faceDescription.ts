@@ -42,9 +42,6 @@ const pickTopEntry = (input: unknown): { key: string; score: number } | null => 
 
 const normaliseKey = (key: string): string => key.replace(/_/g, ' ').replace(/-/g, ' ').trim()
 
-const capitalise = (value: string): string =>
-  value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
-
 const mapGender = (key: string): string => {
   const lowered = key.toLowerCase()
   if (lowered === 'male' || lowered === 'man') return 'masculine-presenting'

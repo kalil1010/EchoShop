@@ -1,4 +1,4 @@
-import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient, User } from '@supabase/supabase-js'
 import type { UserProfile } from '@/types/user'
 
 export type PermissionReason = 'auth' | 'forbidden'
@@ -25,8 +25,11 @@ function extractCode(error: unknown): string | number | undefined {
 function extractMessage(error: unknown): string {
   if (!error) return ''
   if (error instanceof Error) return error.message
-  if (typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
-    return (error as { message: string }).message
+  if (error && typeof error === 'object' && 'message' in error) {
+    const candidate = (error as { message?: unknown }).message
+    if (typeof candidate === 'string') {
+      return candidate
+    }
   }
   return ''
 }
@@ -82,8 +85,8 @@ export async function requireSessionUser(supabase: SupabaseClient, expectedUserI
 
 export async function requireRole(
   supabase: SupabaseClient,
-  allowedRoles: string | string[]
-): Promise<{ user: any; profile: UserProfile }> {
+  allowedRoles: string | string[],
+): Promise<{ user: User; profile: UserProfile }> {
   const { data: { session }, error } = await supabase.auth.getSession()
   if (error) {
     throw mapSupabaseError(error)
@@ -96,7 +99,7 @@ export async function requireRole(
     .from('profiles')
     .select('*')
     .eq('id', session.user.id)
-    .single()
+    .single<UserProfile>()
 
   if (profileError) {
     throw mapSupabaseError(profileError)

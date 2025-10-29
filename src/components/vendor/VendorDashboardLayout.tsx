@@ -23,7 +23,29 @@ const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'orders', label: 'Orders' },
 ]
 
-const adaptAnalytics = (payload: any): VendorAnalyticsSnapshot => ({
+type VendorAnalyticsResponse = {
+  metrics?: {
+    totalProducts?: number
+    total?: number
+    drafts?: number
+    pending?: number
+    pending_review?: number
+    active?: number
+    rejected?: number
+    archived?: number
+  }
+  recentProducts?: Array<{
+    id?: unknown
+    title?: unknown
+    status?: unknown
+    price?: unknown
+    currency?: unknown
+    createdAt?: unknown
+    updatedAt?: unknown
+  }>
+}
+
+const adaptAnalytics = (payload: VendorAnalyticsResponse | null | undefined): VendorAnalyticsSnapshot => ({
   metrics: {
     totalProducts: Number(payload?.metrics?.totalProducts ?? payload?.metrics?.total ?? 0),
     drafts: Number(payload?.metrics?.drafts ?? 0),
@@ -33,11 +55,11 @@ const adaptAnalytics = (payload: any): VendorAnalyticsSnapshot => ({
     archived: Number(payload?.metrics?.archived ?? 0),
   },
   recentProducts: Array.isArray(payload?.recentProducts)
-    ? payload.recentProducts.map((item: any) => ({
+    ? payload.recentProducts.map((item) => ({
         id: String(item?.id ?? ''),
         title: typeof item?.title === 'string' ? item.title : 'Untitled product',
         status: typeof item?.status === 'string' ? item.status : 'draft',
-        price: Number.parseFloat(item?.price ?? '0'),
+        price: typeof item?.price === 'number' ? item.price : Number.parseFloat(String(item?.price ?? '0')),
         currency: typeof item?.currency === 'string' ? item.currency : 'EGP',
         createdAt: typeof item?.createdAt === 'string' ? item.createdAt : null,
         updatedAt: typeof item?.updatedAt === 'string' ? item.updatedAt : null,

@@ -514,12 +514,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let upsertError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(bootstrap), authUser, 'missing-profile')
-        } catch (upsertError) {
-          const normalisedUpsertError = normaliseError(upsertError, 'Profile upsert failed')
+        } catch (caughtError) {
+          const normalisedUpsertError = normaliseError(caughtError, 'Profile upsert failed')
           setProfileError(normalisedUpsertError)
           console.error(
             `[AuthContext] Unable to seed bootstrap profile for ${authUser.uid} after missing profile.`,
-            upsertError,
+            caughtError,
           )
           upsertFailed = true
           upsertError = normalisedUpsertError
@@ -554,12 +554,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let upsertFallbackError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(fallback), authUser, 'fetch-error')
-        } catch (upsertError) {
+        } catch (caughtError) {
           console.error(
             `[AuthContext] Fallback profile upsert failed after fetch error for ${authUser.uid}:`,
-            upsertError,
+            caughtError,
           )
-          upsertFallbackError = normaliseError(upsertError, 'Profile upsert failed after fetch error')
+          upsertFallbackError = normaliseError(caughtError, 'Profile upsert failed after fetch error')
         }
         setProfileStatus('error')
         const permissionIssue = isPermissionError(upsertFallbackError ?? normalised)
@@ -660,7 +660,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
-        const { data, error } = await supabase.auth.getSession()
+        const { data } = await supabase.auth.getSession()
         if (error) {
           console.warn('[AuthContext] Session error:', error)
           const message = typeof error.message === 'string' ? error.message : ''
@@ -759,7 +759,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setLoading(true)
       try {
-        const { data, error } = await supabase.auth.getSession()
+        const { data } = await supabase.auth.getSession()
         const nextSession = data?.session ?? null
         setSession(nextSession)
 
@@ -915,7 +915,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     if (!supabase) throw new Error('Supabase is not properly configured')
     try {
-      const { data, error } = await supabase.auth.getSession()
+      const { data } = await supabase.auth.getSession()
       if (data.session) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error

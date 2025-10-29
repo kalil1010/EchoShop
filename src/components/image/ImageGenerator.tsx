@@ -49,9 +49,10 @@ export function ImageGenerator() {
   const [lightboxCaption, setLightboxCaption] = useState<string | undefined>(undefined)
 
   useEffect(() => {
+    const registry = urlRegistry.current
     return () => {
-      urlRegistry.current.forEach((url) => URL.revokeObjectURL(url))
-      urlRegistry.current.clear()
+      registry.forEach((url) => URL.revokeObjectURL(url))
+      registry.clear()
     }
   }, [])
 

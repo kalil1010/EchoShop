@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'destructive'
@@ -29,9 +29,11 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const dismiss = (id: string) => setToasts((prev) => prev.filter((t) => t.id !== id))
+  const dismiss = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
 
-  const toast = (t: Omit<Toast, 'id'>) => {
+  const toast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).slice(2)
     const duration = t.duration ?? 3000
     const next: Toast = { id, ...t }
@@ -40,9 +42,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       setTimeout(() => dismiss(id), duration)
     }
     return id
-  }
+  }, [dismiss])
 
-  const value = useMemo(() => ({ toast, dismiss }), [])
+  const value = useMemo(() => ({ toast, dismiss }), [toast, dismiss])
 
   return (
     <ToastContext.Provider value={value}>

@@ -12,7 +12,16 @@ export interface SavedPalette {
   name?: string;
   baseHex: string;
   dominantHexes: string[];
-  richMatches: any;
+  richMatches: {
+    base: string;
+    complementary: string;
+    splitComplementary: string[];
+    analogous: string[];
+    triadic: string[];
+    tetradic: string[];
+    monochrome: string[];
+    neutrals: string[];
+  };
   plan?: OutfitColorPlan;
   source?: 'analyzer' | 'closet';
   createdAt: Date;

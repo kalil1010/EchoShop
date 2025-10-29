@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { ClipboardList, Image as ImageIcon, Sparkles, Wand2 } from 'lucide-react'
+import { ClipboardList, Image as ImageIcon, Wand2 } from 'lucide-react'
 
 const STEPS = [
   {

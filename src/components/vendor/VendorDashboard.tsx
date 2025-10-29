@@ -26,44 +26,74 @@ interface VendorProductCardProps {
   onDelete: (productId: string) => Promise<void>
 }
 
-const mapProductFromApi = (payload: any): VendorProduct => {
-  const createdAt = payload?.createdAt ? new Date(payload.createdAt) : new Date()
-  const updatedAt = payload?.updatedAt ? new Date(payload.updatedAt) : createdAt
-  const gallery = Array.isArray(payload?.gallery)
-    ? payload.gallery.map((entry: any) => ({
-        url: typeof entry?.url === 'string' ? entry.url : '',
-        path: typeof entry?.path === 'string' ? entry.path : undefined,
-      }))
-    : []
+type ApiProductGalleryEntry = {
+  url?: unknown
+  path?: unknown
+}
 
-  const rawStatus = typeof payload?.status === 'string' ? (payload.status as string).toLowerCase() : 'draft'
+type ApiProductPayload = {
+  id?: unknown
+  vendorId?: unknown
+  title?: unknown
+  description?: unknown
+  price?: unknown
+  currency?: unknown
+  status?: unknown
+  primaryImageUrl?: unknown
+  primaryImagePath?: unknown
+  gallery?: unknown
+  moderation?: {
+    status?: VendorProductStatus
+    message?: unknown
+    category?: unknown
+    reasons?: unknown
+  }
+  aiDescription?: unknown
+  aiColors?: unknown
+  createdAt?: unknown
+  updatedAt?: unknown
+}
+
+const mapProductFromApi = (payload: unknown): VendorProduct => {
+  const record = (payload ?? {}) as ApiProductPayload
+  const createdAt = typeof record.createdAt === 'string' ? new Date(record.createdAt) : new Date()
+  const updatedAt = typeof record.updatedAt === 'string' ? new Date(record.updatedAt) : createdAt
+  const galleryRaw = Array.isArray(record.gallery) ? (record.gallery as ApiProductGalleryEntry[]) : []
+  const gallery = galleryRaw.map((entry) => ({
+    url: typeof entry?.url === 'string' ? entry.url : '',
+    path: typeof entry?.path === 'string' ? entry.path : undefined,
+  }))
+
+  const rawStatus = typeof record.status === 'string' ? record.status.toLowerCase() : 'draft'
   const status = STATUS_NORMALISE_MAP[rawStatus] ?? 'draft'
 
   return {
-    id: String(payload?.id ?? ''),
-    vendorId: String(payload?.vendorId ?? ''),
-    title: String(payload?.title ?? ''),
-    description: typeof payload?.description === 'string' ? payload.description : undefined,
-    price: typeof payload?.price === 'number' ? payload.price : Number(payload?.price ?? 0),
-    currency: typeof payload?.currency === 'string' && payload.currency ? payload.currency : 'EGP',
+    id: String(record.id ?? ''),
+    vendorId: String(record.vendorId ?? ''),
+    title: String(record.title ?? ''),
+    description: typeof record.description === 'string' ? record.description : undefined,
+    price: typeof record.price === 'number' ? record.price : Number(record.price ?? 0),
+    currency: typeof record.currency === 'string' && record.currency ? record.currency : 'EGP',
     status,
-    primaryImageUrl: typeof payload?.primaryImageUrl === 'string' ? payload.primaryImageUrl : '',
+    primaryImageUrl: typeof record.primaryImageUrl === 'string' ? record.primaryImageUrl : '',
     primaryImagePath:
-      typeof payload?.primaryImagePath === 'string' && payload.primaryImagePath
-        ? payload.primaryImagePath
+      typeof record.primaryImagePath === 'string' && record.primaryImagePath
+        ? record.primaryImagePath
         : undefined,
     gallery,
-    moderation: payload?.moderation
+    moderation: record.moderation
       ? {
-          status: payload.moderation.status,
-          message: payload.moderation.message ?? undefined,
-          category: payload.moderation.category ?? undefined,
-          reasons: Array.isArray(payload.moderation.reasons) ? payload.moderation.reasons : undefined,
+          status: record.moderation.status ?? 'pending_review',
+          message: typeof record.moderation.message === 'string' ? record.moderation.message : undefined,
+          category: typeof record.moderation.category === 'string' ? record.moderation.category : undefined,
+          reasons: Array.isArray(record.moderation.reasons)
+            ? (record.moderation.reasons as string[])
+            : undefined,
         }
       : undefined,
     aiDescription:
-      typeof payload?.aiDescription === 'string' && payload.aiDescription ? payload.aiDescription : undefined,
-    aiColors: Array.isArray(payload?.aiColors) ? payload.aiColors : undefined,
+      typeof record.aiDescription === 'string' && record.aiDescription ? record.aiDescription : undefined,
+    aiColors: Array.isArray(record.aiColors) ? (record.aiColors as string[]) : undefined,
     createdAt,
     updatedAt,
   }

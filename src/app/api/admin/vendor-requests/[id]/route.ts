@@ -32,13 +32,13 @@ type RequestRow = {
 
 export async function PATCH(
   request: NextRequest,
-  context: any,
+  context: { params: { id?: string } },
 ) {
   try {
     const supabase = createServiceClient()
     const { user } = await requireRole(supabase, 'admin')
 
-    const params = (context as { params?: { id?: string } })?.params ?? {}
+    const params = context?.params ?? {}
     const requestId = params.id
     if (!requestId) {
       return NextResponse.json({ error: 'Missing request identifier.' }, { status: 400 })

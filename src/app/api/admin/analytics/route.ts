@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 import { createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
@@ -22,42 +22,42 @@ const toIso = (value: string | null | undefined): string | null => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = createServiceClient()
     await requireRole(supabase, 'admin')
 
     const countProfiles = async (
-      mutate?: (query: any) => any,
+      filters?: Array<{ column: 'role'; value: string }>,
     ): Promise<number> => {
       let query = supabase.from('profiles').select('id', { count: 'exact', head: true })
-      if (mutate) {
-        query = mutate(query)
-      }
+      filters?.forEach(({ column, value }) => {
+        query = query.eq(column, value)
+      })
       const { count, error } = await query
       if (error) throw error
       return count ?? 0
     }
 
     const countVendorRequests = async (
-      mutate?: (query: any) => any,
+      filters?: Array<{ column: 'status'; value: string }>,
     ): Promise<number> => {
       let query = supabase.from('vendor_requests').select('id', { count: 'exact', head: true })
-      if (mutate) {
-        query = mutate(query)
-      }
+      filters?.forEach(({ column, value }) => {
+        query = query.eq(column, value)
+      })
       const { count, error } = await query
       if (error) throw error
       return count ?? 0
     }
 
     const countVendorProducts = async (
-      mutate?: (query: any) => any,
+      filters?: Array<{ column: 'status'; value: string }>,
     ): Promise<number> => {
       let query = supabase.from('vendor_products').select('id', { count: 'exact', head: true })
-      if (mutate) {
-        query = mutate(query)
-      }
+      filters?.forEach(({ column, value }) => {
+        query = query.eq(column, value)
+      })
       const { count, error } = await query
       if (error) throw error
       return count ?? 0
@@ -75,12 +75,12 @@ export async function GET(request: NextRequest) {
       recentRequestsResult,
     ] = await Promise.all([
       countProfiles(),
-      countProfiles((query) => query.eq('role', 'vendor')),
-      countProfiles((query) => query.eq('role', 'admin')),
-      countVendorRequests((query) => query.eq('status', 'pending')),
-      countVendorRequests((query) => query.eq('status', 'approved')),
+      countProfiles([{ column: 'role', value: 'vendor' }]),
+      countProfiles([{ column: 'role', value: 'admin' }]),
+      countVendorRequests([{ column: 'status', value: 'pending' }]),
+      countVendorRequests([{ column: 'status', value: 'approved' }]),
       countVendorProducts(),
-      countVendorProducts((query) => query.eq('status', 'active')),
+      countVendorProducts([{ column: 'status', value: 'active' }]),
       supabase
         .from('profiles')
         .select('id, display_name, email, role, created_at')

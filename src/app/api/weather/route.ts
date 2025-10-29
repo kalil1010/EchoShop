@@ -93,12 +93,36 @@ const resolveLocationKey = async (
   return entry
 }
 
-const mapCurrentConditions = (payload: any, location: LocationCacheEntry) => {
+type AccuCurrentConditionsResponse = Array<{
+  Temperature?: { Metric?: { Value?: number } }
+  WeatherText?: string
+  RelativeHumidity?: number
+  Wind?: { Speed?: { Metric?: { Value?: number } } }
+}>
+
+type AccuDailyForecastResponse = {
+  DailyForecasts?: Array<{
+    Date?: string
+    Temperature?: { Maximum?: { Value?: number }; Minimum?: { Value?: number } }
+    Day?: {
+      IconPhrase?: string
+      RelativeHumidity?: number
+      Wind?: { Speed?: { Value?: number } }
+    }
+    Night?: {
+      IconPhrase?: string
+      RelativeHumidity?: number
+      Wind?: { Speed?: { Value?: number } }
+    }
+  }>
+}
+
+const mapCurrentConditions = (payload: unknown, location: LocationCacheEntry) => {
   if (!Array.isArray(payload) || !payload.length) {
     throw new Error("AccuWeather current conditions payload invalid")
   }
 
-  const item = payload[0]
+  const item = payload[0] as AccuCurrentConditionsResponse[number]
 
   const windKmh = item?.Wind?.Speed?.Metric?.Value ?? 5
 
@@ -114,8 +138,10 @@ const mapCurrentConditions = (payload: any, location: LocationCacheEntry) => {
   }
 }
 
-const mapDailyForecast = (payload: any, index: number, location: LocationCacheEntry) => {
-  const forecasts = Array.isArray(payload?.DailyForecasts) ? payload.DailyForecasts : []
+const mapDailyForecast = (payload: unknown, index: number, location: LocationCacheEntry) => {
+  const forecasts = Array.isArray((payload as AccuDailyForecastResponse | null)?.DailyForecasts)
+    ? ((payload as AccuDailyForecastResponse).DailyForecasts ?? [])
+    : []
   const forecast = forecasts[index]
 
   if (!forecast) {

@@ -25,14 +25,16 @@ const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
 }
 
-const ROLE_OPTIONS: Array<{ value: 'user' | 'vendor' | 'owner' | 'admin'; label: string }> = [
+type ManagedRole = 'user' | 'vendor' | 'owner' | 'admin'
+
+const ROLE_OPTIONS: Array<{ value: ManagedRole; label: string }> = [
   { value: 'user', label: 'User' },
   { value: 'vendor', label: 'Vendor' },
   { value: 'owner', label: 'Owner' },
   { value: 'admin', label: 'Admin' },
 ]
 
-const normaliseRole = (value: string | null | undefined): 'user' | 'vendor' | 'owner' | 'admin' => {
+const normaliseRole = (value: string | null | undefined): ManagedRole => {
   const key = (value ?? 'user').toLowerCase()
   if (key === 'vendor' || key === 'owner' || key === 'admin') return key
   return 'user'
@@ -90,7 +92,7 @@ export default function UserManagement({
     })
   }, [users, searchTerm])
 
-  const handleRoleChange = async (user: OwnerUserRecord, nextRole: 'user' | 'vendor' | 'owner' | 'admin') => {
+  const handleRoleChange = async (user: OwnerUserRecord, nextRole: ManagedRole) => {
     if (user.id === updatingUserId || normaliseRole(user.role) === nextRole) {
       return
     }
@@ -217,9 +219,13 @@ export default function UserManagement({
                       id={`role-${user.id}`}
                       className="w-36 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
                       value={role}
-                      onChange={(event) =>
-                        handleRoleChange(user, event.target.value as any)
-                      }
+                      onChange={(event) => {
+                        const nextRole = event.target.value as ManagedRole
+                        if (!ROLE_OPTIONS.some((option) => option.value === nextRole)) {
+                          return
+                        }
+                        void handleRoleChange(user, nextRole)
+                      }}
                       disabled={isLocked || updatingUserId === user.id}
                     >
                       {ROLE_OPTIONS.map((option) => (

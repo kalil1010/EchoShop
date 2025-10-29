@@ -7,14 +7,14 @@ const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY || '' })
 export async function callMistralAI(
   prompt: string,
   systemPrompt?: string,
-  options?: { responseFormat?: any; model?: string; temperature?: number; maxTokens?: number }
+  options?: { responseFormat?: unknown; model?: string; temperature?: number; maxTokens?: number }
 ): Promise<string> {
   try {
     if (!process.env.MISTRAL_API_KEY) {
       return 'Mistral AI is not configured. Please set up your API key.'
     }
 
-    const messages: any[] = []
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = []
 
     if (systemPrompt) {
       messages.push({

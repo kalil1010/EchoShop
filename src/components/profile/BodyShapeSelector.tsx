@@ -53,7 +53,6 @@ const SILHOUETTE_MAP: Record<BodyShapeId, SilhouetteMetrics> = {
   apple: { shoulder: 13, waist: 16, hip: 13, headRadius: 6, torsoLength: 44 },
 }
 
-const getFillColor = (selected: boolean) => (selected ? '#7c3aed' : '#c4d2f7')
 const getStrokeColor = (selected: boolean) => (selected ? '#5b21b6' : '#475569')
 
 const buildTorsoPath = ({ shoulder, waist, hip, torsoLength }: SilhouetteMetrics) => {
@@ -76,7 +75,6 @@ const buildTorsoPath = ({ shoulder, waist, hip, torsoLength }: SilhouetteMetrics
 }
 
 const BodyShapeIllustration: React.FC<{ shape: BodyShapeId; selected: boolean }> = ({ shape, selected }) => {
-  const fill = getFillColor(selected)
   const stroke = getStrokeColor(selected)
   const metrics = SILHOUETTE_MAP[shape]
   const torsoPath = buildTorsoPath(metrics)

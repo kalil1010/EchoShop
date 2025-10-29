@@ -37,11 +37,19 @@ const parsePrice = (value: unknown): number | undefined => {
   return undefined
 }
 
+type ProductUpdatePayload = {
+  title?: unknown
+  description?: unknown
+  currency?: unknown
+  price?: unknown
+  status?: unknown
+}
+
 export async function PATCH(
   request: NextRequest,
-  context: any,
+  context: { params: { id?: string } },
 ) {
-  const params = (context as { params?: { id?: string } })?.params ?? {}
+  const params = context?.params ?? {}
   const productId = params.id
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })
@@ -53,10 +61,14 @@ export async function PATCH(
     const { userId } = await resolveAuthenticatedUser(request)
     await requireVendorUser(userId)
 
-    let payload: any
+    let payload: ProductUpdatePayload | null
     try {
       payload = await request.json()
     } catch {
+      return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 })
+    }
+
+    if (!payload || typeof payload !== 'object') {
       return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 })
     }
 
@@ -125,9 +137,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  context: any,
+  context: { params: { id?: string } },
 ) {
-  const params = (context as { params?: { id?: string } })?.params ?? {}
+  const params = context?.params ?? {}
   const productId = params.id
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })

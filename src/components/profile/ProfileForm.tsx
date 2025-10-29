@@ -444,7 +444,7 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
       reader.readAsDataURL(file)
     })
 
-  const handlePhotoSelected = async (file: File) => {
+  const handlePhotoSelected = useCallback(async (file: File) => {
     const uid = userProfile?.uid
     if (!uid || !supabase) {
       toast({ variant: 'error', title: 'Unable to upload', description: 'Please sign in before uploading a photo.' })
@@ -486,7 +486,14 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
       setUploading(false)
       setUploadProgress(0)
     }
-  }
+  }, [
+    formData.photoPath,
+    supabase,
+    toast,
+    updateUserProfile,
+    user?.uid,
+    userProfile,
+  ])
 
 
   const handleCropComplete = useCallback((croppedFile: File, previewUrl: string) => {
@@ -779,7 +786,7 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
                     </Button>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-500">
-                    Tip: paste a hex like <code>#3B82F6</code> or type a color name such as "sage".
+                    Tip: paste a hex like <code>#3B82F6</code> or type a color name such as &quot;sage&quot;.
                   </p>
                 </div>
               </div>

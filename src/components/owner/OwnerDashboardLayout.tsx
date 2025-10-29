@@ -32,10 +32,30 @@ const TABS: Array<{ key: OwnerTab; label: string }> = [
   { key: 'analytics', label: 'Analytics' },
 ]
 
-const adaptAnalytics = (payload: any): OwnerAnalyticsSnapshot => {
+type OwnerAnalyticsResponse = {
+  metrics?: {
+    totals?: { users?: number; vendors?: number; owners?: number }
+    vendorRequests?: { pending?: number; approved?: number }
+    products?: { total?: number; active?: number }
+  }
+  recentUsers?: Array<{
+    id?: unknown
+    label?: unknown
+    role?: unknown
+    created_at?: unknown
+  }>
+  recentVendorRequests?: Array<{
+    id?: unknown
+    label?: unknown
+    status?: unknown
+    created_at?: unknown
+  }>
+}
+
+const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): OwnerAnalyticsSnapshot => {
   const metrics = payload?.metrics ?? {}
   const recentUsers = Array.isArray(payload?.recentUsers)
-    ? payload.recentUsers.map((user: any) => ({
+    ? payload.recentUsers.map((user) => ({
         id: String(user?.id ?? ''),
         label: typeof user?.label === 'string' ? user.label : null,
         role: typeof user?.role === 'string' ? user.role : null,
@@ -43,7 +63,7 @@ const adaptAnalytics = (payload: any): OwnerAnalyticsSnapshot => {
       }))
     : []
   const recentVendorRequests = Array.isArray(payload?.recentVendorRequests)
-    ? payload.recentVendorRequests.map((item: any) => ({
+    ? payload.recentVendorRequests.map((item) => ({
         id: String(item?.id ?? ''),
         label: typeof item?.label === 'string' ? item.label : null,
         status: typeof item?.status === 'string' ? item.status : null,

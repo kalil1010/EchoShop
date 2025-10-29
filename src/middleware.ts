@@ -13,7 +13,7 @@ const getSupabaseAdmin = () => {
         getAll() {
           return []
         },
-        setAll(_cookiesToSet) {},
+        setAll() {},
       },
     }
   )

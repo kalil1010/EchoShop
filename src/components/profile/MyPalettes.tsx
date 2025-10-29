@@ -39,17 +39,28 @@ export function MyPalettes() {
 
       if (error) throw mapSupabaseError(error)
 
-      const mapped = (data ?? []).map((row: any) => ({
+      const mapped = (data ?? []).map((row: {
+        id: string
+        user_id?: string | null
+        owner_id?: string | null
+        base_hex: string
+        dominant_hexes?: string[] | null
+        rich_matches?: SavedPalette['richMatches'] | null
+        plan?: SavedPalette['plan'] | null
+        source?: string | null
+        created_at?: string | null
+        updated_at?: string | null
+      }): SavedPalette => ({
         id: row.id,
-        ownerId: row.user_id ?? row.owner_id,
+        ownerId: row.user_id ?? row.owner_id ?? user.uid,
         baseHex: row.base_hex,
-        dominantHexes: row.dominant_hexes ?? [],
+        dominantHexes: Array.isArray(row.dominant_hexes) ? row.dominant_hexes : [],
         richMatches: row.rich_matches ?? null,
-        plan: row.plan ?? {},
-        source: row.source ?? 'analyzer',
+        plan: row.plan ?? undefined,
+        source: (row.source ?? 'analyzer') as SavedPalette['source'],
         createdAt: row.created_at ? new Date(row.created_at) : new Date(),
         updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
-      })) as SavedPalette[]
+      }))
 
       setItems(mapped)
     } catch (error) {
@@ -141,7 +152,7 @@ export function MyPalettes() {
 
         {!loading && items.length === 0 && (
           <div className="text-sm text-gray-600">
-            No saved palettes yet. Build one in the Analyzer or Closet and click "Save to Profile".
+            No saved palettes yet. Build one in the Analyzer or Closet and click &quot;Save to Profile&quot;.
           </div>
         )}
 

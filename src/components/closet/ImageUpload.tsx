@@ -355,7 +355,7 @@ export function ImageUpload({ onItemAdded }: ImageUploadProps) {
     cropFileRef.current = file
     setCropSource(objectUrl)
     setIsCropOpen(true)
-  }, [getAccessToken, supabase, toast, updatePreview, user])
+  }, [supabase, toast, updatePreview, user])
 
   const handleCropCancel = useCallback(() => {
     clearCropSource()
