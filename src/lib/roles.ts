@@ -87,6 +87,16 @@ export const ROLE_META: Record<UserRole, RoleMeta> = {
     welcomeSubtitle: 'Oversee the marketplace, approvals, and vendor growth from this console.',
     icon: 'shield',
   },
+  admin: {
+    id: 'owner',
+    label: 'Owner',
+    shortLabel: 'Owner',
+    defaultRoute: '/downtown/dashboard',
+    onboardingRoute: '/downtown/dashboard',
+    welcomeTitle: 'Hello, Owner!',
+    welcomeSubtitle: 'Oversee the marketplace, approvals, and vendor growth from this console.',
+    icon: 'shield',
+  },
 }
 
 export interface PortalConfig {

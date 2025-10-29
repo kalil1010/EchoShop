@@ -3,7 +3,6 @@
 import Link from 'next/link'
 
 import type { PortalNotice } from '@/lib/roles'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const toneClasses: Record<PortalNotice['tone'], { wrapper: string; title: string }> = {
@@ -37,12 +36,18 @@ export function PortalNoticeBanner({ notice }: PortalNoticeBannerProps) {
           ) : null}
         </div>
         {notice.actionLabel && notice.actionHref ? (
-          <Button asChild size="sm" variant="outline" className="shrink-0 border-current bg-white/80">
-            <Link href={notice.actionHref}>{notice.actionLabel}</Link>
-          </Button>
+          <Link
+            href={notice.actionHref}
+            className={cn(
+              'inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+              'shrink-0 border-current bg-white/80',
+            )}
+          >
+            {notice.actionLabel}
+          </Link>
         ) : null}
       </div>
     </div>
   )
 }
-

@@ -47,10 +47,9 @@ type ProductUpdatePayload = {
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { id?: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const params = context?.params ?? {}
-  const productId = params.id
+  const { id: productId } = await params
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })
   }
@@ -137,10 +136,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id?: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const params = context?.params ?? {}
-  const productId = params.id
+  const { id: productId } = await params
   if (!productId) {
     return NextResponse.json({ error: 'Missing product identifier.' }, { status: 400 })
   }

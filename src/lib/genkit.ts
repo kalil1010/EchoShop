@@ -33,7 +33,7 @@ export async function callMistralAI(
       messages,
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens ?? 1000,
-      responseFormat: options?.responseFormat,
+      responseFormat: options?.responseFormat as any,
     })
 
     const raw = response.choices[0]?.message?.content

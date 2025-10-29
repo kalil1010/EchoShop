@@ -12,7 +12,7 @@ export interface SavedPalette {
   name?: string;
   baseHex: string;
   dominantHexes: string[];
-  richMatches: {
+  richMatches?: {
     base: string;
     complementary: string;
     splitComplementary: string[];

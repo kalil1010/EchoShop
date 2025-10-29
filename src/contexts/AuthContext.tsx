@@ -660,10 +660,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
-        const { data } = await supabase.auth.getSession()
-        if (error) {
-          console.warn('[AuthContext] Session error:', error)
-          const message = typeof error.message === 'string' ? error.message : ''
+        const { data, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError) {
+          console.warn('[AuthContext] Session error:', sessionError)
+          const message = typeof sessionError.message === 'string' ? sessionError.message : ''
           if (message.includes('Refresh Token') || message.includes('Invalid')) {
             console.log('[AuthContext] Invalid token detected, clearing session')
             await supabase.auth.signOut({ scope: 'local' })
@@ -675,7 +675,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return
           }
-          throw error
+          throw sessionError
         }
         if (!isMounted) return
 
@@ -759,7 +759,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setLoading(true)
       try {
-        const { data } = await supabase.auth.getSession()
+        const { data, error: storageSessionError } = await supabase.auth.getSession()
+        if (storageSessionError) {
+          console.warn('[auth] storage sync session error', storageSessionError)
+        }
         const nextSession = data?.session ?? null
         setSession(nextSession)
 

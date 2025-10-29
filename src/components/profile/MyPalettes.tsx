@@ -55,7 +55,7 @@ export function MyPalettes() {
         ownerId: row.user_id ?? row.owner_id ?? user.uid,
         baseHex: row.base_hex,
         dominantHexes: Array.isArray(row.dominant_hexes) ? row.dominant_hexes : [],
-        richMatches: row.rich_matches ?? null,
+        richMatches: row.rich_matches ?? undefined,
         plan: row.plan ?? undefined,
         source: (row.source ?? 'analyzer') as SavedPalette['source'],
         createdAt: row.created_at ? new Date(row.created_at) : new Date(),

@@ -43,13 +43,13 @@ type ApiProductPayload = {
   primaryImagePath?: unknown
   gallery?: unknown
   moderation?: {
-    status?: VendorProductStatus
+    status?: 'ok' | 'review' | 'blocked' | 'error'
     message?: unknown
     category?: unknown
     reasons?: unknown
   }
   aiDescription?: unknown
-  aiColors?: unknown
+  aiColors?: Array<{ name?: unknown; hex?: unknown }> | string[] | null
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -81,19 +81,42 @@ const mapProductFromApi = (payload: unknown): VendorProduct => {
         ? record.primaryImagePath
         : undefined,
     gallery,
-    moderation: record.moderation
-      ? {
-          status: record.moderation.status ?? 'pending_review',
-          message: typeof record.moderation.message === 'string' ? record.moderation.message : undefined,
-          category: typeof record.moderation.category === 'string' ? record.moderation.category : undefined,
-          reasons: Array.isArray(record.moderation.reasons)
-            ? (record.moderation.reasons as string[])
-            : undefined,
-        }
-      : undefined,
+    moderation: (() => {
+      if (!record.moderation) return undefined
+      const allowedStatuses = new Set(['ok', 'review', 'blocked', 'error'])
+      const rawStatus = record.moderation.status
+      const status = typeof rawStatus === 'string' && allowedStatuses.has(rawStatus)
+        ? (rawStatus as 'ok' | 'review' | 'blocked' | 'error')
+        : 'review'
+
+      return {
+        status,
+        message: typeof record.moderation.message === 'string' ? record.moderation.message : undefined,
+        category: typeof record.moderation.category === 'string' ? record.moderation.category : undefined,
+        reasons: Array.isArray(record.moderation.reasons)
+          ? (record.moderation.reasons as string[])
+          : undefined,
+      }
+    })(),
     aiDescription:
       typeof record.aiDescription === 'string' && record.aiDescription ? record.aiDescription : undefined,
-    aiColors: Array.isArray(record.aiColors) ? (record.aiColors as string[]) : undefined,
+    aiColors: Array.isArray(record.aiColors)
+      ? (record.aiColors as Array<{ name?: unknown; hex?: unknown }> | string[])
+          .map((entry) => {
+            if (typeof entry === 'string') {
+              return { name: entry, hex: entry }
+            }
+            if (entry && typeof entry === 'object') {
+              const hexValue = typeof entry.hex === 'string' ? entry.hex : undefined
+              const nameValue = typeof entry.name === 'string' ? entry.name : hexValue ?? undefined
+              if (hexValue) {
+                return { name: nameValue ?? hexValue, hex: hexValue }
+              }
+            }
+            return null
+          })
+          .filter((entry): entry is { name: string; hex: string } => Boolean(entry && entry.hex))
+      : undefined,
     createdAt,
     updatedAt,
   }
