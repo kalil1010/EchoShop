@@ -26,6 +26,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   requiresAuth?: boolean;
+  tourId?: string;
 }
 
 export function Navigation() {
@@ -34,13 +35,13 @@ export function Navigation() {
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { href: '/', label: 'Home', icon: Home },
-      { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true },
-      { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true },
+      { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true, tourId: 'nav-outfit' },
+      { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true, tourId: 'nav-my-closet' },
       { href: '/chat', label: 'ZMODA AI Chat', icon: MessageCircle, requiresAuth: true },
       { href: '/image-generator', label: 'Image Lab', icon: ImageIcon, requiresAuth: true },
       { href: '/analyzer', label: 'Color Analyzer', icon: Palette },
       { href: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
-      { href: '/profile', label: 'Profile', icon: User, requiresAuth: true },
+      { href: '/profile', label: 'Profile', icon: User, requiresAuth: true, tourId: 'nav-profile' },
     ];
     return items;
   }, [userProfile?.role]);
@@ -74,6 +75,7 @@ export function Navigation() {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={item.tourId}
                 className="flex items-center space-x-1 text-gray-600 hover:text-purple-600 transition-colors"
               >
                 <item.icon className="h-4 w-4" />
@@ -134,6 +136,7 @@ export function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  data-tour={item.tourId}
                   className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-purple-600 hover:bg-gray-50 rounded-md transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >

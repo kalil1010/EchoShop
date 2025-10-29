@@ -11,6 +11,8 @@ import React, {
 import type { Session, User } from '@supabase/supabase-js'
 
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { DEFAULT_ROLE, getRoleMeta, normaliseRole } from '@/lib/roles'
+import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 
 type SignInResult = {
@@ -37,6 +39,8 @@ interface AuthContextType {
   user: AuthUser | null
   userProfile: UserProfile | null
   profile: UserProfile | null
+  role: UserRole
+  roleMeta: RoleMeta
   loading: boolean
   session: Session | null
   signIn: (email: string, password: string) => Promise<SignInResult>
@@ -86,24 +90,6 @@ function toDate(value: string | Date | null | undefined): Date {
   if (value instanceof Date) return value
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed
-}
-
-const DEFAULT_ROLE: UserRole = 'user'
-const ROLE_MAP: Record<string, UserRole> = {
-  user: 'user',
-  vendor: 'vendor',
-  owner: 'owner',
-  admin: 'owner',
-}
-
-function normaliseRole(value: unknown): UserRole {
-  if (typeof value === 'string') {
-    const key = value.toLowerCase()
-    if (key in ROLE_MAP) {
-      return ROLE_MAP[key]
-    }
-  }
-  return DEFAULT_ROLE
 }
 
 function sanitiseProfile(profile: UserProfile): UserProfile {
@@ -799,6 +785,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('storage', handleStorage)
   }, [supabase, loadUserProfileWithTimeout, resetProfileState])
 
+  useEffect(() => {
+    if (!supabase || !user?.uid) return
+
+    const channel = supabase
+      .channel(`profile-updates-${user.uid}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.uid}`,
+        },
+        () => {
+          refreshProfile().catch((error) =>
+            console.warn('[AuthContext] Failed to refresh profile after realtime update:', error),
+          )
+        },
+      )
+      .subscribe()
+
+    return () => {
+      if (typeof supabase.removeChannel === 'function') {
+        supabase.removeChannel(channel)
+      } else if (typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe()
+      }
+    }
+  }, [supabase, user?.uid, refreshProfile])
+
   const signIn = useCallback(
     async (email: string, password: string): Promise<SignInResult> => {
       if (!supabase) {
@@ -961,11 +977,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error
 
       applyProfileToState(merged, user)
+      await refreshProfile()
     },
-    [supabase, user, userProfile, applyProfileToState],
+    [supabase, user, userProfile, applyProfileToState, refreshProfile],
   )
 
-  const isVendor = Boolean(userProfile && userProfile.role === 'vendor')
+  const role = normaliseRole(userProfile?.role ?? user?.role ?? DEFAULT_ROLE)
+  const roleMeta = getRoleMeta(role)
+  const isVendor = role === 'vendor'
 
   const isSupabaseEnabled = Boolean(supabase)
 
@@ -973,6 +992,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     userProfile,
     profile: userProfile,
+    role,
+    roleMeta,
     loading,
     session,
     signIn,

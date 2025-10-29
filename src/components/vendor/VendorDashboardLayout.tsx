@@ -1,9 +1,10 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { UploadCloud, BarChart3, Building2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
 import type { VendorProduct } from '@/types/vendor'
 import ProductManagement from './ProductManagement'
@@ -45,7 +46,7 @@ const adaptAnalytics = (payload: any): VendorAnalyticsSnapshot => ({
 })
 
 export default function VendorDashboardLayout() {
-  const { userProfile } = useAuth()
+  const { userProfile, roleMeta } = useAuth()
   const [activeTab, setActiveTab] = useState<VendorTab>('overview')
   const [products, setProducts] = useState<VendorProduct[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
@@ -65,6 +66,33 @@ export default function VendorDashboardLayout() {
       'Vendor'
     )
   }, [userProfile])
+
+  const quickActions = useMemo(
+    () => [
+      {
+        key: 'products',
+        icon: UploadCloud,
+        title: 'Upload a product',
+        description: 'Add new listings and track their moderation status.',
+        tab: 'products' as const,
+      },
+      {
+        key: 'analytics',
+        icon: BarChart3,
+        title: 'Review analytics',
+        description: 'See how drafts, pending items, and approvals are trending.',
+        tab: 'analytics' as const,
+      },
+      {
+        key: 'business',
+        icon: Building2,
+        title: 'Update business profile',
+        description: 'Keep contact details and storefront messaging up to date.',
+        tab: 'business' as const,
+      },
+    ],
+    [],
+  )
 
   const fetchProducts = useCallback(async () => {
     setProductsLoading(true)
@@ -271,10 +299,51 @@ export default function VendorDashboardLayout() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Welcome back, {vendorName}</h1>
+      <Card
+        data-tour="vendor-welcome-card"
+        className="border-emerald-100 bg-emerald-50/60 backdrop-blur-sm"
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg text-emerald-900">
+            {roleMeta.welcomeTitle} 👋
+          </CardTitle>
+          <CardDescription className="text-sm text-emerald-800">
+            {roleMeta.welcomeSubtitle}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {quickActions.map((action) => (
+            <div
+              key={action.key}
+              data-tour={`vendor-action-${action.key}`}
+              className="flex h-full flex-col justify-between rounded-lg border border-emerald-100 bg-white/80 p-4 shadow-sm"
+            >
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 text-emerald-700">
+                  <action.icon className="h-4 w-4" />
+                  <span className="text-sm font-semibold">{action.title}</span>
+                </div>
+                <p className="text-sm text-emerald-800">{action.description}</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="mt-3 w-fit px-0 text-emerald-700 hover:text-emerald-900"
+                onClick={() => setActiveTab(action.tab)}
+              >
+                Go now →
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <header className="space-y-1">
+        <h1 className="text-3xl font-bold text-slate-900">Atlas vendor console</h1>
         <p className="text-sm text-slate-600">
-          Manage your marketplace presence, track performance, and keep your business details current.
+          Manage {vendorName}&apos;s marketplace presence, track performance, and keep your business
+          details current.
         </p>
       </header>
 
@@ -284,6 +353,7 @@ export default function VendorDashboardLayout() {
             key={tab.key}
             variant={activeTab === tab.key ? 'default' : 'outline'}
             onClick={() => setActiveTab(tab.key)}
+            data-tour={`vendor-tab-${tab.key}`}
           >
             {tab.label}
           </Button>

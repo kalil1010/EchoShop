@@ -5,48 +5,115 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { OnboardingContextProvider, TourStep } from '@/contexts/OnboardingContext'
 import { TourOverlay } from '@/components/onboarding/TourOverlay'
 import { getTourState, updateTourState } from '@/lib/onboarding'
-
-const TOUR_SLUG = 'intro_onboarding'
-const STORAGE_KEY = 'zmoda-tour-intro-dismissed'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface OnboardingProviderProps {
   children: React.ReactNode
 }
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
+  const { role, roleMeta } = useAuth()
   const [initialStatus, setInitialStatus] = useState<'not_started' | 'in_progress' | 'completed'>('not_started')
   const [isReady, setIsReady] = useState(false)
 
-  const steps: TourStep[] = useMemo(() => ([
-    {
-      id: 'hero-outfit',
-      title: 'Build outfits instantly',
-      description: 'Use the Outfit Builder to get styled looks tailor-made for your closet and favorite colors.',
-      target: '[data-tour="hero-feature-outfit"]',
-    },
-    {
-      id: 'hero-closet',
-      title: 'Digitize your wardrobe',
-      description: 'Upload pieces to your Digital Closet and track palettes, notes, and outfit ideas.',
-      target: '[data-tour="hero-feature-closet"]',
-    },
-    {
-      id: 'hero-analyzer',
-      title: 'Analyze colors in seconds',
-      description: 'Drop in any photo to discover matching palettes and color-friendly combinations.',
-      target: '[data-tour="hero-feature-analyzer"]',
-    },
-    {
-      id: 'hero-chat',
-      title: 'Chat with your stylist',
-      description: 'Ask ZMODA AI anything—from outfit help to onboarding tips—right from the floating assistant.',
-      target: '[data-tour="hero-feature-chat"]',
-    },
-  ]), [])
+  const tourConfig = useMemo(() => {
+    if (role === 'vendor') {
+      const personaLabel = roleMeta.shortLabel ?? 'Vendor'
+      const vendorSteps: TourStep[] = [
+        {
+          id: 'vendor-welcome',
+          title: 'Start with your vendor hub',
+          description: `The ${personaLabel.toLowerCase()} welcome card highlights priority actions, product status, and business checklists.`,
+          target: '[data-tour="vendor-welcome-card"]',
+        },
+        {
+          id: 'vendor-products',
+          title: 'Add or update products',
+          description: 'Jump into the Products tab to upload items, manage drafts, and monitor moderation.',
+          target: '[data-tour="vendor-action-products"]',
+        },
+        {
+          id: 'vendor-analytics',
+          title: 'Watch performance metrics',
+          description: 'Track approvals, drafts, and top listings from the Analytics tab.',
+          target: '[data-tour="vendor-tab-analytics"]',
+        },
+      ]
+      return {
+        slug: 'vendor_portal_walkthrough',
+        storageKey: 'zmoda-tour-vendor-intro',
+        steps: vendorSteps,
+      }
+    }
+
+    if (role === 'owner') {
+      const personaLabel = roleMeta.shortLabel ?? 'Owner'
+      const ownerSteps: TourStep[] = [
+        {
+          id: 'owner-welcome',
+          title: 'Review system highlights',
+          description: `Your ${personaLabel.toLowerCase()} console welcome card surfaces vendor actions and marketplace health.`,
+          target: '[data-tour="owner-welcome-card"]',
+        },
+        {
+          id: 'owner-requests',
+          title: 'Handle vendor onboarding',
+          description: 'Open the Vendor Requests tab to approve or decline pending applications.',
+          target: '[data-tour="owner-tab-requests"]',
+        },
+        {
+          id: 'owner-analytics',
+          title: 'Monitor marketplace health',
+          description: 'Use the Analytics tab to understand adoption, content flow, and review load.',
+          target: '[data-tour="owner-tab-analytics"]',
+        },
+      ]
+      return {
+        slug: 'owner_console_walkthrough',
+        storageKey: 'zmoda-tour-owner-intro',
+        steps: ownerSteps,
+      }
+    }
+
+    const userSteps: TourStep[] = [
+      {
+        id: 'nav-closet',
+        title: 'Digitize your closet',
+        description: `Store outfits and pieces in one place so ${roleMeta.shortLabel.toLowerCase()} suggestions stay personal.`,
+        target: '[data-tour="nav-my-closet"]',
+      },
+      {
+        id: 'nav-profile',
+        title: 'Complete your profile',
+        description: 'Add your measurements and style preferences to personalize every suggestion.',
+        target: '[data-tour="nav-profile"]',
+      },
+      {
+        id: 'nav-outfit',
+        title: 'Build outfits in seconds',
+        description: 'Use the Outfit Suggestions tool to get AI-styled looks for every occasion.',
+        target: '[data-tour="nav-outfit"]',
+      },
+      {
+        id: 'assistant-help',
+        title: 'Chat with ZMODA Assistant',
+        description: 'Tap the assistant any time for a guided tour, styling tips, or troubleshooting help.',
+        target: '[data-tour="floating-assistant"]',
+      },
+    ]
+
+    return {
+      slug: 'customer_onboarding',
+      storageKey: 'zmoda-tour-customer-intro',
+      steps: userSteps,
+    }
+  }, [role, roleMeta])
 
   useEffect(() => {
+    setIsReady(false)
+    setInitialStatus('not_started')
     let active = true
-    const dismissed = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null
+    const dismissed = typeof window !== 'undefined' ? window.localStorage.getItem(tourConfig.storageKey) : null
     if (dismissed === 'completed') {
       setInitialStatus('completed')
       setIsReady(true)
@@ -55,7 +122,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
     ;(async () => {
       try {
-        const state = await getTourState(TOUR_SLUG)
+        const state = await getTourState(tourConfig.slug)
         if (!active) return
         setInitialStatus(state.status)
       } catch (error) {
@@ -68,25 +135,25 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     return () => {
       active = false
     }
-  }, [])
+  }, [tourConfig])
 
   const handleStatusChange = useCallback(async (status: 'not_started' | 'in_progress' | 'completed') => {
     if (typeof window !== 'undefined' && status === 'completed') {
-      window.localStorage.setItem(STORAGE_KEY, 'completed')
+      window.localStorage.setItem(tourConfig.storageKey, 'completed')
     }
     try {
-      await updateTourState(TOUR_SLUG, status)
+      await updateTourState(tourConfig.slug, status)
     } catch (error) {
       console.warn('Failed to update onboarding status:', error)
     }
-  }, [])
+  }, [tourConfig])
 
   if (!isReady) {
     return <>{children}</>
   }
 
   return (
-    <OnboardingContextProvider steps={steps} initialStatus={initialStatus} onStatusChange={handleStatusChange} autoStart={initialStatus !== 'completed'}>
+    <OnboardingContextProvider steps={tourConfig.steps} initialStatus={initialStatus} onStatusChange={handleStatusChange} autoStart={initialStatus !== 'completed'}>
       {children}
       <TourOverlay />
     </OnboardingContextProvider>

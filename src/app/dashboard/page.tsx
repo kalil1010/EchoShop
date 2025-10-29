@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { getDefaultRouteForRole } from '@/lib/roles'
 
 export default function DashboardPage() {
   const { userProfile, loading } = useAuth()
@@ -16,14 +17,7 @@ export default function DashboardPage() {
       return
     }
 
-    const role = userProfile.role.toLowerCase()
-    if (role === 'admin') {
-      router.replace('/downtown')
-    } else if (role === 'vendor') {
-      router.replace('/atlas')
-    } else {
-      router.replace('/vendor/hub')
-    }
+    router.replace(getDefaultRouteForRole(userProfile.role))
   }, [loading, userProfile, router])
 
   if (loading) {

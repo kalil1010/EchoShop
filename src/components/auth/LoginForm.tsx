@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { getDefaultRouteForRole, getRoleMeta } from '@/lib/roles'
 
 interface LoginFormProps {
   onToggleMode: () => void
@@ -17,8 +18,6 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
   const { signIn } = useAuth()
   const router = useRouter()
@@ -38,42 +37,26 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     const trimmedPassword = password.trim()
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Please enter a valid email address.')
       toast({ variant: 'error', title: 'Invalid email', description: 'Double-check your email format and try again.' })
       return
     }
 
     if (trimmedPassword.length < 8) {
-      setError('Password must be at least 8 characters long.')
       toast({ variant: 'error', title: 'Invalid password', description: 'Passwords must be at least 8 characters.' })
       return
     }
 
     setLoading(true)
-    setError('')
 
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
       const { profile, profileStatus, profileIssueMessage, isProfileFallback } = result
-
-      if (profile.role === 'owner') {
-        const ownerMessage =
-          profileIssueMessage ??
-          (isProfileFallback
-            ? 'We could not fully sync your owner profile yet, but you can continue in the Downtown console.'
-            : 'Redirecting you to the Downtown owner console.')
-        toast({
-          variant: 'success',
-          title: 'Owner access granted',
-          description: ownerMessage,
-        })
-        router.replace('/downtown')
-        return
-      }
+      const roleMeta = getRoleMeta(profile.role)
+      const destination = getDefaultRouteForRole(profile.role)
 
       if (profileIssueMessage) {
         toast({
-          variant: 'warning',
+          variant: profileStatus === 'error' ? 'error' : 'warning',
           title:
             profileStatus === 'error'
               ? 'Profile sync is delayed'
@@ -82,14 +65,28 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         })
       }
 
-      const name = trimmedEmail.split('@')[0] || 'there'
-      setSuccess(`Welcome back, ${name}! Redirecting...`)
-      toast({ variant: 'success', title: 'Signed in', description: `Welcome back, ${name}!` })
-      setTimeout(() => router.push('/'), 1200)
+      if (isProfileFallback) {
+        toast({
+          variant: 'warning',
+          title: 'Limited profile mode',
+          description: 'We are loading the rest of your account details. Some features may be unavailable momentarily.',
+        })
+      }
+
+      const greetingTitle = profile.displayName
+        ? `Welcome back, ${profile.displayName}!`
+        : roleMeta.welcomeTitle
+
+      toast({
+        variant: 'success',
+        title: greetingTitle,
+        description: roleMeta.welcomeSubtitle,
+      })
+
+      setTimeout(() => router.replace(destination), 800)
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
-      setError(message)
       toast({
         variant: 'error',
         title: 'Sign-in failed',

@@ -6,12 +6,16 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getDefaultRouteForRole, getPortalAccess, getRoleMeta } from '@/lib/roles'
+import type { PortalNotice } from '@/lib/roles'
+import { PortalNoticeBanner } from '@/components/access/PortalNoticeBanner'
 
 export function OwnerLoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState<PortalNotice | null>(null)
   const { signIn, logout, profileStatus, profileIssueMessage, isProfileFallback, refreshProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -64,6 +68,33 @@ export function OwnerLoginForm() {
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
       const { profile, profileStatus: status, isProfileFallback: fallback, profileIssueMessage: issueMessage } = result
+      const access = getPortalAccess(profile.role, 'owner')
+
+      if (!access.allowed) {
+        setNotice(access.denial?.banner ?? null)
+        setError('Access denied. Please follow the guidance below.')
+
+        const toastPayload = access.denial?.toast
+        toast({
+          variant: toastPayload?.variant ?? 'warning',
+          title: toastPayload?.title ?? 'Access denied',
+          description:
+            toastPayload?.description ??
+            'You do not have permission to access the owner console from this account.',
+        })
+
+        if (access.denial?.requiresLogout) {
+          await logout().catch(() => undefined)
+        }
+
+        if (access.denial?.redirect) {
+          router.replace(access.denial.redirect)
+        }
+
+        return
+      }
+
+      setNotice(null)
 
       if (status !== 'ready') {
         const message =
@@ -80,24 +111,14 @@ export function OwnerLoginForm() {
         return
       }
 
-      if (profile.role !== 'owner') {
-        await logout().catch(() => undefined)
-        const guidance =
-          profile.role === 'vendor'
-            ? 'Please sign in via the vendor portal at /atlas.'
-            : 'Please sign in via the customer portal at /auth.'
-        throw new Error(
-          `This portal is reserved for ZMODA owners. ${guidance}`,
-        )
-      }
-
+      const roleMeta = getRoleMeta(profile.role)
       toast({
         variant: 'success',
-        title: 'Signed in',
-        description: `Welcome back${profile.displayName ? `, ${profile.displayName}` : ''}!`,
+        title: roleMeta.welcomeTitle,
+        description: roleMeta.welcomeSubtitle,
       })
 
-      router.replace('/downtown/dashboard')
+      router.replace(getDefaultRouteForRole(profile.role))
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
@@ -121,6 +142,7 @@ export function OwnerLoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {notice ? <PortalNoticeBanner notice={notice} /> : null}
         {profileStatus !== 'ready' && profileIssueMessage && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-semibold">Owner profile not available.</p>

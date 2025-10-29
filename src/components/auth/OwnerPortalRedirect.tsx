@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { getDefaultRouteForRole } from '@/lib/roles'
 
 const isDowntownPath = (pathname: string | null) => {
   if (!pathname) return false
@@ -11,13 +12,12 @@ const isDowntownPath = (pathname: string | null) => {
 }
 
 export function OwnerPortalRedirect() {
-  const { user, userProfile, loading, profileStatus } = useAuth()
+  const { role, loading, profileStatus } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
     if (loading) return
-    const role = userProfile?.role ?? user?.role ?? null
     if (role !== 'owner') return
     if (isDowntownPath(pathname)) return
 
@@ -26,9 +26,8 @@ export function OwnerPortalRedirect() {
       return
     }
 
-    router.replace('/downtown')
-  }, [loading, user?.role, userProfile?.role, profileStatus, pathname, router])
+    router.replace(getDefaultRouteForRole(role))
+  }, [loading, role, profileStatus, pathname, router])
 
   return null
 }
-

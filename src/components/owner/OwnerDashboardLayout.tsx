@@ -1,9 +1,12 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { ShieldCheck, Inbox, BarChart3, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 import SystemStatusOverview from './SystemStatusOverview'
 import UserManagement from './UserManagement'
 import VendorRequestsPanel from './VendorRequestsPanel'
@@ -70,6 +73,7 @@ const adaptAnalytics = (payload: any): OwnerAnalyticsSnapshot => {
 }
 
 export default function OwnerDashboardLayout() {
+  const { roleMeta } = useAuth()
   const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
   const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
@@ -118,6 +122,33 @@ export default function OwnerDashboardLayout() {
     }
   }, [activeTab])
 
+  const quickActions = useMemo(
+    () => [
+      {
+        key: 'requests',
+        icon: Inbox,
+        title: 'Review vendor requests',
+        description: 'Approve or decline pending vendor applications.',
+        tab: 'requests' as const,
+      },
+      {
+        key: 'analytics',
+        icon: BarChart3,
+        title: 'Monitor marketplace health',
+        description: 'Track growth, conversions, and moderation activity.',
+        tab: 'analytics' as const,
+      },
+      {
+        key: 'users',
+        icon: Users,
+        title: 'Manage team roles',
+        description: 'Adjust permissions and respond to escalations quickly.',
+        tab: 'users' as const,
+      },
+    ],
+    [],
+  )
+
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
@@ -153,8 +184,49 @@ export default function OwnerDashboardLayout() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Owner control center</h1>
+      <Card
+        data-tour="owner-welcome-card"
+        className="border-slate-200 bg-slate-50/80 backdrop-blur-sm"
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
+            <ShieldCheck className="h-5 w-5 text-purple-600" />
+            {roleMeta.welcomeTitle}
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-700">
+            {roleMeta.welcomeSubtitle}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {quickActions.map((action) => (
+            <div
+              key={action.key}
+              data-tour={`owner-action-${action.key}`}
+              className="flex h-full flex-col justify-between rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm"
+            >
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 text-slate-800">
+                  <action.icon className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-semibold">{action.title}</span>
+                </div>
+                <p className="text-sm text-slate-700">{action.description}</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="mt-3 w-fit px-0 text-purple-700 hover:text-purple-900"
+                onClick={() => setActiveTab(action.tab)}
+              >
+                Jump to tab →
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <header className="space-y-1">
+        <h1 className="text-3xl font-bold text-slate-900">Downtown owner console</h1>
         {headerDescription ? (
           <p className="text-sm text-slate-600">{headerDescription}</p>
         ) : null}
@@ -166,6 +238,7 @@ export default function OwnerDashboardLayout() {
             key={tab.key}
             variant={activeTab === tab.key ? 'default' : 'outline'}
             onClick={() => setActiveTab(tab.key)}
+            data-tour={`owner-tab-${tab.key}`}
           >
             {tab.label}
           </Button>

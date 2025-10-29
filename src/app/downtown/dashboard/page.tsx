@@ -6,14 +6,14 @@ import type { PostgrestError, User } from '@supabase/supabase-js'
 
 import OwnerDashboardLayout from '@/components/owner/OwnerDashboardLayout'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { useToast } from '@/components/ui/toast'
+import { getDefaultRouteForRole, getPortalAccess, normaliseRole } from '@/lib/roles'
 
 type ProfileRole = { role: string | null }
 
 type DashboardError = (Error & { code?: string }) | (PostgrestError & { stack?: string })
 
 const PROFILE_TIMEOUT_MS = 30000
-
-const normalizeRole = (value: string | null | undefined): string => value?.toLowerCase() ?? ''
 
 const logProfileLoadError = (error: DashboardError, context: Record<string, unknown> = {}) => {
   const errorLog = {
@@ -76,6 +76,7 @@ const toDashboardError = (error: unknown): DashboardError => {
 
 export default function OwnerDashboardPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
   const [, setProfile] = useState<ProfileRole | null>(null)
   const [error, setError] = useState<DashboardError | null>(null)
@@ -135,14 +136,21 @@ export default function OwnerDashboardPage() {
         }
 
         const profileData = profileResponse.data
-        const role = normalizeRole(profileData?.role)
+        const role = normaliseRole(profileData?.role)
+        const access = getPortalAccess(role, 'owner')
 
-        if (role !== 'owner') {
-          if (role === 'vendor') {
-            router.replace('/atlas/hub?from=owner-portal')
-          } else {
-            router.replace('/dashboard')
-          }
+        if (!access.allowed) {
+          const toastPayload = access.denial?.toast
+          toast({
+            variant: toastPayload?.variant ?? 'warning',
+            title: toastPayload?.title ?? 'Access denied',
+            description:
+              toastPayload?.description ??
+              'You were signed out before entering the owner console.',
+          })
+
+          await supabase.auth.signOut().catch(() => undefined)
+          router.replace(access.denial?.redirect ?? getDefaultRouteForRole(role))
           return
         }
 
@@ -169,7 +177,7 @@ export default function OwnerDashboardPage() {
     return () => {
       isMounted = false
     }
-  }, [router])
+  }, [router, toast])
 
   if (isLoading) {
     return (

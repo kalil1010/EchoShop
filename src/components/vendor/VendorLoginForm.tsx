@@ -1,78 +1,38 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { getSupabaseClient } from '@/lib/supabaseClient'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getDefaultRouteForRole, getPortalAccess, getRoleMeta } from '@/lib/roles'
+import type { PortalDenial, PortalNotice } from '@/lib/roles'
+import { PortalNoticeBanner } from '@/components/access/PortalNoticeBanner'
 
-type ProfileRoleRow = {
-  role: string | null
+interface VendorLoginFormProps {
+  initialNotice?: PortalDenial | null
 }
 
-const VENDOR_ROLES = new Set(['vendor', 'admin'])
-
-export function VendorLoginForm() {
+export function VendorLoginForm({ initialNotice = null }: VendorLoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState<PortalNotice | null>(
+    initialNotice?.banner ?? null,
+  )
 
-  const { signIn, refreshProfile, logout, userProfile } = useAuth()
+  const { signIn, refreshProfile, logout } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient()
-    } catch (clientError) {
-      console.error('Failed to initialise Supabase client for vendor login:', clientError)
-      return null
-    }
-  }, [])
-
-  const verifyVendorRole = async (): Promise<boolean> => {
-    const profileRole = userProfile?.role?.toLowerCase()
-    if (profileRole && VENDOR_ROLES.has(profileRole)) {
-      return true
-    }
-
-    const refreshed = await refreshProfile().catch(() => null)
-    const refreshedRole = refreshed?.role?.toLowerCase()
-    if (refreshedRole && VENDOR_ROLES.has(refreshedRole)) {
-      return true
-    }
-
-    if (supabase) {
-      try {
-        const { data: userData } = await supabase.auth.getSession()
-        const uid = userData?.session?.user?.id
-        if (uid) {
-          const { data: roleRow, error: roleError } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', uid)
-            .maybeSingle<ProfileRoleRow>()
-
-          if (!roleError) {
-            const remoteRole = roleRow?.role?.toLowerCase()
-            if (remoteRole && VENDOR_ROLES.has(remoteRole)) {
-              return true
-            }
-          }
-        }
-      } catch (roleFetchError) {
-        console.warn('Unable to verify vendor role via Supabase:', roleFetchError)
-      }
-    }
-
-    return false
-  }
+  useEffect(() => {
+    setNotice(initialNotice?.banner ?? null)
+  }, [initialNotice])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -90,39 +50,46 @@ export function VendorLoginForm() {
 
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
+      const refreshed = await refreshProfile().catch(() => result.profile)
+      const activeProfile = refreshed ?? result.profile
+      const access = getPortalAccess(activeProfile.role, 'vendor')
 
-      if (result.profile.role === 'owner') {
-        await logout().catch(() => undefined)
-        setError('Owner accounts cannot access the vendor portal. Please use the Downtown console instead.')
-        toast({
-          variant: 'warning',
-          title: 'Use owner console',
-          description: 'This email belongs to an owner account. You have been signed out here—continue via /downtown.',
-        })
+      if (!access.allowed) {
+        setError('Access denied. Please use the recommended console below.')
+        setNotice(access.denial?.banner ?? null)
+
+        if (access.denial?.toast) {
+          toast({
+            variant: access.denial.toast.variant,
+            title: access.denial.toast.title,
+            description: access.denial.toast.description,
+          })
+        } else {
+          toast({
+            variant: 'warning',
+            title: 'Access denied',
+            description: 'You were signed out of the vendor console.',
+          })
+        }
+
+        if (access.denial?.requiresLogout) {
+          await logout().catch(() => undefined)
+        }
+
+        if (access.denial?.redirect) {
+          router.replace(access.denial.redirect)
+        }
         return
       }
 
-      const hasVendorAccess = await verifyVendorRole()
-      if (!hasVendorAccess) {
-        await logout().catch(() => undefined)
-        setError(
-          'This account is not registered as a vendor. Please request vendor access or use the customer portal.',
-        )
-        toast({
-          variant: 'error',
-          title: 'Vendor access required',
-          description:
-            'The email you entered belongs to a customer account. Sign into the regular experience or apply for vendor tools.',
-        })
-        return
-      }
-
+      setNotice(null)
+      const roleMeta = getRoleMeta(activeProfile.role)
       toast({
         variant: 'success',
-        title: 'Welcome back',
-        description: 'Launching your vendor dashboard.',
+        title: roleMeta.welcomeTitle,
+        description: roleMeta.welcomeSubtitle,
       })
-      router.push('/dashboard/vendor')
+      router.push(getDefaultRouteForRole(activeProfile.role))
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Unable to sign in with those credentials.'
@@ -147,6 +114,8 @@ export function VendorLoginForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {notice ? <PortalNoticeBanner notice={notice} /> : null}
+
           <div className="space-y-2">
             <label htmlFor="vendor-email" className="text-sm font-medium text-foreground">
               Email

@@ -29,10 +29,7 @@ export function FloatingAssistant() {
   const { toast } = useToast()
   const { user, userProfile } = useAuth()
   const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
-
-  if (normalisedRole === 'owner') {
-    return null
-  }
+  const shouldHideAssistant = normalisedRole === 'owner'
 
   const initialMessage = useMemo<AssistantMessage>(() => ({
     id: 'assistant-welcome',
@@ -41,11 +38,12 @@ export function FloatingAssistant() {
   }), [])
 
   useEffect(() => {
+    if (shouldHideAssistant) return
     if (isOpen && messages.length === 0) {
       setMessages([initialMessage])
       setTimeout(() => textareaRef.current?.focus(), 150)
     }
-  }, [isOpen, messages.length, initialMessage])
+  }, [isOpen, messages.length, initialMessage, shouldHideAssistant])
 
   const handlePrompt = async (prompt: string) => {
     setInput('')
@@ -73,6 +71,10 @@ export function FloatingAssistant() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (shouldHideAssistant) {
+    return null
   }
 
   return (
@@ -139,6 +141,7 @@ export function FloatingAssistant() {
         </div>
       )}
       <button
+        data-tour="floating-assistant"
         onClick={() => setIsOpen((prev) => !prev)}
         className='pointer-events-auto inline-flex items-center gap-3 rounded-full bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/40 transition hover:bg-purple-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-400'
       >

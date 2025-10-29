@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
 import type { UserProfile } from '@/types/user'
+import { getDefaultRouteForRole, getPortalAccess, normaliseRole, resolvePortalFromPath } from '@/lib/roles'
 
 const getSupabaseAdmin = () => {
   return createServerClient(
@@ -61,59 +62,26 @@ const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const user = await getAuthenticatedUser(req)
+  const portal = resolvePortalFromPath(pathname)
 
-  // Role-based route protection
   if (user) {
     const profile = await fetchUserProfile(user.id)
-    const role = profile?.role?.toLowerCase()
-    const isOwner = role === 'owner'
-
-    if (isOwner) {
-      const inDowntown = pathname === '/downtown' || pathname.startsWith('/downtown/')
-      const isApiRequest = pathname.startsWith('/api')
-
-      if (!inDowntown && !isApiRequest) {
-        if (pathname !== '/downtown') {
-          console.info(
-            `[middleware] Owner ${user.id} requested ${pathname}. Redirecting to /downtown.`,
-          )
+    const role = normaliseRole(profile?.role)
+    if (portal !== 'customer') {
+      const access = getPortalAccess(role, portal)
+      if (!access.allowed) {
+        if (pathname.startsWith('/api')) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
-        return NextResponse.redirect(new URL('/downtown', req.url))
+        const target = access.denial?.redirect ?? getDefaultRouteForRole(role)
+        return NextResponse.redirect(new URL(target, req.url))
       }
     }
-
-    if (pathname.startsWith('/downtown')) {
-      if (!isOwner) {
-        console.warn(
-          `[middleware] Redirecting non-owner user ${user.id} away from ${pathname}. role=${role ?? 'unknown'}`,
-        )
-        return NextResponse.redirect(new URL('/dashboard', req.url))
-      }
+  } else if (portal !== 'customer') {
+    if (pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    if (pathname.startsWith('/atlas')) {
-      if (role !== 'vendor') {
-        return NextResponse.redirect(new URL('/dashboard', req.url))
-      }
-    }
-
-    if (pathname.startsWith('/api/admin')) {
-      if (role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
-
-    if (pathname.startsWith('/api/vendor')) {
-      if (role !== 'vendor') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
-
-  } else {
-    // Redirect unauthenticated users trying to access protected routes
-    if (pathname.startsWith('/downtown') || pathname.startsWith('/atlas') || pathname.startsWith('/api/admin') || pathname.startsWith('/api/vendor')) {
-      return NextResponse.redirect(new URL('/auth', req.url))
-    }
+    return NextResponse.redirect(new URL('/auth', req.url))
   }
 
   // Enforce HTTPS in production

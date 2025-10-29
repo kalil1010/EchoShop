@@ -2,13 +2,12 @@ import { redirect } from 'next/navigation'
 
 import { OwnerLoginForm } from '@/components/owner/OwnerLoginForm'
 import { createRouteClient } from '@/lib/supabaseServer'
+import { getDefaultRouteForRole, normaliseRole } from '@/lib/roles'
 
 export const metadata = {
   title: 'ZMODA Downtown Entry',
   description: 'Secure access for verified ZMODA owners.',
 }
-
-const normaliseRole = (value: string | null | undefined): string => value?.toLowerCase() ?? ''
 
 export default async function DowntownEntryPage() {
   const supabase = createRouteClient()
@@ -24,15 +23,7 @@ export default async function DowntownEntryPage() {
       .maybeSingle<{ role: string | null }>()
 
     const role = normaliseRole(profile?.role)
-    if (role === 'owner') {
-      redirect('/downtown/dashboard')
-    }
-
-    if (role === 'vendor') {
-      redirect('/atlas/hub?from=owner-portal')
-    }
-
-    redirect('/dashboard')
+    redirect(getDefaultRouteForRole(role))
   }
 
   return (
