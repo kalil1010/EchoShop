@@ -234,6 +234,24 @@ async function withRetry<T>(
   }
 }
 
+async function syncServerSession(event: string, session: Session | null) {
+  try {
+    await fetch('/api/auth/callback', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event,
+        session,
+      }),
+    })
+  } catch (error) {
+    console.warn('[AuthContext] Failed to sync session to server:', error)
+  }
+}
+
 function mapAuthUser(user: User): AuthUser {
   const metadata = user.user_metadata || {}
   const uid = extractUserId(user.id)
@@ -615,6 +633,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsProfileFallback(true)
         const fallback = buildBootstrapProfile(authUser)
         const profile = applyProfileToState(fallback, authUser)
+        if (timeoutIssue) {
+          loadUserProfile(authUser).catch((retryError) =>
+            console.warn(
+              `[AuthContext] Background profile reload failed after timeout for ${authUser.uid}:`,
+              retryError,
+            ),
+          )
+        }
         return {
           profile,
           status: 'error',
@@ -667,6 +693,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (message.includes('Refresh Token') || message.includes('Invalid')) {
             console.log('[AuthContext] Invalid token detected, clearing session')
             await supabase.auth.signOut({ scope: 'local' })
+            void syncServerSession('SIGNED_OUT', null)
             if (isMounted) {
               setUser(null)
               setUserProfile(null)
@@ -681,6 +708,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const nextSession = data?.session ?? null
         setSession(nextSession)
+        if (nextSession) {
+          void syncServerSession('SIGNED_IN', nextSession)
+        } else {
+          void syncServerSession('SIGNED_OUT', null)
+        }
 
         const sessionUser = nextSession?.user ?? null
         if (sessionUser) {
@@ -698,6 +730,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null)
           setUserProfile(null)
           setSession(null)
+          void syncServerSession('SIGNED_OUT', null)
           resetProfileState()
         }
       } finally {
@@ -715,12 +748,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Auth state changed:', event)
       if (event === 'TOKEN_REFRESHED' && !newSession) {
         console.warn('[AuthContext] Token refresh failed, clearing session')
+        void syncServerSession('SIGNED_OUT', null)
         setSession(null)
         setUser(null)
         setUserProfile(null)
         resetProfileState()
         setLoading(false)
         return
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+        void syncServerSession(event, newSession ?? null)
       }
 
       setLoading(true)
@@ -765,6 +803,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const nextSession = data?.session ?? null
         setSession(nextSession)
+        if (nextSession) {
+          void syncServerSession('SIGNED_IN', nextSession)
+        } else {
+          void syncServerSession('SIGNED_OUT', null)
+        }
 
         const sessionUser = nextSession?.user ?? null
         if (sessionUser) {
@@ -846,6 +889,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const authUser = mapAuthUser(supabaseUser)
       setSession(session)
+      if (session) {
+        void syncServerSession('SIGNED_IN', session)
+      }
       setUser(authUser)
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
 
@@ -934,6 +980,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error
       }
     }
+    void syncServerSession('SIGNED_OUT', null)
     setSession(null)
     setUser(null)
     setUserProfile(null)
@@ -1014,8 +1061,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
 }
-
-
-
-
-

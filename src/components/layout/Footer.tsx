@@ -12,7 +12,7 @@ const hasActiveRequest = (requests: VendorRequest[]): boolean =>
   requests.some((request) => request.status === 'pending' || request.status === 'approved')
 
 export function Footer() {
-  const { user, userProfile, loading } = useAuth()
+  const { user, userProfile, loading, profileStatus, isProfileFallback } = useAuth()
   const [checkingRequest, setCheckingRequest] = useState(false)
   const [hasVendorRequest, setHasVendorRequest] = useState(false)
   const [showApplication, setShowApplication] = useState(false)
@@ -23,7 +23,7 @@ export function Footer() {
     if (isOwner) {
       return
     }
-    if (!user || loading) {
+    if (!user || loading || profileStatus !== 'ready' || isProfileFallback) {
       setHasVendorRequest(false)
       setCheckingRequest(false)
       return
@@ -58,10 +58,12 @@ export function Footer() {
     return () => {
       isMounted = false
     }
-  }, [user, userProfile, loading, isOwner])
+  }, [user, userProfile, loading, profileStatus, isProfileFallback, isOwner])
 
   const canApply =
     Boolean(user) &&
+    profileStatus === 'ready' &&
+    !isProfileFallback &&
     userProfile?.role?.toLowerCase() === 'user' &&
     !checkingRequest &&
     !hasVendorRequest
