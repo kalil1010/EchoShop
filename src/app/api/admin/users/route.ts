@@ -14,7 +14,6 @@ type ProfileRow = {
   role: string | null
   is_super_admin: boolean | null
   vendor_business_name: string | null
-  vendor_business_description: string | null
   vendor_contact_email: string | null
   vendor_phone: string | null
   vendor_website: string | null
@@ -29,7 +28,6 @@ type ProfileSummary = {
   role: string
   isSuperAdmin: boolean
   vendorBusinessName?: string | null
-  vendorBusinessDescription?: string | null
   vendorContactEmail?: string | null
   vendorPhone?: string | null
   vendorWebsite?: string | null
@@ -46,7 +44,6 @@ const mapProfileRow = (row: ProfileRow): ProfileSummary => ({
   role: normaliseRole(row.role),
   isSuperAdmin: Boolean(row.is_super_admin),
   vendorBusinessName: row.vendor_business_name,
-  vendorBusinessDescription: row.vendor_business_description,
   vendorContactEmail: row.vendor_contact_email,
   vendorPhone: row.vendor_phone,
   vendorWebsite: row.vendor_website,
@@ -68,7 +65,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('profiles')
       .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
+        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
       )
       .order('created_at', { ascending: false })
 
@@ -168,7 +165,7 @@ export async function PATCH(request: NextRequest) {
       })
       .eq('id', targetId)
       .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_business_description, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
+        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
       )
       .maybeSingle<ProfileRow>()
 

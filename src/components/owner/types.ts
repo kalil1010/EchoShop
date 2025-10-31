@@ -37,7 +37,6 @@ export interface OwnerUserRecord {
   role: string
   isSuperAdmin: boolean
   vendorBusinessName?: string | null
-  vendorBusinessDescription?: string | null
   vendorContactEmail?: string | null
   vendorPhone?: string | null
   vendorWebsite?: string | null

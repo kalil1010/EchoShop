@@ -16,7 +16,6 @@ export default function BusinessProfile() {
   const { userProfile, updateUserProfile } = useAuth()
   const { toast } = useToast()
   const [businessName, setBusinessName] = useState('')
-  const [businessDescription, setBusinessDescription] = useState('')
   const [businessAddress, setBusinessAddress] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -26,7 +25,6 @@ export default function BusinessProfile() {
   useEffect(() => {
     if (!userProfile) return
     setBusinessName(userProfile.vendorBusinessName ?? '')
-    setBusinessDescription(userProfile.vendorBusinessDescription ?? '')
     setBusinessAddress(userProfile.vendorBusinessAddress ?? '')
     setContactEmail(userProfile.vendorContactEmail ?? userProfile.email ?? '')
     setPhone(userProfile.vendorPhone ?? '')
@@ -41,14 +39,6 @@ export default function BusinessProfile() {
       toast({
         title: 'Business name required',
         description: 'Please provide a business name before saving.',
-        variant: 'error',
-      })
-      return
-    }
-    if (!businessDescription.trim()) {
-      toast({
-        title: 'Business description required',
-        description: 'Share a short description so customers know what you offer.',
         variant: 'error',
       })
       return
@@ -79,7 +69,6 @@ export default function BusinessProfile() {
     try {
       await updateUserProfile({
         vendorBusinessName: businessName.trim(),
-        vendorBusinessDescription: businessDescription.trim(),
         vendorBusinessAddress: businessAddress.trim(),
         vendorContactEmail: contactEmail.trim(),
         vendorPhone: phone.trim(),
@@ -173,22 +162,6 @@ export default function BusinessProfile() {
               placeholder="Street, City, Country"
               rows={3}
             />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="vendor-description" className="text-sm font-medium text-foreground">
-              Business description
-            </label>
-            <Textarea
-              id="vendor-description"
-              value={businessDescription}
-              onChange={(event) => setBusinessDescription(event.target.value.slice(0, 500))}
-              placeholder="Tell shoppers what makes your collections unique."
-              rows={5}
-            />
-            <p className="text-xs text-slate-500">
-              {businessDescription.length}/500 characters
-            </p>
           </div>
 
           <Button type="submit" disabled={saving}>

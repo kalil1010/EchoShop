@@ -110,7 +110,6 @@ export async function PATCH(
           role: 'vendor',
           updated_at: nowIso,
           vendor_business_name: requestRow.business_name,
-          vendor_business_description: requestRow.business_description,
           vendor_contact_email: requestRow.contact_email,
           vendor_phone: requestRow.phone,
           vendor_website: requestRow.website,

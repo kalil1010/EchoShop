@@ -22,7 +22,6 @@ export interface UserProfile {
   role: UserRole
   isSuperAdmin?: boolean
   vendorBusinessName?: string
-  vendorBusinessDescription?: string
   vendorBusinessAddress?: string
   vendorContactEmail?: string
   vendorPhone?: string

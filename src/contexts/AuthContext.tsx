@@ -73,7 +73,6 @@ interface ProfileRow {
   favorite_styles: string[] | null
   is_super_admin: boolean | null
   vendor_business_name: string | null
-  vendor_business_description: string | null
   vendor_business_address: string | null
   vendor_contact_email: string | null
   vendor_phone: string | null
@@ -108,7 +107,6 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     favoriteStyles: toArray(profile.favoriteStyles),
     isSuperAdmin: Boolean(profile.isSuperAdmin),
     vendorBusinessName: profile.vendorBusinessName?.trim() || undefined,
-    vendorBusinessDescription: profile.vendorBusinessDescription?.trim() || undefined,
     vendorBusinessAddress: profile.vendorBusinessAddress?.trim() || undefined,
     vendorContactEmail: profile.vendorContactEmail?.trim() || undefined,
     vendorPhone: profile.vendorPhone?.trim() || undefined,
@@ -288,7 +286,6 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     favoriteStyles: row.favorite_styles ?? [],
     isSuperAdmin: Boolean(row.is_super_admin),
     vendorBusinessName: row.vendor_business_name ?? undefined,
-    vendorBusinessDescription: row.vendor_business_description ?? undefined,
     vendorBusinessAddress: row.vendor_business_address ?? undefined,
     vendorContactEmail: row.vendor_contact_email ?? undefined,
     vendorPhone: row.vendor_phone ?? undefined,
@@ -318,7 +315,6 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     favoriteStyles: [],
     isSuperAdmin: false,
     vendorBusinessName: undefined,
-    vendorBusinessDescription: undefined,
     vendorBusinessAddress: undefined,
     vendorContactEmail: undefined,
     vendorPhone: undefined,
@@ -347,7 +343,6 @@ function profileToRow(profile: UserProfile): Partial<ProfileRow> {
     favorite_styles: profile.favoriteStyles ?? [],
     is_super_admin: profile.isSuperAdmin ?? null,
     vendor_business_name: profile.vendorBusinessName ?? null,
-    vendor_business_description: profile.vendorBusinessDescription ?? null,
     vendor_business_address: profile.vendorBusinessAddress ?? null,
     vendor_contact_email: profile.vendorContactEmail ?? null,
     vendor_phone: profile.vendorPhone ?? null,
