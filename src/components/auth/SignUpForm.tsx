@@ -129,33 +129,28 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setLoading(true)
     
     try {
-      const result = await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
-      
-      // Check if signUp returns user data
-      if (result && result.user && result.user.id) {
-        const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
-        setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
-        toast({
-          variant: 'success',
-          title: 'Account created',
-          description: `Welcome, ${name}!`,
-        })
-        
-        // Wait a moment then redirect based on role
-        setTimeout(async () => {
-          await redirectBasedOnRole(result.user.id)
-        }, 1500)
+      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
+
+      const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
+      setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
+      toast({
+        variant: 'success',
+        title: 'Account created',
+        description: `Welcome, ${name}!`,
+      })
+
+      let resolvedUserId: string | null = null
+      if (supabase) {
+        const { data, error: currentUserError } = await supabase.auth.getUser()
+        if (!currentUserError && data?.user?.id) {
+          resolvedUserId = data.user.id
+        }
+      }
+
+      if (resolvedUserId) {
+        await redirectBasedOnRole(resolvedUserId)
       } else {
-        // Fallback if no user data returned
-        const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
-        setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
-        toast({
-          variant: 'success',
-          title: 'Account created',
-          description: `Welcome, ${name}!`,
-        })
-        
-        setTimeout(() => router.push('/profile'), 1500)
+        router.push('/profile')
       }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
