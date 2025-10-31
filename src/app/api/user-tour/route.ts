@@ -1,5 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse as NextResponseBase } from 'next/server'
 import { z } from 'zod'
 
 import { createServiceClient, getAuthenticatedUserId } from '@/lib/supabaseServer'
@@ -27,13 +26,13 @@ const BodySchema = z.object({
 type TourStatus = z.infer<typeof StatusSchema>
 
 function responseOk(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
+  return NextResponseBase.json(data, { status })
 }
 
 export async function GET(request: NextRequest) {
   const slug = request.nextUrl.searchParams.get('slug')
   if (!slug) {
-    return NextResponse.json({ ok: false, error: 'Missing slug' }, { status: 400 })
+    return NextResponseBase.json({ ok: false, error: 'Missing slug' }, { status: 400 })
   }
 
   try {
@@ -72,12 +71,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = BodySchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json({ ok: false, error: 'Invalid payload' }, { status: 400 })
+      return NextResponseBase.json({ ok: false, error: 'Invalid payload' }, { status: 400 })
     }
 
     const userId = await getAuthenticatedUserId()
     if (!userId) {
-      return NextResponse.json({ ok: false, error: 'Not authenticated' }, { status: 401 })
+      return NextResponseBase.json({ ok: false, error: 'Not authenticated' }, { status: 401 })
     }
 
     const supabase = createServiceClient()
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     if (fetchError) {
       console.error('POST /api/user-tour fetch existing error', fetchError)
-      return NextResponse.json({ ok: false, error: 'Failed to save tour state' }, { status: 500 })
+      return NextResponseBase.json({ ok: false, error: 'Failed to save tour state' }, { status: 500 })
     }
 
     const createdAt = existingRow?.created_at ?? now
@@ -112,10 +111,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('POST /api/user-tour upsert error', error)
-      return NextResponse.json({ ok: false, error: 'Failed to save tour state' }, { status: 500 })
+      return NextResponseBase.json({ ok: false, error: 'Failed to save tour state' }, { status: 500 })
     }
 
-    return NextResponse.json({
+    return NextResponseBase.json({
       ok: true,
       state: {
         ...row,
@@ -124,6 +123,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('POST /api/user-tour error', error)
-    return NextResponse.json({ ok: false, error: 'Unexpected error' }, { status: 500 })
+    return NextResponseBase.json({ ok: false, error: 'Unexpected error' }, { status: 500 })
   }
 }
+
