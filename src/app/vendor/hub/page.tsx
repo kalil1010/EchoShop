@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import VendorHub from '@/components/vendor/VendorHub'
+import { normaliseRole } from '@/lib/roles'
 import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequest } from '@/types/vendor'
@@ -44,7 +45,7 @@ export default async function VendorHubPage() {
     <div className="container mx-auto px-4 py-10">
       <VendorHub
         userName={profileRow?.display_name ?? user?.email ?? 'Creator'}
-        initialRole={profileRow?.role ?? 'user'}
+        initialRole={normaliseRole(profileRow?.role)}
         initialRequests={requests}
       />
     </div>

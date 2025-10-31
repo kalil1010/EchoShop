@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
+import { normaliseRole } from '@/lib/roles'
+import type { UserRole } from '@/types/user'
 
 export const runtime = 'nodejs'
 
@@ -35,10 +37,7 @@ type ProfileSummary = {
   updatedAt: string | null
 }
 
-const ROLE_SET = new Set(['user', 'vendor', 'admin'])
-
-const normaliseRole = (value: string | null | undefined): string =>
-  (value ?? 'user').toLowerCase()
+const ROLE_SET = new Set<UserRole>(['user', 'vendor', 'owner'])
 
 const mapProfileRow = (row: ProfileRow): ProfileSummary => ({
   id: row.id,
@@ -75,7 +74,11 @@ export async function GET(request: NextRequest) {
 
     const normalisedRoleFilter = normaliseRole(roleFilter)
     if (ROLE_SET.has(normalisedRoleFilter)) {
-      query = query.eq('role', normalisedRoleFilter)
+      if (normalisedRoleFilter === 'owner') {
+        query = query.in('role', ['owner', 'admin'])
+      } else {
+        query = query.eq('role', normalisedRoleFilter)
+      }
     }
 
     const trimmedSearch = searchFilter?.trim()
@@ -137,14 +140,14 @@ export async function PATCH(request: NextRequest) {
     const targetRole = normaliseRole(targetProfile.role)
     const targetIsSuperAdmin = Boolean(targetProfile.is_super_admin)
 
-    if ((requestedRole === 'admin' || targetRole === 'admin') && !actorProfile.isSuperAdmin) {
+    if ((requestedRole === 'owner' || targetRole === 'owner') && !actorProfile.isSuperAdmin) {
       throw new PermissionError(
         'forbidden',
-        'Only the super admin may modify admin privileges.',
+        'Only the super admin may modify owner-level privileges.',
       )
     }
 
-    if (targetIsSuperAdmin && requestedRole !== 'admin') {
+    if (targetIsSuperAdmin && requestedRole !== 'owner') {
       return NextResponse.json(
         { error: 'Super admin privileges cannot be revoked via the dashboard.' },
         { status: 400 },

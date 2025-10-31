@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -26,13 +26,38 @@ export function VendorLoginForm({ initialNotice = null }: VendorLoginFormProps) 
     initialNotice?.banner ?? null,
   )
 
-  const { signIn, refreshProfile, logout } = useAuth()
+  const { signIn, refreshProfile, logout, profileStatus, profileIssueMessage, isProfileFallback } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const [retryingProfile, setRetryingProfile] = useState(false)
 
   useEffect(() => {
     setNotice(initialNotice?.banner ?? null)
   }, [initialNotice])
+
+  const handleProfileRetry = useCallback(async () => {
+    setRetryingProfile(true)
+    try {
+      await refreshProfile()
+      toast({
+        variant: 'default',
+        title: 'Retry requested',
+        description: 'Trying the profile sync again. This usually finishes within a few seconds.',
+      })
+    } catch (refreshError) {
+      const message =
+        refreshError instanceof Error
+          ? refreshError.message
+          : 'Unable to retry profile sync. Please contact support if this continues.'
+      toast({
+        variant: 'error',
+        title: 'Retry failed',
+        description: message,
+      })
+    } finally {
+      setRetryingProfile(false)
+    }
+  }, [refreshProfile, toast])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -55,6 +80,10 @@ export function VendorLoginForm({ initialNotice = null }: VendorLoginFormProps) 
       const access = getPortalAccess(activeProfile.role, 'vendor')
 
       if (!access.allowed) {
+        console.warn('[vendor-login] access denied', {
+          role: activeProfile.role,
+          denial: access.denial ?? null,
+        })
         setError('Access denied. Please use the recommended console below.')
         setNotice(access.denial?.banner ?? null)
 
@@ -89,6 +118,20 @@ export function VendorLoginForm({ initialNotice = null }: VendorLoginFormProps) 
         title: roleMeta.welcomeTitle,
         description: roleMeta.welcomeSubtitle,
       })
+      if (result.profileStatus !== 'ready') {
+        const message =
+          result.profileIssueMessage ??
+          (result.isProfileFallback
+            ? 'We signed you in with a temporary vendor profile. Retry profile sync before continuing.'
+            : 'We could not confirm your vendor profile yet. Please retry the sync in a moment.')
+        setError(message)
+        toast({
+          variant: 'warning',
+          title: 'Vendor profile pending',
+          description: message,
+        })
+        return
+      }
       router.push(getDefaultRouteForRole(activeProfile.role))
     } catch (unknownError) {
       const message =
@@ -115,6 +158,26 @@ export function VendorLoginForm({ initialNotice = null }: VendorLoginFormProps) 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {notice ? <PortalNoticeBanner notice={notice} /> : null}
+          {profileStatus !== 'ready' && profileIssueMessage ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">Vendor profile not ready.</p>
+              <p className="mt-1">{profileIssueMessage}</p>
+              {isProfileFallback ? (
+                <p className="mt-1 text-amber-800">
+                  We&apos;re using a temporary profile, so vendor tools may be limited until sync finishes.
+                </p>
+              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 border-amber-300 text-amber-900 hover:bg-amber-100"
+                onClick={handleProfileRetry}
+                disabled={retryingProfile}
+              >
+                {retryingProfile ? 'Retrying...' : 'Retry profile sync'}
+              </Button>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <label htmlFor="vendor-email" className="text-sm font-medium text-foreground">

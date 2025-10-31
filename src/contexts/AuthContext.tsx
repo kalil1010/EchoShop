@@ -205,6 +205,8 @@ const PERMISSION_ISSUE_MESSAGE =
   'Profile loading failed due to database permission issues. Please contact support or retry later.'
 const TIMEOUT_ISSUE_MESSAGE =
   'Loading your profile is taking longer than expected. This may be due to a database timeout. Please retry shortly or contact support.'
+const PROFILE_SYNC_SUPPORT_MESSAGE =
+  'We could not sync your profile after sign-in. Retry profile sync or contact support if this continues.'
 
 function resolveProfileTimeout(): number {
   const raw = process.env.NEXT_PUBLIC_PROFILE_TIMEOUT
@@ -356,6 +358,20 @@ function profileToRow(profile: UserProfile): Partial<ProfileRow> {
   }
 }
 
+function normalisePersistedProfile(profile: UserProfile): UserProfile {
+  const now = new Date()
+  const createdAt =
+    profile.createdAt instanceof Date && !Number.isNaN(profile.createdAt.getTime())
+      ? profile.createdAt
+      : now
+  return {
+    ...profile,
+    role: normaliseRole(profile.role),
+    createdAt,
+    updatedAt: now,
+  }
+}
+
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext)
   if (!context) {
@@ -455,6 +471,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return profile
     },
     [],
+  )
+
+  const reconcileProfileAfterAuth = useCallback(
+    async (authUser: AuthUser, profile: UserProfile): Promise<UserProfile> => {
+      const normalised = normalisePersistedProfile(profile)
+      await upsertProfileWithRetry(profileToRow(normalised), authUser, 'post-sign-in')
+      console.debug(
+        '[AuthContext] Post-sign-in profile sync completed',
+        { userId: authUser.uid, role: normalised.role },
+      )
+      return applyProfileToState(normalised, authUser)
+    },
+    [upsertProfileWithRetry, applyProfileToState],
   )
 
   const loadUserProfile = useCallback(
@@ -895,17 +924,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(authUser)
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
 
+      let finalProfile = profileOutcome.profile
+      let finalStatus = profileOutcome.status
+      let finalMessage = profileOutcome.message
+      let finalError = profileOutcome.error
+      let finalFallback = profileOutcome.fallback
+
+      try {
+        finalProfile = await reconcileProfileAfterAuth(authUser, profileOutcome.profile)
+      } catch (syncError) {
+        const normalisedSyncError = normaliseError(syncError, 'Profile sync failed')
+        console.error('[AuthContext] Post-sign-in profile sync failed:', syncError)
+        setProfileStatus('error')
+        setProfileError(normalisedSyncError)
+        setProfileIssueMessage((current) => current ?? PROFILE_SYNC_SUPPORT_MESSAGE)
+        setIsProfileFallback(true)
+        finalStatus = 'error'
+        finalError = normalisedSyncError
+        finalMessage = PROFILE_SYNC_SUPPORT_MESSAGE
+        finalFallback = true
+      }
+
       return {
         user: authUser,
-        profile: profileOutcome.profile,
+        profile: finalProfile,
         session,
-        profileStatus: profileOutcome.status,
-        profileIssueMessage: profileOutcome.message,
-        profileError: profileOutcome.error,
-        isProfileFallback: profileOutcome.fallback,
+        profileStatus: finalStatus,
+        profileIssueMessage: finalMessage,
+        profileError: finalError,
+        isProfileFallback: finalFallback,
       }
     },
-    [supabase, loadUserProfileWithTimeout],
+    [
+      supabase,
+      loadUserProfileWithTimeout,
+      reconcileProfileAfterAuth,
+      setProfileStatus,
+      setProfileError,
+      setProfileIssueMessage,
+      setIsProfileFallback,
+    ],
   )
 
   const signUp = useCallback(

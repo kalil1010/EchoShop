@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { normaliseRole } from '@/lib/roles'
 
 interface AssistantMessage {
   id: string
@@ -28,7 +29,7 @@ export function FloatingAssistant() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const { toast } = useToast()
   const { user, userProfile } = useAuth()
-  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
   const shouldHideAssistant = normalisedRole === 'owner'
 
   const initialMessage = useMemo<AssistantMessage>(() => ({

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { VendorRequest, VendorRequestStatus } from '@/types/vendor'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import VendorApplicationForm from '@/components/vendor/VendorApplicationForm'
+import { normaliseRole } from '@/lib/roles'
 
 type VendorHubProps = {
   userName: string
@@ -37,7 +38,9 @@ const formatRelative = (value: Date) => {
 export default function VendorHub({ userName, initialRole, initialRequests }: VendorHubProps) {
   const [requests, setRequests] = useState<VendorRequest[]>(initialRequests)
 
-  const normalizedRole = (initialRole ?? 'user').toLowerCase()
+  const resolvedRole = normaliseRole(initialRole)
+  const isVendor = resolvedRole === 'vendor'
+  const isOwner = resolvedRole === 'owner'
   const latestRequest = useMemo(() => (requests.length ? requests[0] : null), [requests])
 
   const handleApplicationSubmitted = (request: VendorRequest) => {
@@ -50,9 +53,11 @@ export default function VendorHub({ userName, initialRole, initialRequests }: Ve
         <CardHeader>
           <CardTitle>Vendor Hub</CardTitle>
           <CardDescription>
-            {normalizedRole === 'vendor' || normalizedRole === 'admin'
+            {isVendor
               ? 'You already have vendor privileges. Jump into your portal to manage listings.'
-              : 'Share a bit about your brand and the review team will follow up shortly.'}
+              : isOwner
+                ? 'Owner accounts manage vendor approvals from the Downtown console. Head there to review requests.'
+                : 'Share a bit about your brand and the review team will follow up shortly.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -60,9 +65,9 @@ export default function VendorHub({ userName, initialRole, initialRequests }: Ve
             <h3 className="text-sm font-semibold text-foreground">Profile summary</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Signed in as <span className="font-medium text-foreground">{userName}</span>. Your current role is{' '}
-              <span className="font-medium text-foreground">{normalizedRole}</span>.
+              <span className="font-medium text-foreground">{resolvedRole}</span>.
             </p>
-            {normalizedRole === 'vendor' || normalizedRole === 'admin' ? (
+            {isVendor ? (
               <p className="mt-3 text-sm text-muted-foreground">
                 Visit the{' '}
                 <Link href="/atlas" className="text-purple-600 hover:underline">
@@ -71,9 +76,18 @@ export default function VendorHub({ userName, initialRole, initialRequests }: Ve
                 to upload products, manage listings, and track moderation.
               </p>
             ) : null}
+            {isOwner ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Manage vendor upgrades from the{' '}
+                <Link href="/downtown" className="text-purple-600 hover:underline">
+                  Downtown owner console
+                </Link>{' '}
+                instead.
+              </p>
+            ) : null}
           </div>
 
-          {normalizedRole === 'user' ? (
+          {resolvedRole === 'user' ? (
             latestRequest?.status === 'pending' ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
                 Your application is under review. We will notify you by email once a system owner approves it.

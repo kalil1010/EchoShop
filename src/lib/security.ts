@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
+import { normaliseRole } from '@/lib/roles'
 import type { UserProfile } from '@/types/user'
 
 export type PermissionReason = 'auth' | 'forbidden'
@@ -109,12 +110,13 @@ export async function requireRole(
     throw new PermissionError('forbidden', 'User profile not found.')
   }
 
-  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
-  if (!roles.includes(profile.role)) {
+  const roles = Array.isArray(allowedRoles) ? allowedRoles.map(normaliseRole) : [normaliseRole(allowedRoles)]
+  const profileRole = normaliseRole(profile.role)
+  if (!roles.includes(profileRole)) {
     throw new PermissionError('forbidden', 'You do not have permission to access this resource.')
   }
 
-  return { user: session.user, profile }
+  return { user: session.user, profile: { ...profile, role: profileRole } }
 }
 
 export function sanitizeText(input: string, options?: { maxLength?: number; allowNewlines?: boolean }): string {

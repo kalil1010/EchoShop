@@ -140,6 +140,11 @@ export default function OwnerDashboardPage() {
         const access = getPortalAccess(role, 'owner')
 
         if (!access.allowed) {
+          console.warn('[owner-dashboard] access denied', {
+            userId: authUser?.id ?? null,
+            role,
+            denial: access.denial ?? null,
+          })
           const toastPayload = access.denial?.toast
           toast({
             variant: toastPayload?.variant ?? 'warning',

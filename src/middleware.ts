@@ -66,18 +66,40 @@ export async function middleware(req: NextRequest) {
 
   if (user) {
     const profile = await fetchUserProfile(user.id)
-    const role = normaliseRole(profile?.role)
+    const role = normaliseRole(profile?.role ?? user.app_metadata?.role ?? user.user_metadata?.role)
     if (portal !== 'customer') {
       const access = getPortalAccess(role, portal)
       if (!access.allowed) {
+        console.warn('[middleware] portal access denied', {
+          userId: user.id,
+          role,
+          portal,
+          path: pathname,
+          redirect: access.denial?.redirect ?? null,
+          requiresLogout: Boolean(access.denial?.requiresLogout),
+        })
         if (pathname.startsWith('/api')) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
         const target = access.denial?.redirect ?? getDefaultRouteForRole(role)
-        return NextResponse.redirect(new URL(target, req.url))
+        const response = NextResponse.redirect(new URL(target, req.url))
+        if (access.denial?.requiresLogout) {
+          for (const cookie of req.cookies.getAll()) {
+            if (
+              cookie.name.startsWith('sb-') ||
+              cookie.name.startsWith('sb:') ||
+              cookie.name.startsWith('__Secure-sb-')
+            ) {
+              response.cookies.set(cookie.name, '', { path: '/', maxAge: 0 })
+            }
+          }
+        }
+        return response
       }
+      console.info('[middleware] portal access granted', { userId: user.id, role, portal, path: pathname })
     }
   } else if (portal !== 'customer') {
+    console.info('[middleware] unauthenticated portal access blocked', { portal, path: pathname })
     if (pathname.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

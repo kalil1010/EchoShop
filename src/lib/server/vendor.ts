@@ -1,12 +1,13 @@
 import { createServiceClient } from '@/lib/supabaseServer'
 import { PermissionError } from '@/lib/security'
+import { normaliseRole } from '@/lib/roles'
 
 type VendorProfileRow = {
   role: string | null
   display_name: string | null
 }
 
-const VENDOR_ROLES = new Set(['vendor', 'admin'])
+const ALLOWED_ROLES = new Set(['vendor', 'owner'])
 
 export async function requireVendorUser(userId: string): Promise<VendorProfileRow> {
   const client = createServiceClient()
@@ -20,13 +21,13 @@ export async function requireVendorUser(userId: string): Promise<VendorProfileRo
     throw error
   }
 
-  const role = (data?.role ?? '').toLowerCase()
-  if (!VENDOR_ROLES.has(role)) {
+  const role = normaliseRole(data?.role)
+  if (!ALLOWED_ROLES.has(role)) {
     throw new PermissionError('forbidden', 'Vendor access is required for this action.')
   }
 
   return {
-    role: role as VendorProfileRow['role'],
+    role,
     display_name: data?.display_name ?? null,
   }
 }

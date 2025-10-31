@@ -71,6 +71,10 @@ export function OwnerLoginForm() {
       const access = getPortalAccess(profile.role, 'owner')
 
       if (!access.allowed) {
+        console.warn('[owner-login] access denied', {
+          role: profile.role,
+          denial: access.denial ?? null,
+        })
         setNotice(access.denial?.banner ?? null)
         setError('Access denied. Please follow the guidance below.')
 

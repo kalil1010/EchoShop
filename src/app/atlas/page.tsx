@@ -21,6 +21,11 @@ export default function AtlasPage() {
 
     const access = getPortalAccess(profile.role, 'vendor')
     if (!access.allowed) {
+      console.warn('[atlas] access denied', {
+        userId: user?.uid ?? null,
+        role: profile.role,
+        denial: access.denial ?? null,
+      })
       setDenial(access.denial ?? null)
 
       if (!handledRef.current) {
@@ -43,7 +48,7 @@ export default function AtlasPage() {
 
     setDenial(null)
     handledRef.current = false
-  }, [loading, profile, logout, toast])
+  }, [loading, profile, logout, toast, user])
 
   if (loading) {
     return (

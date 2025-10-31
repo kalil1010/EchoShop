@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequest } from '@/types/vendor'
+import { normaliseRole } from '@/lib/roles'
 
 export const runtime = 'nodejs'
 
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
     const requests: VendorRequest[] = (requestRows ?? []).map(mapVendorRequestRow)
 
     return NextResponse.json({
-      role: profileRow?.role ?? 'user',
+      role: normaliseRole(profileRow?.role),
       requests,
     })
   } catch (error) {
@@ -113,8 +114,8 @@ export async function POST(request: NextRequest) {
         .limit(1),
     ])
 
-    const currentRole = profileRow?.role?.toLowerCase() ?? 'user'
-    if (currentRole === 'vendor' || currentRole === 'admin') {
+    const currentRole = normaliseRole(profileRow?.role)
+    if (currentRole !== 'user') {
       return NextResponse.json(
         { error: 'This account already has vendor access.' },
         { status: 400 },

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import VendorApplicationForm from '@/components/vendor/VendorApplicationForm'
 import { useAuth } from '@/contexts/AuthContext'
+import { normaliseRole } from '@/lib/roles'
 import type { VendorRequest } from '@/types/vendor'
 
 const hasActiveRequest = (requests: VendorRequest[]): boolean =>
@@ -16,7 +17,7 @@ export function Footer() {
   const [checkingRequest, setCheckingRequest] = useState(false)
   const [hasVendorRequest, setHasVendorRequest] = useState(false)
   const [showApplication, setShowApplication] = useState(false)
-  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
   const isOwner = normalisedRole === 'owner'
 
   useEffect(() => {
@@ -28,8 +29,8 @@ export function Footer() {
       setCheckingRequest(false)
       return
     }
-    const role = userProfile?.role?.toLowerCase()
-    if (role !== 'user') {
+    const resolvedRole = normaliseRole(userProfile?.role)
+    if (resolvedRole !== 'user') {
       setHasVendorRequest(true)
       setCheckingRequest(false)
       return
@@ -64,7 +65,7 @@ export function Footer() {
     Boolean(user) &&
     profileStatus === 'ready' &&
     !isProfileFallback &&
-    userProfile?.role?.toLowerCase() === 'user' &&
+    normalisedRole === 'user' &&
     !checkingRequest &&
     !hasVendorRequest
 

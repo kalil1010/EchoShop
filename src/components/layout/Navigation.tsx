@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { normaliseRole } from '@/lib/roles';
 
 interface NavItem {
   href: string;
@@ -46,7 +47,7 @@ export function Navigation() {
     return items;
   }, []);
 
-  const normalisedRole = (userProfile?.role ?? user?.role)?.toLowerCase()
+  const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
   if (normalisedRole === 'owner') {
     return null
   }

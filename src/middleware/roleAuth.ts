@@ -2,6 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import type { Session } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
+import { normaliseRole } from '@/lib/roles'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
 import type { UserRole } from '@/types/user'
 
@@ -15,17 +16,6 @@ type RoleCheckResult = {
 
 interface RoleOptions {
   requireSuperAdmin?: boolean
-}
-
-const ROLE_MAP: Record<string, UserRole> = {
-  admin: 'admin',
-  vendor: 'vendor',
-  user: 'user',
-}
-
-const normaliseRole = (value: string | null | undefined): UserRole => {
-  const key = value?.toLowerCase() ?? ''
-  return ROLE_MAP[key] ?? 'user'
 }
 
 export async function requireRole(

@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
+import { normaliseRole } from '@/lib/roles'
 import type { OwnerUserRecord } from './types'
+import type { UserRole } from '@/types/user'
 
 type RoleFilter = 'all' | 'user' | 'vendor' | 'owner'
 
@@ -18,26 +20,24 @@ interface UserManagementProps {
   emptyStateMessage?: string
 }
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<UserRole, string> = {
   user: 'User',
   vendor: 'Vendor',
   owner: 'Owner',
-  admin: 'Admin',
+  admin: 'Owner',
 }
 
-type ManagedRole = 'user' | 'vendor' | 'owner' | 'admin'
+type ManagedRole = 'user' | 'vendor' | 'owner'
 
 const ROLE_OPTIONS: Array<{ value: ManagedRole; label: string }> = [
   { value: 'user', label: 'User' },
   { value: 'vendor', label: 'Vendor' },
   { value: 'owner', label: 'Owner' },
-  { value: 'admin', label: 'Admin' },
 ]
 
-const normaliseRole = (value: string | null | undefined): ManagedRole => {
-  const key = (value ?? 'user').toLowerCase()
-  if (key === 'vendor' || key === 'owner' || key === 'admin') return key
-  return 'user'
+const resolveManagedRole = (value: string | null | undefined): ManagedRole => {
+  const resolved = normaliseRole(value)
+  return resolved === 'admin' ? 'owner' : resolved
 }
 
 export default function UserManagement({
@@ -93,7 +93,7 @@ export default function UserManagement({
   }, [users, searchTerm])
 
   const handleRoleChange = async (user: OwnerUserRecord, nextRole: ManagedRole) => {
-    if (user.id === updatingUserId || normaliseRole(user.role) === nextRole) {
+    if (user.id === updatingUserId || resolveManagedRole(user.role) === nextRole) {
       return
     }
 
@@ -177,7 +177,7 @@ export default function UserManagement({
         ) : (
           <div className="space-y-3">
             {displayedUsers.map((user) => {
-              const role = normaliseRole(user.role)
+              const role = resolveManagedRole(user.role)
               const isLocked = user.isSuperAdmin
               return (
                 <div
