@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('user_tour_state')
-      .upsert({ ...row, created_at: now }, { onConflict: 'user_id,tour_slug' })
+      .upsert(row, { onConflict: 'user_id,tour_slug' })
       .select('id, status, updated_at, metadata')
       .maybeSingle()
 
