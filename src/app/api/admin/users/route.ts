@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { normaliseRole } from '@/lib/roles'
+import {
+  disableOptionalProfileColumn,
+  extractMissingProfileColumn,
+  getActiveOptionalProfileColumns,
+} from '@/lib/profileSchema'
 import type { UserRole } from '@/types/user'
 
 export const runtime = 'nodejs'
@@ -13,10 +18,10 @@ type ProfileRow = {
   display_name: string | null
   role: string | null
   is_super_admin: boolean | null
-  vendor_business_name: string | null
-  vendor_contact_email: string | null
-  vendor_phone: string | null
-  vendor_website: string | null
+  vendor_business_name?: string | null
+  vendor_contact_email?: string | null
+  vendor_phone?: string | null
+  vendor_website?: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -62,31 +67,45 @@ export async function GET(request: NextRequest) {
     const roleFilter = url.searchParams.get('role')
     const searchFilter = url.searchParams.get('search')
 
-    let query = supabase
-      .from('profiles')
-      .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
-      )
-      .order('created_at', { ascending: false })
+    const trimmedSearch = searchFilter?.trim()
+    const runProfilesQuery = () => {
+      let listQuery = supabase.from('profiles').select('*').order('created_at', { ascending: false })
 
-    const normalisedRoleFilter = normaliseRole(roleFilter)
-    if (ROLE_SET.has(normalisedRoleFilter)) {
-      if (normalisedRoleFilter === 'owner') {
-        query = query.in('role', ['owner', 'admin'])
-      } else {
-        query = query.eq('role', normalisedRoleFilter)
+      const normalisedRoleFilter = normaliseRole(roleFilter)
+      if (ROLE_SET.has(normalisedRoleFilter)) {
+        if (normalisedRoleFilter === 'owner') {
+          listQuery = listQuery.in('role', ['owner', 'admin'])
+        } else {
+          listQuery = listQuery.eq('role', normalisedRoleFilter)
+        }
+      }
+
+      if (trimmedSearch) {
+        const pattern = buildSearchPattern(trimmedSearch)
+        const searchColumns = ['email', 'display_name']
+        if (getActiveOptionalProfileColumns().includes('vendor_business_name')) {
+          searchColumns.push('vendor_business_name')
+        }
+        const searchExpression = searchColumns
+          .map((column) => `${column}.ilike.${pattern}`)
+          .join(',')
+        listQuery = listQuery.or(searchExpression)
+      }
+      return listQuery
+    }
+
+    let { data, error } = await runProfilesQuery()
+
+    if (error) {
+      const missingColumn = extractMissingProfileColumn(error)
+      if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+        console.warn(
+          `[admin/users] Optional profile column "${missingColumn}" missing. Retrying list fetch without it.`,
+        )
+        ;({ data, error } = await runProfilesQuery())
       }
     }
 
-    const trimmedSearch = searchFilter?.trim()
-    if (trimmedSearch) {
-      const pattern = buildSearchPattern(trimmedSearch)
-      query = query.or(
-        `email.ilike.${pattern},display_name.ilike.${pattern},vendor_business_name.ilike.${pattern}`,
-      )
-    }
-
-    const { data, error } = await query
     if (error) throw error
 
     const users = (data ?? []).map(mapProfileRow)
@@ -164,9 +183,7 @@ export async function PATCH(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq('id', targetId)
-      .select(
-        'id, email, display_name, role, is_super_admin, vendor_business_name, vendor_contact_email, vendor_phone, vendor_website, created_at, updated_at',
-      )
+      .select('*')
       .maybeSingle<ProfileRow>()
 
     if (updateError) throw updateError

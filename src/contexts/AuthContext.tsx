@@ -12,6 +12,7 @@ import type { Session, User } from '@supabase/supabase-js'
 
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { DEFAULT_ROLE, getRoleMeta, normaliseRole } from '@/lib/roles'
+import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfilePayload } from '@/lib/profileSchema'
 import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 
@@ -72,11 +73,11 @@ interface ProfileRow {
   disliked_colors: string[] | null
   favorite_styles: string[] | null
   is_super_admin: boolean | null
-  vendor_business_name: string | null
-  vendor_business_address: string | null
-  vendor_contact_email: string | null
-  vendor_phone: string | null
-  vendor_website: string | null
+  vendor_business_name?: string | null
+  vendor_business_address?: string | null
+  vendor_contact_email?: string | null
+  vendor_phone?: string | null
+  vendor_website?: string | null
   role: string | null
   created_at: string | null
   updated_at: string | null
@@ -407,12 +408,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let attempt = 0
       const performUpsert = async () => {
         attempt += 1
-        const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+        const payload = filterProfilePayload(row)
+        const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' })
         if (error) {
           console.error(
             `[AuthContext] Profile upsert attempt ${attempt} failed for ${authUser.uid} (${reason}).`,
             error,
           )
+          const missingColumn = extractMissingProfileColumn(error)
+          if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+            console.warn(
+              `[AuthContext] Optional profile column "${missingColumn}" missing in Supabase schema. Retrying without it.`,
+            )
+          }
           throw error
         }
         return attempt

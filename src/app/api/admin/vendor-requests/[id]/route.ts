@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequestStatus } from '@/types/vendor'
+import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfilePayload } from '@/lib/profileSchema'
 
 export const runtime = 'nodejs'
 
@@ -104,20 +105,41 @@ export async function PATCH(
     if (isApproval) {
       const userToPromote = requestRow.user_id
 
+      const profileUpdate = filterProfilePayload({
+        role: 'vendor',
+        updated_at: nowIso,
+        vendor_business_name: requestRow.business_name,
+        vendor_business_address: requestRow.business_address,
+        vendor_contact_email: requestRow.contact_email,
+        vendor_phone: requestRow.phone,
+        vendor_website: requestRow.website,
+      })
+
       const { error: roleUpdateError } = await supabase
         .from('profiles')
-        .update({
-          role: 'vendor',
-          updated_at: nowIso,
-          vendor_business_name: requestRow.business_name,
-          vendor_contact_email: requestRow.contact_email,
-          vendor_phone: requestRow.phone,
-          vendor_website: requestRow.website,
-        })
+        .update(profileUpdate)
         .eq('id', userToPromote)
 
       if (roleUpdateError) {
-        console.warn('[vendor-requests] Failed to update profile role during approval', roleUpdateError)
+        const missingColumn = extractMissingProfileColumn(roleUpdateError)
+        if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+          console.warn(
+            `[vendor-requests] Optional profile column "${missingColumn}" missing during vendor approval. Retrying with core fields.`,
+          )
+          const fallbackUpdate = filterProfilePayload({ role: 'vendor', updated_at: nowIso })
+          const { error: fallbackError } = await supabase
+            .from('profiles')
+            .update(fallbackUpdate)
+            .eq('id', userToPromote)
+          if (fallbackError) {
+            console.warn(
+              '[vendor-requests] Fallback profile update failed during approval',
+              fallbackError,
+            )
+          }
+        } else {
+          console.warn('[vendor-requests] Failed to update profile role during approval', roleUpdateError)
+        }
       }
 
       try {
