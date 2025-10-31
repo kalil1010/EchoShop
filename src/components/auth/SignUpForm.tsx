@@ -1,5 +1,4 @@
 'use client'
-
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -19,12 +18,15 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [, setError] = useState('')
-  const [, setSuccess] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
+
   const { signUp } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+
   const supabase = useMemo(() => {
     try {
       return getSupabaseClient()
@@ -34,48 +36,135 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     }
   }, [])
 
+  // Function to get user profile and redirect based on role
+  const redirectBasedOnRole = async (userId: string) => {
+    if (!supabase) {
+      console.error('Supabase client not available for profile fetch')
+      router.push('/profile') // fallback
+      return
+    }
+
+    setProfileLoading(true)
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError)
+        // If profile doesn't exist or error, default to user role
+        router.push('/profile')
+        return
+      }
+
+      // Redirect based on role
+      switch (profile?.role) {
+        case 'vendor':
+          router.push('/vendor/hub')
+          break
+        case 'owner':
+          router.push('/downtown')
+          break
+        case 'user':
+        default:
+          router.push('/profile')
+          break
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+      // Default fallback
+      router.push('/profile')
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
     const trimmedEmail = email.trim().toLowerCase()
     const trimmedPassword = password.trim()
     const trimmedDisplayName = displayName.trim()
 
+    // Clear previous states
+    setError('')
+    setSuccess('')
+
+    // Validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Please enter a valid email address.')
-      toast({ variant: 'error', title: 'Invalid email', description: 'Double-check your email format and try again.' })
+      const errorMsg = 'Please enter a valid email address.'
+      setError(errorMsg)
+      toast({ 
+        variant: 'error', 
+        title: 'Invalid email', 
+        description: 'Double-check your email format and try again.' 
+      })
       return
     }
 
     if (trimmedPassword.length < 8) {
-      setError('Password must be at least 8 characters long.')
-      toast({ variant: 'error', title: 'Weak password', description: 'Passwords must be at least 8 characters.' })
+      const errorMsg = 'Password must be at least 8 characters long.'
+      setError(errorMsg)
+      toast({ 
+        variant: 'error', 
+        title: 'Weak password', 
+        description: 'Passwords must be at least 8 characters.' 
+      })
       return
     }
 
     if (trimmedDisplayName.length > 80) {
-      setError('Display name is too long.')
-      toast({ variant: 'error', title: 'Display name too long', description: 'Please keep your display name under 80 characters.' })
+      const errorMsg = 'Display name is too long.'
+      setError(errorMsg)
+      toast({ 
+        variant: 'error', 
+        title: 'Display name too long', 
+        description: 'Please keep your display name under 80 characters.' 
+      })
       return
     }
 
     setLoading(true)
-    setError('')
-
+    
     try {
-      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
-      const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
-      setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
-      toast({
-        variant: 'success',
-        title: 'Account created',
-        description: `Welcome, ${name}!`,
-      })
-      setTimeout(() => router.push('/profile'), 1500)
+      const result = await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
+      
+      // Check if signUp returns user data
+      if (result && result.user && result.user.id) {
+        const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
+        setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
+        toast({
+          variant: 'success',
+          title: 'Account created',
+          description: `Welcome, ${name}!`,
+        })
+        
+        // Wait a moment then redirect based on role
+        setTimeout(async () => {
+          await redirectBasedOnRole(result.user.id)
+        }, 1500)
+      } else {
+        // Fallback if no user data returned
+        const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
+        setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
+        toast({
+          variant: 'success',
+          title: 'Account created',
+          description: `Welcome, ${name}!`,
+        })
+        
+        setTimeout(() => router.push('/profile'), 1500)
+      }
     } catch (unknownError) {
-      const message =
-        unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
+      const message = unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
       setError(message)
-      toast({ variant: 'error', title: 'Sign-up failed', description: message || 'Please try again.' })
+      toast({ 
+        variant: 'error', 
+        title: 'Sign-up failed', 
+        description: message || 'Please try again.' 
+      })
     } finally {
       setLoading(false)
     }
@@ -83,22 +172,35 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
   const handleGoogleSignUp = async () => {
     if (!supabase) {
+      const errorMsg = 'Supabase client is not configured. Please try again later.'
+      setError(errorMsg)
       toast({
         variant: 'error',
         title: 'Google sign-up unavailable',
-        description: 'Supabase client is not configured. Please try again later.',
+        description: errorMsg,
       })
       return
     }
 
     setGoogleLoading(true)
+    setError('')
+    
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google' })
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
+      
       if (oauthError) {
         throw oauthError
       }
+      
+      // OAuth redirect will handle the rest
     } catch (oauthError) {
-      const message = oauthError instanceof Error ? oauthError.message : 'Please try again.'
+      const message = oauthError instanceof Error ? oauthError.message : 'Google sign-up failed. Please try again.'
+      setError(message)
       console.error('Google sign-up failed:', oauthError)
       toast({
         variant: 'error',
@@ -107,6 +209,20 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       })
       setGoogleLoading(false)
     }
+  }
+
+  // Show loading state during profile fetch
+  if (profileLoading) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardContent className="flex items-center justify-center p-6">
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="text-sm text-muted-foreground">Setting up your dashboard...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -118,9 +234,21 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+        
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-sm text-green-600">{success}</p>
+          </div>
+        )}
+        
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <label htmlFor="displayName" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="displayName">
               Display Name (optional)
             </label>
             <Input
@@ -128,11 +256,12 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
+              disabled={loading || googleLoading}
             />
           </div>
-
+          
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="email">
               Email
             </label>
             <Input
@@ -142,11 +271,12 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
               required
+              disabled={loading || googleLoading}
             />
           </div>
-
+          
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
+            <label className="text-sm font-medium" htmlFor="password">
               Password
             </label>
             <Input
@@ -156,27 +286,32 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a password"
               required
+              disabled={loading || googleLoading}
             />
           </div>
-
+          
           <p className="text-sm text-muted-foreground">
             Interested in selling on ZMODA Marketplace? Complete your account first, then visit the{' '}
-            <Link href="/vendor/hub" className="text-purple-600 hover:underline">
+            <Link className="text-purple-600 hover:underline" href="/vendor/hub">
               Vendor Hub
-            </Link>{' '}
-            to submit an application.
+            </Link>
+            {' '}to submit an application.
           </p>
-
-          <Button type="submit" className="w-full" disabled={loading}>
+          
+          <Button 
+            className="w-full" 
+            disabled={loading || googleLoading} 
+            type="submit"
+          >
             {loading ? 'Creating account...' : 'Sign Up'}
           </Button>
-
+          
           <div className="flex items-center gap-2">
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-border"></span>
             <span className="text-xs text-muted-foreground uppercase tracking-widest">or</span>
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-border"></span>
           </div>
-
+          
           <Button
             type="button"
             variant="outline"
@@ -186,12 +321,13 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           >
             {googleLoading ? 'Redirecting...' : 'Sign up with Google'}
           </Button>
-
+          
           <div className="text-center">
             <button
               type="button"
               onClick={onToggleMode}
               className="text-sm text-blue-600 hover:underline"
+              disabled={loading || googleLoading}
             >
               Already have an account? Sign in
             </button>
