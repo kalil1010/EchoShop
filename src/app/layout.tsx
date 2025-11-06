@@ -9,6 +9,7 @@ import { Footer } from '@/components/layout/Footer'
 import { ToastProvider } from '@/components/ui/toast'
 import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider'
 import { FloatingAssistant } from '@/components/chat/FloatingAssistant'
+import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
+        <GlobalErrorHandler />
         <div className="min-h-screen bg-background">
           <ToastProvider>
             <AuthProvider>
@@ -44,4 +46,5 @@ export default function RootLayout({
     </html>
   )
 }
+
 

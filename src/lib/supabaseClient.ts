@@ -18,13 +18,15 @@ function createSupabaseClient(): SupabaseClientType {
   const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
   const anonKey = requireEnv(PUBLIC_SUPABASE_ANON_KEY, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
-  return createClient(url, anonKey, {
+  const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: typeof window !== 'undefined',
     },
   })
+
+  return client
 }
 
 export function getSupabaseClient(): SupabaseClientType {
