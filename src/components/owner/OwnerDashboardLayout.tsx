@@ -94,16 +94,8 @@ const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): Own
 }
 
 export default function OwnerDashboardLayout() {
+  // ALL hooks must be called before any conditional returns (Rules of Hooks)
   const { roleMeta, logout, loading: authLoading } = useAuth()
-  
-  if (!roleMeta) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900" />
-      </div>
-    )
-  }
-
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
   const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
@@ -111,8 +103,8 @@ export default function OwnerDashboardLayout() {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  // Show loading state if auth is still loading
-  if (authLoading) {
+  // Show loading state if auth is still loading or roleMeta is missing
+  if (authLoading || !roleMeta) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
