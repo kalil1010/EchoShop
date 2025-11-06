@@ -20,28 +20,55 @@ const getSupabaseAdmin = () => {
 }
 
 const getAuthenticatedUser = async (req: NextRequest) => {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options) {
+            req.cookies.set({ name, value, ...options })
+          },
+          remove(name: string, options) {
+            req.cookies.set({ name, value: '', ...options })
+          },
+          getAll() {
+            return req.cookies.getAll()
+          },
         },
-        set(name: string, value: string, options) {
-          req.cookies.set({ name, value, ...options })
-        },
-        remove(name: string, options) {
-          req.cookies.set({ name, value: '', ...options })
-        },
-      },
-    }
-  )
+      }
+    )
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  return session?.user ?? null
+    // Try getUser() first (more reliable in middleware)
+    const {
+      data: { user: getUserResult },
+      error: getUserError,
+    } = await supabase.auth.getUser()
+
+    if (getUserResult && !getUserError) {
+      return getUserResult
+    }
+
+    // Fallback to getSession() if getUser() fails
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      // Session error is not critical - user might just not be logged in
+      return null
+    }
+
+    return session?.user ?? null
+  } catch (error) {
+    // If there's an error getting the user, assume not authenticated
+    console.warn('[middleware] Error getting authenticated user:', error)
+    return null
+  }
 }
 
 const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -103,6 +130,22 @@ export async function middleware(req: NextRequest) {
     const isLoginPage = pathname === '/downtown' || pathname === '/atlas' || pathname === '/vendor/login'
     if (isLoginPage) {
       // Allow unauthenticated access to login pages
+      return NextResponse.next()
+    }
+    // Check if there are any Supabase auth cookies (user might be logged in but session not detected)
+    const hasAuthCookies = req.cookies.getAll().some(
+      (cookie) =>
+        cookie.name.startsWith('sb-') ||
+        cookie.name.startsWith('sb:') ||
+        cookie.name.startsWith('__Secure-sb-')
+    )
+    if (hasAuthCookies) {
+      // User has auth cookies but session wasn't detected - might be a timing issue
+      // Allow the request through and let the page handle authentication
+      console.warn('[middleware] Auth cookies present but session not detected, allowing request', {
+        portal,
+        path: pathname,
+      })
       return NextResponse.next()
     }
     console.info('[middleware] unauthenticated portal access blocked', { portal, path: pathname })

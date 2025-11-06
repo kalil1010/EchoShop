@@ -41,11 +41,33 @@ export default async function DowntownEntryPage() {
         redirect(defaultRoute)
       }
       // If no profile or error, show login form (user can log in to create/update profile)
-    } catch (profileError) {
+    } catch (profileError: unknown) {
+      // Check if this is a Next.js redirect (expected behavior, not an error)
+      if (
+        profileError &&
+        typeof profileError === 'object' &&
+        'digest' in profileError &&
+        typeof profileError.digest === 'string' &&
+        profileError.digest.startsWith('NEXT_REDIRECT')
+      ) {
+        // This is a Next.js redirect, re-throw it to let Next.js handle it
+        throw profileError
+      }
       // Profile query failed, show login form
       console.error('[downtown] Profile query error:', profileError)
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    // Check if this is a Next.js redirect (expected behavior, not an error)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'digest' in error &&
+      typeof error.digest === 'string' &&
+      error.digest.startsWith('NEXT_REDIRECT')
+    ) {
+      // This is a Next.js redirect, re-throw it to let Next.js handle it
+      throw error
+    }
     // Any other error (e.g., Supabase client creation), show login form
     console.error('[downtown] Page error:', error)
   }
