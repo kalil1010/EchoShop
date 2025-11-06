@@ -13,6 +13,7 @@ export default function OwnerDashboardPage() {
   const { toast } = useToast()
   const { user, userProfile, loading: authLoading } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const redirectHandledRef = useRef(false)
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function OwnerDashboardPage() {
     // If no user, redirect to login
     if (!user) {
       redirectHandledRef.current = true
+      setIsRedirecting(true)
       router.replace('/downtown')
       return
     }
@@ -46,6 +48,7 @@ export default function OwnerDashboardPage() {
       })
       
       redirectHandledRef.current = true
+      setIsRedirecting(true)
       const toastPayload = access.denial?.toast
       toast({
         variant: toastPayload?.variant ?? 'warning',
@@ -63,7 +66,8 @@ export default function OwnerDashboardPage() {
     setIsLoading(false)
   }, [user, userProfile, authLoading, router, toast])
 
-  if (isLoading || authLoading) {
+  // Show loading state or prevent rendering during redirect
+  if (isLoading || authLoading || isRedirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -74,6 +78,7 @@ export default function OwnerDashboardPage() {
     )
   }
 
+  // Only render dashboard if user has access and we're not redirecting
   return (
     <OwnerDashboardLayout>
       {/* Existing dashboard content rendered inside the layout */}
