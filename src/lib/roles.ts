@@ -242,6 +242,15 @@ export function resolvePortalFromPath(pathname: string): PortalKey {
   return 'customer'
 }
 
-export function getRoleMeta(role: UserRole): RoleMeta {
-  return ROLE_META[role] ?? ROLE_META[DEFAULT_ROLE]
+export function getRoleMeta(role: UserRole | null | undefined): RoleMeta {
+  // Ensure we always return a valid RoleMeta
+  if (!role || !(role in ROLE_META)) {
+    return ROLE_META[DEFAULT_ROLE]
+  }
+  const meta = ROLE_META[role]
+  // Double-check all required fields exist
+  if (!meta || !meta.welcomeTitle || !meta.welcomeSubtitle) {
+    return ROLE_META[DEFAULT_ROLE]
+  }
+  return meta
 }

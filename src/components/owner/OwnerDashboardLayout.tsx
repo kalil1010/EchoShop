@@ -94,13 +94,51 @@ const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): Own
 }
 
 export default function OwnerDashboardLayout() {
-  const { roleMeta, logout } = useAuth()
+  const { roleMeta, logout, loading: authLoading } = useAuth()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
   const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  // Default roleMeta values to prevent crashes
+  const safeRoleMeta = useMemo(() => {
+    if (!roleMeta) {
+      return {
+        id: 'owner' as const,
+        label: 'Owner',
+        shortLabel: 'Owner',
+        defaultRoute: '/downtown/dashboard',
+        onboardingRoute: '/downtown/dashboard',
+        welcomeTitle: 'Hello, Owner!',
+        welcomeSubtitle: 'Oversee the marketplace, approvals, and vendor growth from this console.',
+        icon: 'shield',
+      }
+    }
+    return {
+      id: roleMeta.id ?? 'owner',
+      label: roleMeta.label ?? 'Owner',
+      shortLabel: roleMeta.shortLabel ?? 'Owner',
+      defaultRoute: roleMeta.defaultRoute ?? '/downtown/dashboard',
+      onboardingRoute: roleMeta.onboardingRoute ?? '/downtown/dashboard',
+      welcomeTitle: roleMeta.welcomeTitle ?? 'Hello, Owner!',
+      welcomeSubtitle: roleMeta.welcomeSubtitle ?? 'Oversee the marketplace, approvals, and vendor growth from this console.',
+      icon: roleMeta.icon ?? 'shield',
+    }
+  }, [roleMeta])
+
+  // Show loading state if auth is still loading or roleMeta is undefined
+  if (authLoading || !roleMeta) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true)
@@ -226,10 +264,10 @@ export default function OwnerDashboardLayout() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
             <ShieldCheck className="h-5 w-5 text-purple-600" />
-            {roleMeta.welcomeTitle}
+            {safeRoleMeta.welcomeTitle}
           </CardTitle>
           <CardDescription className="text-sm text-slate-700">
-            {roleMeta.welcomeSubtitle}
+            {safeRoleMeta.welcomeSubtitle}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">

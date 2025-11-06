@@ -1182,8 +1182,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase, user, userProfile, applyProfileToState, refreshProfile],
   )
 
+  // Ensure role is always valid, defaulting to 'user' if undefined
   const role = normaliseRole(userProfile?.role ?? user?.role ?? DEFAULT_ROLE)
-  const roleMeta = getRoleMeta(role)
+  // Ensure roleMeta always has valid values with fallbacks
+  const roleMeta = useMemo(() => {
+    const meta = getRoleMeta(role)
+    // Double-check that all required fields exist
+    return {
+      id: meta.id ?? DEFAULT_ROLE,
+      label: meta.label ?? 'User',
+      shortLabel: meta.shortLabel ?? 'User',
+      defaultRoute: meta.defaultRoute ?? '/',
+      onboardingRoute: meta.onboardingRoute ?? '/profile',
+      welcomeTitle: meta.welcomeTitle ?? 'Welcome!',
+      welcomeSubtitle: meta.welcomeSubtitle ?? 'Get started by exploring the platform.',
+      icon: meta.icon ?? 'sparkles',
+    }
+  }, [role])
   const isVendor = role === 'vendor'
 
   const isSupabaseEnabled = Boolean(supabase)
