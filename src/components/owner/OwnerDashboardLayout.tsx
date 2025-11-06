@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { ShieldCheck, Inbox, BarChart3, Users } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ShieldCheck, Inbox, BarChart3, Users, LogOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -93,11 +94,25 @@ const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): Own
 }
 
 export default function OwnerDashboardLayout() {
-  const { roleMeta } = useAuth()
+  const { roleMeta, logout } = useAuth()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
   const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = useCallback(async () => {
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      router.push('/downtown')
+    } catch (error) {
+      console.error('Logout failed:', error)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }, [logout, router])
 
   const fetchAnalytics = useCallback(async () => {
     setAnalyticsLoading(true)
@@ -246,10 +261,24 @@ export default function OwnerDashboardLayout() {
       </Card>
 
       <header className="space-y-1">
-        <h1 className="text-3xl font-bold text-slate-900">Downtown owner console</h1>
-        {headerDescription ? (
-          <p className="text-sm text-slate-600">{headerDescription}</p>
-        ) : null}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Downtown owner console</h1>
+            {headerDescription ? (
+              <p className="text-sm text-slate-600">{headerDescription}</p>
+            ) : null}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2">
