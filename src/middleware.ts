@@ -20,9 +20,22 @@ const getSupabaseAdmin = () => {
 }
 
 const getAuthenticatedUser = async (req: NextRequest) => {
+  // Check if auth cookies exist first
+  const hasAuthCookies = req.cookies.getAll().some(
+    (cookie) =>
+      cookie.name.startsWith('sb-') ||
+      cookie.name.startsWith('sb:') ||
+      cookie.name.startsWith('__Secure-sb-')
+  )
+
+  if (!hasAuthCookies) {
+    // No auth cookies, user is definitely not authenticated
+    return null
+  }
+
   try {
-    // Create a read-only Supabase client for middleware
-    // We avoid getSession() as it can trigger token refresh which tries to modify cookies
+    // Create a Supabase client with no-op cookie handlers
+    // This prevents Supabase from trying to modify cookies
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -31,46 +44,73 @@ const getAuthenticatedUser = async (req: NextRequest) => {
           get(name: string) {
             return req.cookies.get(name)?.value
           },
-          // In middleware, we can't modify cookies directly
-          // These handlers are no-ops to prevent Supabase from trying to modify cookies
+          // No-op handlers to prevent any cookie modifications
           set() {
-            // No-op: cookies can only be modified via NextResponse in middleware
+            // Cookies can only be modified via NextResponse in middleware
+            // Supabase will try to call this during token refresh, but we ignore it
           },
           remove() {
-            // No-op: cookies can only be modified via NextResponse in middleware
+            // Cookies can only be modified via NextResponse in middleware
+            // Supabase will try to call this during session cleanup, but we ignore it
           },
         },
       }
     )
 
-    // Only use getUser() - it's more reliable and doesn't trigger session refresh
-    // getSession() can trigger token refresh which tries to delete/modify cookies
-    const {
-      data: { user: getUserResult },
-      error: getUserError,
-    } = await supabase.auth.getUser()
+    // Try to get the user
+    // This may trigger internal session management that tries to modify cookies
+    // We catch and suppress those errors since we can't modify cookies in middleware
+    try {
+      const {
+        data: { user: getUserResult },
+        error: getUserError,
+      } = await supabase.auth.getUser()
 
-    if (getUserResult && !getUserError) {
-      return getUserResult
-    }
-
-    // If getUser() fails, the session is likely invalid or expired
-    // Don't try getSession() as it can trigger refresh logic that modifies cookies
-    if (getUserError) {
-      // Log only if it's not a common "session not found" error
-      if (!getUserError.message?.includes('session') && !getUserError.message?.includes('JWT')) {
-        console.warn('[middleware] Error getting user:', getUserError.message)
+      if (getUserResult && !getUserError) {
+        return getUserResult
       }
-    }
 
-    return null
-  } catch (error) {
-    // If there's an error getting the user, assume not authenticated
-    // Don't log common session errors to avoid noise
+      // If getUser() fails, the session is likely invalid or expired
+      return null
+    } catch (sessionError: unknown) {
+      // Supabase's internal session management (token refresh, session cleanup)
+      // tries to modify cookies, which throws errors in middleware
+      // We catch and suppress these errors since we already allow requests through
+      // when cookies are present (see the logic below)
+      const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError)
+      
+      // Suppress cookie modification errors - these are expected in middleware
+      if (errorMessage.includes('cookie') || 
+          errorMessage.includes('Cookie') ||
+          errorMessage.includes('Server Action') ||
+          errorMessage.includes('Route Handler')) {
+        // This is expected - Supabase tried to modify cookies but we prevented it
+        // Return null and let the page/API route handle authentication
+        return null
+      }
+      
+      // Re-throw unexpected errors
+      throw sessionError
+    }
+  } catch (error: unknown) {
+    // Catch any other errors and suppress cookie-related ones
     const errorMessage = error instanceof Error ? error.message : String(error)
-    if (!errorMessage.includes('session') && !errorMessage.includes('JWT') && !errorMessage.includes('cookie')) {
+    
+    // Suppress cookie-related errors as they're expected in middleware
+    if (errorMessage.includes('cookie') || 
+        errorMessage.includes('Cookie') ||
+        errorMessage.includes('Server Action') ||
+        errorMessage.includes('Route Handler')) {
+      return null
+    }
+    
+    // Log other unexpected errors (but not session/JWT errors which are common)
+    if (!errorMessage.includes('session') && 
+        !errorMessage.includes('JWT') && 
+        !errorMessage.includes('token')) {
       console.warn('[middleware] Error getting authenticated user:', errorMessage)
     }
+    
     return null
   }
 }
