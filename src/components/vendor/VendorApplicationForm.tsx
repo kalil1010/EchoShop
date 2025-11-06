@@ -42,15 +42,110 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
   const [productCategories, setProductCategories] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  
+  // Track which fields have been touched/blurred
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+
+  // Validation functions for each field
+  const validateBusinessName = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return 'Please enter a business name longer than 2 characters.'
+    }
+    if (trimmed.length <= 2) {
+      return 'Please enter a business name longer than 2 characters.'
+    }
+    return null
+  }
+
+  const validateContactEmail = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return 'Please enter a valid email address.'
+    }
+    if (!EMAIL_REGEX.test(trimmed.toLowerCase())) {
+      return 'Please enter a valid email address.'
+    }
+    return null
+  }
+
+  const validatePhone = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return 'Please enter a valid phone number.'
+    }
+    if (!PHONE_REGEX.test(trimmed)) {
+      return 'Please enter a valid phone number.'
+    }
+    return null
+  }
+
+  const validateTaxId = (value: string): string | null => {
+    const trimmed = value.trim()
+    // Tax ID is optional, but if provided, must be > 3 characters
+    if (trimmed.length > 0 && trimmed.length <= 3) {
+      return 'Please enter a registration/tax ID longer than 3 characters.'
+    }
+    return null
+  }
+
+  const validateBusinessAddress = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return 'Please enter an address at least 5 characters long.'
+    }
+    if (trimmed.length < 5) {
+      return 'Please enter an address at least 5 characters long.'
+    }
+    return null
+  }
+
+  const validateBusinessDescription = (value: string): string | null => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return 'Your business description must be at least 21 characters.'
+    }
+    if (trimmed.length <= 20) {
+      return 'Your business description must be at least 21 characters.'
+    }
+    return null
+  }
+
+  // Get error message for a field
+  const getFieldError = (fieldName: string): string | null => {
+    const shouldShow = touched[fieldName] || submitAttempted
+    if (!shouldShow) return null
+
+    switch (fieldName) {
+      case 'businessName':
+        return validateBusinessName(businessName)
+      case 'contactEmail':
+        return validateContactEmail(contactEmail)
+      case 'phone':
+        return validatePhone(phone)
+      case 'taxId':
+        return validateTaxId(taxId)
+      case 'businessAddress':
+        return validateBusinessAddress(businessAddress)
+      case 'businessDescription':
+        return validateBusinessDescription(businessDescription)
+      default:
+        return null
+    }
+  }
 
   const canSubmit = useMemo(() => {
+    // Tax ID is optional, so only validate if provided
+    const taxIdValid = taxId.trim().length === 0 || validateTaxId(taxId) === null
+    
     return (
-      businessName.trim().length > 2 &&
-      businessDescription.trim().length > 20 &&
-      businessAddress.trim().length > 4 &&
-      EMAIL_REGEX.test(contactEmail.trim().toLowerCase()) &&
-      PHONE_REGEX.test(phone.trim()) &&
-      taxId.trim().length > 3
+      validateBusinessName(businessName) === null &&
+      validateBusinessDescription(businessDescription) === null &&
+      validateBusinessAddress(businessAddress) === null &&
+      validateContactEmail(contactEmail) === null &&
+      validatePhone(phone) === null &&
+      taxIdValid
     )
   }, [businessName, businessDescription, businessAddress, contactEmail, phone, taxId])
 
@@ -60,8 +155,24 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
     )
   }
 
+  const handleBlur = (fieldName: string) => {
+    setTouched((prev) => ({ ...prev, [fieldName]: true }))
+  }
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setSubmitAttempted(true)
+    
+    // Mark all fields as touched on submit
+    setTouched({
+      businessName: true,
+      contactEmail: true,
+      phone: true,
+      taxId: true,
+      businessAddress: true,
+      businessDescription: true,
+    })
+    
     if (!canSubmit || submitting) {
       toast({
         title: 'Check your details',
@@ -151,9 +262,14 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
                 id="vendor-business-name"
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
+                onBlur={() => handleBlur('businessName')}
                 placeholder="ZMODA Boutique"
                 required
+                className={getFieldError('businessName') ? 'border-red-500' : ''}
               />
+              {getFieldError('businessName') && (
+                <p className="text-sm text-red-600">{getFieldError('businessName')}</p>
+              )}
             </div>
             <div className="space-y-2">
               <label htmlFor="vendor-contact-email" className="text-sm font-medium text-foreground">
@@ -164,9 +280,14 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
                 type="email"
                 value={contactEmail}
                 onChange={(event) => setContactEmail(event.target.value)}
+                onBlur={() => handleBlur('contactEmail')}
                 placeholder="hello@yourbrand.com"
                 required
+                className={getFieldError('contactEmail') ? 'border-red-500' : ''}
               />
+              {getFieldError('contactEmail') && (
+                <p className="text-sm text-red-600">{getFieldError('contactEmail')}</p>
+              )}
             </div>
           </div>
 
@@ -179,21 +300,30 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
                 id="vendor-phone"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
+                onBlur={() => handleBlur('phone')}
                 placeholder="+20 10 1234 5678"
                 required
+                className={getFieldError('phone') ? 'border-red-500' : ''}
               />
+              {getFieldError('phone') && (
+                <p className="text-sm text-red-600">{getFieldError('phone')}</p>
+              )}
             </div>
             <div className="space-y-2">
               <label htmlFor="vendor-tax-id" className="text-sm font-medium text-foreground">
-                Tax or registration ID
+                Tax or registration ID <span className="text-muted-foreground">(optional)</span>
               </label>
               <Input
                 id="vendor-tax-id"
                 value={taxId}
                 onChange={(event) => setTaxId(event.target.value)}
+                onBlur={() => handleBlur('taxId')}
                 placeholder="CR-1234567890"
-                required
+                className={getFieldError('taxId') ? 'border-red-500' : ''}
               />
+              {getFieldError('taxId') && (
+                <p className="text-sm text-red-600">{getFieldError('taxId')}</p>
+              )}
             </div>
           </div>
 
@@ -217,10 +347,15 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               id="vendor-address"
               value={businessAddress}
               onChange={(event) => setBusinessAddress(event.target.value)}
+              onBlur={() => handleBlur('businessAddress')}
               placeholder="Street, city, country"
               rows={3}
               required
+              className={getFieldError('businessAddress') ? 'border-red-500' : ''}
             />
+            {getFieldError('businessAddress') && (
+              <p className="text-sm text-red-600">{getFieldError('businessAddress')}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -233,13 +368,22 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               onChange={(event) =>
                 setBusinessDescription(event.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
               }
+              onBlur={() => handleBlur('businessDescription')}
               rows={5}
               placeholder="Tell us what you sell, your target audience, and how your brand stands out."
               required
+              className={getFieldError('businessDescription') ? 'border-red-500' : ''}
             />
-            <p className="text-xs text-muted-foreground text-right">
-              {businessDescription.length}/{MAX_DESCRIPTION_LENGTH}
-            </p>
+            <div className="flex items-center justify-between">
+              {getFieldError('businessDescription') ? (
+                <p className="text-sm text-red-600">{getFieldError('businessDescription')}</p>
+              ) : (
+                <div />
+              )}
+              <p className="text-xs text-muted-foreground">
+                {businessDescription.length}/{MAX_DESCRIPTION_LENGTH}
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

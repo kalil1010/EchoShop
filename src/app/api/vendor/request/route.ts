@@ -183,9 +183,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const taxId = truncate(trimString(payload.taxId), MAX_TAX_ID_LENGTH)
-    if (!taxId) {
-      return NextResponse.json({ error: 'Tax or business registration ID is required.' }, { status: 400 })
+    const taxIdRaw = truncate(trimString(payload.taxId), MAX_TAX_ID_LENGTH)
+    // Tax ID is optional, but if provided, must be > 3 characters
+    const taxId = taxIdRaw && taxIdRaw.length > 3 ? taxIdRaw : null
+    if (taxIdRaw && taxIdRaw.length > 0 && taxIdRaw.length <= 3) {
+      return NextResponse.json({ error: 'Tax or business registration ID must be longer than 3 characters if provided.' }, { status: 400 })
     }
 
     const productCategories = Array.isArray(payload.productCategories)
