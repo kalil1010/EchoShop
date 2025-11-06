@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 import OwnerDashboardLayout from '@/components/owner/OwnerDashboardLayout'
@@ -13,8 +13,14 @@ export default function OwnerDashboardPage() {
   const { toast } = useToast()
   const { user, userProfile, loading: authLoading } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
+  const redirectHandledRef = useRef(false)
 
   useEffect(() => {
+    // Prevent multiple redirects
+    if (redirectHandledRef.current) {
+      return
+    }
+
     // Wait for auth context to finish loading
     if (authLoading) {
       return
@@ -22,6 +28,7 @@ export default function OwnerDashboardPage() {
 
     // If no user, redirect to login
     if (!user) {
+      redirectHandledRef.current = true
       router.replace('/downtown')
       return
     }
@@ -31,11 +38,14 @@ export default function OwnerDashboardPage() {
     const access = getPortalAccess(role, 'owner')
 
     if (!access.allowed) {
-      console.warn('[owner-dashboard] access denied', {
+      // This is expected behavior - log at debug level, not warn
+      console.debug('[owner-dashboard] access denied', {
         userId: user?.uid ?? null,
         role,
         denial: access.denial ?? null,
       })
+      
+      redirectHandledRef.current = true
       const toastPayload = access.denial?.toast
       toast({
         variant: toastPayload?.variant ?? 'warning',

@@ -252,7 +252,7 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="vendor-business-name" className="text-sm font-medium text-foreground">
@@ -260,10 +260,12 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               </label>
               <Input
                 id="vendor-business-name"
+                name="business-name"
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
                 onBlur={() => handleBlur('businessName')}
                 placeholder="ZMODA Boutique"
+                autoComplete="organization"
                 required
                 className={getFieldError('businessName') ? 'border-red-500' : ''}
               />
@@ -277,11 +279,13 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               </label>
               <Input
                 id="vendor-contact-email"
+                name="contact-email"
                 type="email"
                 value={contactEmail}
                 onChange={(event) => setContactEmail(event.target.value)}
                 onBlur={() => handleBlur('contactEmail')}
                 placeholder="hello@yourbrand.com"
+                autoComplete="email"
                 required
                 className={getFieldError('contactEmail') ? 'border-red-500' : ''}
               />
@@ -298,10 +302,13 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               </label>
               <Input
                 id="vendor-phone"
+                name="phone"
+                type="tel"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 onBlur={() => handleBlur('phone')}
                 placeholder="+20 10 1234 5678"
+                autoComplete="tel"
                 required
                 className={getFieldError('phone') ? 'border-red-500' : ''}
               />
@@ -315,10 +322,12 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               </label>
               <Input
                 id="vendor-tax-id"
+                name="tax-id"
                 value={taxId}
                 onChange={(event) => setTaxId(event.target.value)}
                 onBlur={() => handleBlur('taxId')}
                 placeholder="CR-1234567890"
+                autoComplete="off"
                 className={getFieldError('taxId') ? 'border-red-500' : ''}
               />
               {getFieldError('taxId') && (
@@ -333,9 +342,12 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
             </label>
             <Input
               id="vendor-website"
+              name="website"
+              type="url"
               value={website}
               onChange={(event) => setWebsite(event.target.value)}
               placeholder="https://yourbrand.com"
+              autoComplete="url"
             />
           </div>
 
@@ -345,11 +357,13 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
             </label>
             <Textarea
               id="vendor-address"
+              name="address"
               value={businessAddress}
               onChange={(event) => setBusinessAddress(event.target.value)}
               onBlur={() => handleBlur('businessAddress')}
               placeholder="Street, city, country"
               rows={3}
+              autoComplete="street-address"
               required
               className={getFieldError('businessAddress') ? 'border-red-500' : ''}
             />
@@ -364,6 +378,7 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
             </label>
             <Textarea
               id="vendor-description"
+              name="description"
               value={businessDescription}
               onChange={(event) =>
                 setBusinessDescription(event.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
@@ -371,6 +386,7 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
               onBlur={() => handleBlur('businessDescription')}
               rows={5}
               placeholder="Tell us what you sell, your target audience, and how your brand stands out."
+              autoComplete="off"
               required
               className={getFieldError('businessDescription') ? 'border-red-500' : ''}
             />
