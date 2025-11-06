@@ -21,6 +21,8 @@ const getSupabaseAdmin = () => {
 
 const getAuthenticatedUser = async (req: NextRequest) => {
   try {
+    // Create a read-only Supabase client for middleware
+    // We avoid getSession() as it can trigger token refresh which tries to modify cookies
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -29,17 +31,20 @@ const getAuthenticatedUser = async (req: NextRequest) => {
           get(name: string) {
             return req.cookies.get(name)?.value
           },
-          set(name: string, value: string, options) {
-            req.cookies.set({ name, value, ...options })
+          // In middleware, we can't modify cookies directly
+          // These handlers are no-ops to prevent Supabase from trying to modify cookies
+          set() {
+            // No-op: cookies can only be modified via NextResponse in middleware
           },
-          remove(name: string, options) {
-            req.cookies.set({ name, value: '', ...options })
+          remove() {
+            // No-op: cookies can only be modified via NextResponse in middleware
           },
         },
       }
     )
 
-    // Try getUser() first (more reliable in middleware)
+    // Only use getUser() - it's more reliable and doesn't trigger session refresh
+    // getSession() can trigger token refresh which tries to delete/modify cookies
     const {
       data: { user: getUserResult },
       error: getUserError,
@@ -49,21 +54,23 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       return getUserResult
     }
 
-    // Fallback to getSession() if getUser() fails
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
-
-    if (sessionError) {
-      // Session error is not critical - user might just not be logged in
-      return null
+    // If getUser() fails, the session is likely invalid or expired
+    // Don't try getSession() as it can trigger refresh logic that modifies cookies
+    if (getUserError) {
+      // Log only if it's not a common "session not found" error
+      if (!getUserError.message?.includes('session') && !getUserError.message?.includes('JWT')) {
+        console.warn('[middleware] Error getting user:', getUserError.message)
+      }
     }
 
-    return session?.user ?? null
+    return null
   } catch (error) {
     // If there's an error getting the user, assume not authenticated
-    console.warn('[middleware] Error getting authenticated user:', error)
+    // Don't log common session errors to avoid noise
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (!errorMessage.includes('session') && !errorMessage.includes('JWT') && !errorMessage.includes('cookie')) {
+      console.warn('[middleware] Error getting authenticated user:', errorMessage)
+    }
     return null
   }
 }
@@ -137,12 +144,9 @@ export async function middleware(req: NextRequest) {
         cookie.name.startsWith('__Secure-sb-')
     )
     if (hasAuthCookies) {
-      // User has auth cookies but session wasn't detected - might be a timing issue
-      // Allow the request through and let the page handle authentication
-      console.warn('[middleware] Auth cookies present but session not detected, allowing request', {
-        portal,
-        path: pathname,
-      })
+      // User has auth cookies but session wasn't detected - might be a timing issue or expired session
+      // Allow the request through and let the page/API route handle authentication
+      // This is expected behavior when cookies exist but session is invalid/expired
       return NextResponse.next()
     }
     console.info('[middleware] unauthenticated portal access blocked', { portal, path: pathname })
