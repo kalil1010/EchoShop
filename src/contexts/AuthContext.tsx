@@ -433,7 +433,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         const code = getErrorCode(error)
         const message = getErrorMessage(error)
+        
+        // For PGRST204 errors, try to extract and disable the missing column before giving up
         if (code && code.toUpperCase() === 'PGRST204') {
+          const missingColumn = extractMissingProfileColumn(error)
+          if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+            console.warn(
+              `[AuthContext] Detected missing column "${missingColumn}" in PGRST204 error. Disabled for future attempts.`,
+            )
+            // Don't throw yet - let the retry mechanism handle it if there are retries left
+            // But if we're here, all retries have been exhausted, so throw the error
+          }
           const devError = new Error(
             'Profile upsert failed: mismatch between frontend payload and DB schema. Please sync columns and types.',
           )
@@ -444,6 +454,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw devError
         }
         if (message.toLowerCase().includes('column') && message.toLowerCase().includes('not found')) {
+          const missingColumn = extractMissingProfileColumn(error)
+          if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+            console.warn(
+              `[AuthContext] Detected missing column "${missingColumn}" in column error. Disabled for future attempts.`,
+            )
+          }
           const schemaError = new Error(
             'Profile upsert failed: mismatch between frontend payload and DB schema. Please sync columns and types.',
           )

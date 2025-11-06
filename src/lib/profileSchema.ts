@@ -22,7 +22,7 @@ const OPTIONAL_PROFILE_COLUMNS = new Set<string>(
 
 const DISABLED_OPTIONAL_COLUMNS = new Set<string>()
 
-const MISSING_COLUMN_REGEX = /column\s+["']?([a-z0-9_.]+)["']?\s+does not exist/i
+const MISSING_COLUMN_REGEX = /(?:column\s+["']?([a-z0-9_.]+)["']?\s+(?:does not exist|could not find)|could not find the\s+["']?([a-z0-9_.]+)["']?\s+column)/i
 
 export type ProfileMutationPayload = Record<string, unknown>
 
@@ -51,9 +51,24 @@ export function extractMissingProfileColumn(error: unknown): string | null {
   }
 
   for (const message of messages) {
+    // Try to extract column name from various error message formats
+    // Format 1: "Could not find the 'vendor_contact_email' column of 'profiles' in the schema cache"
+    const format1Match = message.match(/could not find the\s+["']([a-z0-9_]+)["']\s+column/i)
+    if (format1Match && format1Match[1]) {
+      return format1Match[1]
+    }
+
+    // Format 2: "column 'vendor_contact_email' does not exist"
+    const format2Match = message.match(/column\s+["']([a-z0-9_]+)["']\s+does not exist/i)
+    if (format2Match && format2Match[1]) {
+      return format2Match[1]
+    }
+
+    // Fallback to regex pattern
     const match = message.match(MISSING_COLUMN_REGEX)
     if (match) {
-      const column = match[1]
+      // Try both capture groups (different error message formats)
+      const column = match[1] || match[2]
       if (column) {
         const parts = column.split('.')
         return parts[parts.length - 1] ?? column

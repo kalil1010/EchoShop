@@ -99,6 +99,12 @@ export async function middleware(req: NextRequest) {
       console.info('[middleware] portal access granted', { userId: user.id, role, portal, path: pathname })
     }
   } else if (portal !== 'customer') {
+    // Allow access to login pages for unauthenticated users
+    const isLoginPage = pathname === '/downtown' || pathname === '/atlas' || pathname === '/vendor/login'
+    if (isLoginPage) {
+      // Allow unauthenticated access to login pages
+      return NextResponse.next()
+    }
     console.info('[middleware] unauthenticated portal access blocked', { portal, path: pathname })
     if (pathname.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
