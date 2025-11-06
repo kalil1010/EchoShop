@@ -103,7 +103,7 @@ export default function OwnerDashboardLayout() {
     setAnalyticsLoading(true)
     setAnalyticsError(null)
     try {
-      const response = await fetch('/api/owner/analytics', { credentials: 'include' })
+      const response = await fetch('/api/admin/analytics', { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload?.error ?? 'Failed to load analytics.')

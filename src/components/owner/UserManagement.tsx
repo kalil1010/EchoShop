@@ -62,7 +62,7 @@ export default function UserManagement({
         params.set('role', roleFilter)
       }
       const query = params.toString()
-      const response = await fetch(`/api/owner/users${query ? `?${query}` : ''}`, {
+      const response = await fetch(`/api/admin/users${query ? `?${query}` : ''}`, {
         credentials: 'include',
       })
       if (!response.ok) {
@@ -99,7 +99,7 @@ export default function UserManagement({
 
     setUpdatingUserId(user.id)
     try {
-      const response = await fetch('/api/owner/users', {
+      const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

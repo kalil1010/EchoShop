@@ -34,7 +34,7 @@ export default function OwnerInvitations() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/owner/invitations', { credentials: 'include' })
+      const response = await fetch('/api/admin/invitations', { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload?.error ?? 'Failed to load invitations.')
