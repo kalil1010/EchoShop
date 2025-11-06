@@ -127,14 +127,20 @@ export default function Home() {
       setEmergencyShow(false)
       return
     }
+    // Only show emergency content if we've been loading for a while
+    // and we don't have a user yet (if we have a user, profile might still be loading)
     const timer = window.setTimeout(() => {
       if (loading && !emergencyShow) {
-        console.warn('[Home] Auth loading timeout - showing content anyway')
-        setEmergencyShow(true)
+        // If we have a user but profile is still loading, that's okay - don't show warning
+        // Only show warning if we don't even have a user after 8 seconds
+        if (!user) {
+          console.debug('[Home] Auth loading taking longer than expected, showing content')
+          setEmergencyShow(true)
+        }
       }
     }, 8000)
     return () => window.clearTimeout(timer)
-  }, [loading, emergencyShow])
+  }, [loading, emergencyShow, user])
 
   if (loading && !emergencyShow) {
     return (

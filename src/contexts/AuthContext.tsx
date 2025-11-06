@@ -198,7 +198,7 @@ function isTimeoutError(error: unknown): boolean {
   )
 }
 
-const DEFAULT_PROFILE_TIMEOUT_MS = 45000
+const DEFAULT_PROFILE_TIMEOUT_MS = 10000 // Reduced from 45s to 10s for better UX
 
 const PERMISSION_ISSUE_MESSAGE =
   'Profile loading failed due to database permission issues. Please contact support or retry later.'
@@ -693,12 +693,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ])
         return result
       } catch (error) {
-        console.error('[AuthContext] Profile load failed or timed out:', error)
         const normalised = normaliseError(error, 'Profile load failed')
-        setProfileStatus('error')
         const permissionIssue = isPermissionError(error)
         const timeoutIssue =
           normalised.message === 'PROFILE_TIMEOUT' || isTimeoutError(error)
+        
+        // Only log as error if it's not a timeout (timeouts are handled gracefully)
+        if (!timeoutIssue) {
+          console.error('[AuthContext] Profile load failed:', error)
+        } else {
+          // Log timeout as debug/warn, not error, since we handle it gracefully
+          console.debug('[AuthContext] Profile load timed out, using fallback profile')
+        }
+        
+        setProfileStatus('error')
         setProfileError(normalised)
         const issueMessage = permissionIssue
           ? PERMISSION_ISSUE_MESSAGE
@@ -710,12 +718,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fallback = buildBootstrapProfile(authUser)
         const profile = applyProfileToState(fallback, authUser)
         if (timeoutIssue) {
-          loadUserProfile(authUser).catch((retryError) =>
-            console.warn(
-              `[AuthContext] Background profile reload failed after timeout for ${authUser.uid}:`,
-              retryError,
-            ),
-          )
+          // Silently retry in background without logging errors
+          loadUserProfile(authUser).catch(() => {
+            // Silently fail - we already have a fallback profile
+          })
         }
         return {
           profile,
