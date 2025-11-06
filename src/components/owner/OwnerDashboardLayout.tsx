@@ -103,18 +103,6 @@ export default function OwnerDashboardLayout() {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  // Show loading state if auth is still loading or roleMeta is missing
-  if (authLoading || !roleMeta) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true)
     try {
@@ -196,6 +184,19 @@ export default function OwnerDashboardLayout() {
     ],
     [],
   )
+
+  // Show loading state if auth is still loading or roleMeta is missing
+  // This must come AFTER all hooks are called
+  if (authLoading || !roleMeta) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   const renderContent = () => {
     switch (activeTab) {
