@@ -843,8 +843,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
       console.log('[AuthContext] Auth state changed:', event)
+      
+      // Handle token refresh failures gracefully
       if (event === 'TOKEN_REFRESHED' && !newSession) {
-        console.warn('[AuthContext] Token refresh failed, clearing session')
+        // This is expected when refresh tokens expire - handle silently
+        console.debug('[AuthContext] Token refresh failed (token expired), clearing session')
         void syncServerSession('SIGNED_OUT', null)
         setSession(null)
         setUser(null)
@@ -872,7 +875,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           resetProfileState()
         }
       } catch (error) {
-        console.error('[AuthContext] Auth state change failed:', error)
+        // Check if it's a refresh token error (expected)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorCode = error && typeof error === 'object' && 'code' in error 
+          ? String((error as { code?: string }).code)
+          : ''
+        
+        const isRefreshTokenError = 
+          errorMessage.includes('Refresh Token') ||
+          errorMessage.includes('refresh_token_not_found') ||
+          errorCode === 'refresh_token_not_found'
+        
+        if (isRefreshTokenError) {
+          // Expected error when tokens expire - handle silently
+          console.debug('[AuthContext] Refresh token error during auth state change, clearing session')
+          setSession(null)
+          setUser(null)
+          setUserProfile(null)
+          resetProfileState()
+        } else {
+          // Real error, log it
+          console.error('[AuthContext] Auth state change failed:', error)
+        }
       } finally {
         if (isMounted) {
           setLoading(false)

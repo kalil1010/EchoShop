@@ -52,7 +52,20 @@ export function Navigation() {
     return null
   }
 
-  const visibleNavItems = navItems.filter((item) => !item.requiresAuth || !!user);
+  // Filter nav items based on role
+  // Vendors should only see: Home, Marketplace, Profile (no regular user services)
+  const visibleNavItems = useMemo(() => {
+    if (normalisedRole === 'vendor') {
+      // Vendors only see: Home, Marketplace, Profile
+      return navItems.filter((item) => 
+        item.href === '/' || 
+        item.href === '/marketplace' || 
+        item.href === '/profile'
+      )
+    }
+    // Regular users see all items (filtered by auth requirement)
+    return navItems.filter((item) => !item.requiresAuth || !!user)
+  }, [navItems, normalisedRole, user])
 
   const handleLogout = async () => {
     try {
