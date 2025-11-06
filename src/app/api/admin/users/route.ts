@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createServiceClient } from '@/lib/supabaseServer'
+import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { normaliseRole } from '@/lib/roles'
 import {
@@ -60,8 +60,12 @@ const buildSearchPattern = (value: string): string => `%${value.replace(/[%_]/g,
 
 export async function GET(request: NextRequest) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    await requireRole(supabase, 'admin')
 
     const url = request.nextUrl
     const roleFilter = url.searchParams.get('role')
@@ -123,8 +127,12 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    const { profile: actorProfile } = await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    const { profile: actorProfile } = await requireRole(supabase, 'admin')
 
     const payload = (await request.json().catch(() => ({}))) as {
       userId?: string

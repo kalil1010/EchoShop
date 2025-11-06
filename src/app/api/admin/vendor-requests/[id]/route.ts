@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createServiceClient } from '@/lib/supabaseServer'
+import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequestStatus } from '@/types/vendor'
@@ -36,8 +36,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    const { user } = await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    const { user } = await requireRole(supabase, 'admin')
 
     const { id: requestId } = await params
     if (!requestId) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createServiceClient } from '@/lib/supabaseServer'
+import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequest } from '@/types/vendor'
@@ -9,8 +9,12 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    await requireRole(supabase, 'admin')
 
     const status = request.nextUrl.searchParams.get('status')?.toLowerCase()
     const query = supabase

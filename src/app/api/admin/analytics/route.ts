@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { createServiceClient } from '@/lib/supabaseServer'
+import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 
 export const runtime = 'nodejs'
@@ -24,8 +24,12 @@ const toIso = (value: string | null | undefined): string | null => {
 
 export async function GET() {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    await requireRole(supabase, 'admin')
 
     const countProfiles = async (
       filters?: Array<{ column: 'role'; value: string }>,

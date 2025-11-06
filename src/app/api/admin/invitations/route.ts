@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createServiceClient } from '@/lib/supabaseServer'
+import { createRouteClient, createServiceClient } from '@/lib/supabaseServer'
 import { mapSupabaseError, PermissionError, requireRole } from '@/lib/security'
 
 export const runtime = 'nodejs'
@@ -45,8 +45,12 @@ const mapInvitation = (row: InvitationRow) => {
 
 export async function GET(request: NextRequest) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    await requireRole(supabase, 'admin')
 
     const url = request.nextUrl
     const statusFilter = url.searchParams.get('status')?.toLowerCase()
@@ -78,8 +82,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Use route client for authentication (has access to user session)
+    const routeClient = createRouteClient()
+    const { profile } = await requireRole(routeClient, 'admin')
+    
+    // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
-    const { profile } = await requireRole(supabase, 'admin')
 
     if (!profile.isSuperAdmin) {
       throw new PermissionError(
