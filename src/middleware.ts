@@ -35,9 +35,6 @@ const getAuthenticatedUser = async (req: NextRequest) => {
           remove(name: string, options) {
             req.cookies.set({ name, value: '', ...options })
           },
-          getAll() {
-            return req.cookies.getAll()
-          },
         },
       }
     )
