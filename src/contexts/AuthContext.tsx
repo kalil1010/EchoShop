@@ -434,6 +434,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const code = getErrorCode(error)
         const message = getErrorMessage(error)
         
+        // Handle RLS/permission errors (42501)
+        if (code === '42501' || message.toLowerCase().includes('row-level security') || message.toLowerCase().includes('violates row-level security')) {
+          const rlsError = new Error(
+            'Profile update blocked by database security policy. Please ensure Row Level Security policies are configured correctly for the profiles table.',
+          )
+          if (error instanceof Error) {
+            ;(rlsError as Error & { cause?: unknown }).cause = error
+            copyErrorMetadata(error, rlsError)
+          }
+          console.error(
+            `[AuthContext] RLS policy violation during profile upsert for ${authUser.uid}. Ensure RLS policies allow users to update their own profiles.`,
+            error,
+          )
+          throw rlsError
+        }
+        
         // For PGRST204 errors, try to extract and disable the missing column before giving up
         if (code && code.toUpperCase() === 'PGRST204') {
           const missingColumn = extractMissingProfileColumn(error)
