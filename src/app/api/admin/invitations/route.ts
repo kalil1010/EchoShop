@@ -55,20 +55,48 @@ export async function GET(request: NextRequest) {
     const url = request.nextUrl
     const statusFilter = url.searchParams.get('status')?.toLowerCase()
 
+    // Query invitations first (can't use foreign key join since it references auth.users, not profiles)
     let query = supabase
       .from('admin_invitations')
-      .select('id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at, inviter:profiles!admin_invitations_invited_by_fkey(display_name, email)')
+      .select('id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at')
       .order('created_at', { ascending: false })
 
     if (statusFilter && ['pending', 'accepted', 'expired'].includes(statusFilter)) {
       query = query.eq('status', statusFilter)
     }
 
-    const { data, error } = await query
+    const { data: invitationsData, error } = await query
     if (error) throw error
 
-    const invitations = (data ?? []).map(mapInvitation)
-    return NextResponse.json({ invitations })
+    // Get unique inviter IDs
+    const inviterIds = [...new Set((invitationsData ?? []).map((inv) => inv.invited_by).filter(Boolean))]
+
+    // Fetch profiles for inviters
+    let inviterProfiles: Record<string, { display_name: string | null; email: string | null }> = {}
+    if (inviterIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, display_name, email')
+        .in('id', inviterIds)
+
+      if (profilesData) {
+        inviterProfiles = profilesData.reduce(
+          (acc, profile) => {
+            acc[profile.id] = { display_name: profile.display_name, email: profile.email }
+            return acc
+          },
+          {} as Record<string, { display_name: string | null; email: string | null }>,
+        )
+      }
+    }
+
+    // Map invitations with inviter data
+    const invitations = (invitationsData ?? []).map((inv) => ({
+      ...inv,
+      inviter: inviterProfiles[inv.invited_by] ?? null,
+    })) as InvitationRow[]
+
+    return NextResponse.json({ invitations: invitations.map(mapInvitation) })
   } catch (error) {
     const mapped = mapSupabaseError(error)
     if (mapped instanceof PermissionError) {
@@ -134,13 +162,24 @@ export async function POST(request: NextRequest) {
           status: 'pending',
           expires_at: expiresAtIso,
         })
-        .select(
-          'id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at, inviter:profiles!admin_invitations_invited_by_fkey(display_name, email)',
-        )
-        .maybeSingle<InvitationRow>()
+        .select('id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at')
+        .maybeSingle<Omit<InvitationRow, 'inviter'>>()
 
       if (error) throw error
-      responseRow = data
+      
+      // Fetch inviter profile separately
+      if (data) {
+        const { data: inviterProfile } = await supabase
+          .from('profiles')
+          .select('display_name, email')
+          .eq('id', profile.uid)
+          .maybeSingle<{ display_name: string | null; email: string | null }>()
+        
+        responseRow = {
+          ...data,
+          inviter: inviterProfile ?? null,
+        } as InvitationRow
+      }
     } else {
       if (existing.status === 'accepted') {
         return NextResponse.json(
@@ -159,13 +198,24 @@ export async function POST(request: NextRequest) {
           accepted_at: null,
         })
         .eq('id', existing.id)
-        .select(
-          'id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at, inviter:profiles!admin_invitations_invited_by_fkey(display_name, email)',
-        )
-        .maybeSingle<InvitationRow>()
+        .select('id, invited_email, invited_by, invitation_token, status, created_at, expires_at, accepted_at')
+        .maybeSingle<Omit<InvitationRow, 'inviter'>>()
 
       if (error) throw error
-      responseRow = data
+      
+      // Fetch inviter profile separately
+      if (data) {
+        const { data: inviterProfile } = await supabase
+          .from('profiles')
+          .select('display_name, email')
+          .eq('id', profile.uid)
+          .maybeSingle<{ display_name: string | null; email: string | null }>()
+        
+        responseRow = {
+          ...data,
+          inviter: inviterProfile ?? null,
+        } as InvitationRow
+      }
     }
 
     if (!responseRow) {

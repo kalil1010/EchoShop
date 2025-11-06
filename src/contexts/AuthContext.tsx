@@ -770,11 +770,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) {
-          console.warn('[AuthContext] Session error:', sessionError)
           const message = typeof sessionError.message === 'string' ? sessionError.message : ''
-          if (message.includes('Refresh Token') || message.includes('Invalid')) {
-            console.log('[AuthContext] Invalid token detected, clearing session')
-            await supabase.auth.signOut({ scope: 'local' })
+          const code = typeof (sessionError as { code?: string }).code === 'string' 
+            ? (sessionError as { code: string }).code 
+            : ''
+          
+          // Handle refresh token errors gracefully - these are expected when tokens expire
+          if (
+            message.includes('Refresh Token') || 
+            message.includes('Invalid') ||
+            code === 'refresh_token_not_found' ||
+            message.includes('refresh_token_not_found')
+          ) {
+            console.debug('[AuthContext] Refresh token invalid or expired, clearing session')
+            try {
+              await supabase.auth.signOut({ scope: 'local' })
+            } catch (signOutError) {
+              // Ignore signOut errors if token is already invalid
+            }
             void syncServerSession('SIGNED_OUT', null)
             if (isMounted) {
               setUser(null)
@@ -784,6 +797,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return
           }
+          // Only log non-token errors as warnings
+          console.warn('[AuthContext] Session error:', sessionError)
           throw sessionError
         }
         if (!isMounted) return
