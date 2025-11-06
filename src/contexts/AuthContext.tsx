@@ -406,27 +406,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (row: Partial<ProfileRow>, authUser: AuthUser, reason: string): Promise<void> => {
       if (!supabase) return
       let attempt = 0
-      const performUpsert = async () => {
+      const maxRetries = 10 // Increased to handle multiple missing columns
+      
+      const performUpsert = async (): Promise<number> => {
         attempt += 1
         const payload = filterProfilePayload(row)
         const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' })
         if (error) {
+          const code = getErrorCode(error)
+          const message = getErrorMessage(error)
+          
+          // Check if it's a missing column error
+          const missingColumn = extractMissingProfileColumn(error)
+          if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
+            console.warn(
+              `[AuthContext] Optional profile column "${missingColumn}" missing in Supabase schema. Retrying without it (attempt ${attempt}/${maxRetries}).`,
+            )
+            // If we disabled a column and have retries left, retry immediately
+            if (attempt < maxRetries && (code === 'PGRST204' || message.toLowerCase().includes('column'))) {
+              // Don't throw, let the retry mechanism handle it
+              throw error
+            }
+          }
+          
           console.error(
             `[AuthContext] Profile upsert attempt ${attempt} failed for ${authUser.uid} (${reason}).`,
             error,
           )
-          const missingColumn = extractMissingProfileColumn(error)
-          if (missingColumn && disableOptionalProfileColumn(missingColumn)) {
-            console.warn(
-              `[AuthContext] Optional profile column "${missingColumn}" missing in Supabase schema. Retrying without it.`,
-            )
-          }
           throw error
         }
         return attempt
       }
       try {
-        await withRetry(performUpsert, 2, 1500)
+        await withRetry(performUpsert, maxRetries - 1, 1500)
         console.debug(
           `[AuthContext] Profile upsert succeeded for ${authUser.uid} after ${attempt} attempt(s) (${reason}).`,
         )
