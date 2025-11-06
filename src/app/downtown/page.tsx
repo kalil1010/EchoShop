@@ -16,14 +16,25 @@ export default async function DowntownEntryPage() {
   } = await supabase.auth.getUser()
 
   if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle<{ role: string | null }>()
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle<{ role: string | null }>()
 
-    const role = normaliseRole(profile?.role)
-    redirect(getDefaultRouteForRole(role))
+      if (profileError) {
+        console.error('[downtown] Profile fetch error:', profileError)
+        // If profile doesn't exist or RLS blocks it, show login form
+        // The user can log in and create/update their profile
+      } else if (profile) {
+        const role = normaliseRole(profile.role)
+        redirect(getDefaultRouteForRole(role))
+      }
+    } catch (error) {
+      console.error('[downtown] Error checking user profile:', error)
+      // On error, show login form
+    }
   }
 
   return (
