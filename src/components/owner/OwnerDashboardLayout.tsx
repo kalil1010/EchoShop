@@ -93,7 +93,15 @@ const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): Own
   }
 }
 
-export default function OwnerDashboardLayout() {
+interface OwnerDashboardLayoutProps {
+  isLoading?: boolean
+  user?: { uid: string; role?: string } | null
+  userProfile?: { role?: string } | null
+}
+
+export default function OwnerDashboardLayout({
+  isLoading: externalLoading = false,
+}: OwnerDashboardLayoutProps = {}) {
   // ALL hooks must be called before any conditional returns (Rules of Hooks)
   const { roleMeta, logout, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -185,10 +193,10 @@ export default function OwnerDashboardLayout() {
     [],
   )
 
-  // Show loading state if auth is still loading
+  // Show loading state if auth is still loading or external loading is requested
   // roleMeta is always defined (computed in useMemo with fallbacks), so no need to check it
   // This must come AFTER all hooks are called
-  if (authLoading) {
+  if (authLoading || externalLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

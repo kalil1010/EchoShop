@@ -109,29 +109,20 @@ export default function OwnerDashboardPage() {
     }
   }, [user, userProfile, authLoading, router, toast])
 
-  // Show loading state or prevent rendering during redirect
-  // This must come AFTER all hooks are called
-  if (isLoading || authLoading || isRedirecting) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Only render dashboard if user has access and we're not redirecting
+  // Always render ErrorBoundary and OwnerDashboardLayout to ensure hooks are always called
+  // This prevents React error #300 during rapid auth state changes
+  // Pass loading/redirect state as props so the layout can handle it internally
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
         console.error('[owner-dashboard] Error caught by boundary:', error, errorInfo)
       }}
     >
-      <OwnerDashboardLayout>
-        {/* Existing dashboard content rendered inside the layout */}
-      </OwnerDashboardLayout>
+      <OwnerDashboardLayout
+        isLoading={isLoading || authLoading || isRedirecting}
+        user={user}
+        userProfile={userProfile}
+      />
     </ErrorBoundary>
   )
 }
