@@ -29,4 +29,126 @@ export async function GET() {
     await requireRole(routeClient, 'owner')
     
     // Use service client for queries (bypasses RLS for owner operations)
-      const supabase = createServiceClient()
+    const supabase = createServiceClient()
+
+    // Helper function to count profiles with optional role filter
+    const countProfiles = async (role?: string): Promise<number> => {
+      let query = supabase.from('profiles').select('id', { count: 'exact', head: true })
+      if (role) {
+        if (role === 'admin') {
+          query = query.in('role', ['owner', 'admin'])
+        } else {
+          query = query.eq('role', role)
+        }
+      }
+      const { count, error } = await query
+      if (error) throw error
+      return count ?? 0
+    }
+
+    // Helper function to count vendor requests with optional status filter
+    const countVendorRequests = async (status?: string): Promise<number> => {
+      let query = supabase.from('vendor_requests').select('id', { count: 'exact', head: true })
+      if (status) {
+        query = query.eq('status', status)
+      }
+      const { count, error } = await query
+      if (error) throw error
+      return count ?? 0
+    }
+
+    // Helper function to count vendor products with optional status filter
+    const countVendorProducts = async (status?: string): Promise<number> => {
+      let query = supabase.from('vendor_products').select('id', { count: 'exact', head: true })
+      if (status) {
+        query = query.eq('status', status)
+      }
+      const { count, error } = await query
+      if (error) throw error
+      return count ?? 0
+    }
+
+    // Execute all queries in parallel
+    const [
+      totalUsers,
+      totalVendors,
+      totalAdmins,
+      pendingRequests,
+      approvedRequests,
+      totalProducts,
+      activeProducts,
+      recentUsersResult,
+      recentRequestsResult,
+    ] = await Promise.all([
+      countProfiles(),
+      countProfiles('vendor'),
+      countProfiles('admin'),
+      countVendorRequests('pending'),
+      countVendorRequests('approved'),
+      countVendorProducts(),
+      countVendorProducts('active'),
+      supabase
+        .from('profiles')
+        .select('id, display_name, email, role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase
+        .from('vendor_requests')
+        .select('id, business_name, status, submitted_at')
+        .order('submitted_at', { ascending: false })
+        .limit(10),
+    ])
+
+    // Check for errors in recent queries
+    if (recentUsersResult.error) {
+      throw recentUsersResult.error
+    }
+    if (recentRequestsResult.error) {
+      throw recentRequestsResult.error
+    }
+
+    // Transform recent users data
+    const recentUsers: RecentItem[] = (recentUsersResult.data ?? []).map((row) => ({
+      id: row.id,
+      label: row.display_name ?? row.email ?? null,
+      created_at: toIso(row.created_at),
+      role: normaliseRole(row.role),
+    }))
+
+    // Transform recent vendor requests data
+    const recentVendorRequests: RecentItem[] = (recentRequestsResult.data ?? []).map((row) => ({
+      id: row.id,
+      label: row.business_name ?? null,
+      status: row.status ?? null,
+      created_at: toIso(row.submitted_at),
+    }))
+
+    return NextResponse.json({
+      metrics: {
+        totals: {
+          users: totalUsers,
+          vendors: totalVendors,
+          owners: totalAdmins,
+        },
+        vendorRequests: {
+          pending: pendingRequests,
+          approved: approvedRequests,
+        },
+        products: {
+          total: totalProducts,
+          active: activeProducts,
+        },
+      },
+      recentUsers,
+      recentVendorRequests,
+    })
+  } catch (error) {
+    const mapped = mapSupabaseError(error)
+    if (mapped instanceof PermissionError) {
+      const status = mapped.reason === 'auth' ? 401 : 403
+      return NextResponse.json({ error: mapped.message }, { status })
+    }
+    const message = mapped instanceof Error ? mapped.message : 'Unable to load analytics.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
