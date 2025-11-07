@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, Inbox, BarChart3, Users, LogOut } from 'lucide-react'
 
@@ -102,6 +102,8 @@ interface OwnerDashboardLayoutProps {
 export default function OwnerDashboardLayout({
   isLoading: externalLoading = false,
 }: OwnerDashboardLayoutProps = {}) {
+  // Ensure all hooks are called unconditionally at the top level
+  // This is critical to prevent React error #300 during rapid auth state changes
   // ALL hooks must be called before any conditional returns (Rules of Hooks)
   const { roleMeta, logout, loading: authLoading } = useAuth()
   const router = useRouter()

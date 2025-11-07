@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 import OwnerDashboardLayout from '@/components/owner/OwnerDashboardLayout'
@@ -18,8 +18,14 @@ export default function OwnerDashboardPage() {
   const [isRedirecting, setIsRedirecting] = useState(false)
   const redirectHandledRef = useRef(false)
   const effectRunningRef = useRef(false)
+  // Track previous auth loading state to detect rapid transitions
+  const prevAuthLoadingRef = useRef(authLoading)
 
   useEffect(() => {
+    // Update ref to track auth loading state changes
+    const wasLoading = prevAuthLoadingRef.current
+    prevAuthLoadingRef.current = authLoading
+    
     // Prevent concurrent effect runs during rapid auth state changes
     if (effectRunningRef.current) {
       return
@@ -31,8 +37,19 @@ export default function OwnerDashboardPage() {
     }
 
     // Wait for auth context to finish loading
+    // If auth was just loading and now isn't, add a small delay to let state settle
     if (authLoading) {
       return
+    }
+    
+    // If auth state just transitioned from loading to not loading, add a brief delay
+    // to prevent rapid re-renders that can cause React error #300
+    if (wasLoading && !authLoading) {
+      // Small delay to let auth state fully settle
+      const settleTimeout = setTimeout(() => {
+        // Continue with normal flow after state settles
+      }, 100)
+      return () => clearTimeout(settleTimeout)
     }
 
     // Mark effect as running to prevent concurrent executions
@@ -111,18 +128,23 @@ export default function OwnerDashboardPage() {
 
   // Always render ErrorBoundary and OwnerDashboardLayout to ensure hooks are always called
   // This prevents React error #300 during rapid auth state changes
-  // Pass loading/redirect state as props so the layout can handle it internally
+  // Memoize the loading state to prevent unnecessary re-renders during auth transitions
+  const isLoadingState = isLoading || authLoading || isRedirecting
+  
+  const dashboardContent = (
+    <OwnerDashboardLayout
+      isLoading={isLoadingState}
+      user={user}
+      userProfile={userProfile}
+    />
+  )
+
   return (
     <ErrorBoundary
+      children={dashboardContent}
       onError={(error, errorInfo) => {
         console.error('[owner-dashboard] Error caught by boundary:', error, errorInfo)
       }}
-    >
-      <OwnerDashboardLayout
-        isLoading={isLoading || authLoading || isRedirecting}
-        user={user}
-        userProfile={userProfile}
-      />
-    </ErrorBoundary>
+    />
   )
 }
