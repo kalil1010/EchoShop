@@ -38,7 +38,7 @@ export async function PATCH(
   try {
     // Use route client for authentication (has access to user session)
     const routeClient = createRouteClient()
-    const { user } = await requireRole(routeClient, 'admin')
+    const { user } = await requireRole(routeClient, 'owner')
     
     // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()

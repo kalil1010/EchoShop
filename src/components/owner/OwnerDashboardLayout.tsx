@@ -185,9 +185,10 @@ export default function OwnerDashboardLayout() {
     [],
   )
 
-  // Show loading state if auth is still loading or roleMeta is missing
+  // Show loading state if auth is still loading
+  // roleMeta is always defined (computed in useMemo with fallbacks), so no need to check it
   // This must come AFTER all hooks are called
-  if (authLoading || !roleMeta) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

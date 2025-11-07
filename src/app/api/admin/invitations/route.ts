@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   try {
     // Use route client for authentication (has access to user session)
     const routeClient = createRouteClient()
-    await requireRole(routeClient, 'admin')
+    await requireRole(routeClient, 'owner')
     
     // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
   try {
     // Use route client for authentication (has access to user session)
     const routeClient = createRouteClient()
-    const { profile } = await requireRole(routeClient, 'admin')
+    const { profile } = await requireRole(routeClient, 'owner')
     
     // Use service client for queries (bypasses RLS for admin operations)
     const supabase = createServiceClient()
