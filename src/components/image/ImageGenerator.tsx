@@ -35,7 +35,7 @@ const toFilename = (prompt: string, extension: string) => {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
-  const slug = normalized || 'zmoda-image'
+  const slug = normalized || 'echo-shop-image'
   return `${slug}.${extension}`
 }
 

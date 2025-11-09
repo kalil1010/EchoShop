@@ -303,7 +303,7 @@ const mapVendorProductToPiece = (product: VendorProduct): FashionPiece | null =>
     categories: ['Marketplace'],
     imageUrl,
     sourceUrl: '/marketplace',
-    store: `${vendorName} · ZMODA Marketplace`,
+    store: `${vendorName} · Echo Shop Marketplace`,
     price: formattedPrice,
     highlights,
   }

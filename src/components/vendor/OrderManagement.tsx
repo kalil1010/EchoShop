@@ -20,7 +20,7 @@ export default function OrderManagement() {
         </p>
         <p className="text-xs text-slate-500">
           This module is currently in planning. If you need manual support in the meantime, reach out
-          to the ZMODA team and we&apos;ll help coordinate order logistics for you.
+          to the Echo Shop team and we&apos;ll help coordinate order logistics for you.
         </p>
       </CardContent>
     </Card>

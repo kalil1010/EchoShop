@@ -7,8 +7,8 @@ import { getDefaultRouteForRole, getPortalAccess, normaliseRole } from '@/lib/ro
 import type { PortalDenial } from '@/lib/roles'
 
 export const metadata = {
-  title: 'Vendor Login | ZMODA AI',
-  description: 'Sign in to manage your ZMODA marketplace storefront.',
+  title: 'Vendor Login | Echo Shop',
+  description: 'Sign in to manage your Echo Shop marketplace storefront.',
 }
 
 export default async function VendorLoginPage() {

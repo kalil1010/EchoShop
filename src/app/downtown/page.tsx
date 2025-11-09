@@ -5,8 +5,8 @@ import { createRouteClient } from '@/lib/supabaseServer'
 import { getDefaultRouteForRole, normaliseRole } from '@/lib/roles'
 
 export const metadata = {
-  title: 'ZMODA Downtown Entry',
-  description: 'Secure access for verified ZMODA owners.',
+  title: 'Echo Shop Downtown Entry',
+  description: 'Secure access for verified Echo Shop owners.',
 }
 
 export default async function DowntownEntryPage() {

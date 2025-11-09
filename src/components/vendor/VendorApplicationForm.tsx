@@ -264,7 +264,7 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
                 onBlur={() => handleBlur('businessName')}
-                placeholder="ZMODA Boutique"
+                placeholder="Echo Shop Boutique"
                 autoComplete="organization"
                 required
                 className={getFieldError('businessName') ? 'border-red-500' : ''}

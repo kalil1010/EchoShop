@@ -35,7 +35,7 @@ export function FloatingAssistant() {
   const initialMessage = useMemo<AssistantMessage>(() => ({
     id: 'assistant-welcome',
     role: 'assistant',
-    text: 'Need help getting started with ZMODA? I can walk you through the tour, uploading closet items, or styling tips. Just type a question or use a quick prompt!',
+    text: 'Need help getting started with Echo Shop? I can walk you through the tour, uploading closet items, or styling tips. Just type a question or use a quick prompt!',
   }), [])
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export function FloatingAssistant() {
           <header className='flex items-center justify-between bg-gradient-to-r from-purple-600 to-fuchsia-600 px-4 py-3 text-white'>
             <div className='flex items-center gap-2'>
               <Sparkles className='h-4 w-4' />
-              <span className='text-sm font-semibold'>ZMODA Assistant</span>
+              <span className='text-sm font-semibold'>Echo Shop Assistant</span>
             </div>
             <button onClick={() => setIsOpen(false)} className='rounded-full p-1 transition hover:bg-white/20'>
               <X className='h-4 w-4' />

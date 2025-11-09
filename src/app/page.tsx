@@ -50,7 +50,7 @@ const primaryFeatures: Array<{
   },
   {
     icon: MessageCircle,
-    title: 'ZMODA AI Assistant',
+    title: 'Echo Shop Assistant',
     description: 'Ask questions, get styling tips, or take the guided tour any time.',
     href: '/chat',
     cta: 'Start Chatting',
@@ -190,7 +190,7 @@ export default function Home() {
           <span className='inline-flex items-center gap-2 rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-600'>
             <Sparkles className='h-3 w-3' /> New onboarding experience
           </span>
-          <h1 className='mt-4 text-4xl font-bold text-slate-900 md:text-5xl'>Style smarter with ZMODA AI.</h1>
+          <h1 className='mt-4 text-4xl font-bold text-slate-900 md:text-5xl'>Style smarter with Echo Shop.</h1>
           <p className='mt-4 max-w-xl text-base text-slate-600'>Discover outfits you love, organise your wardrobe, and master colour theory�all guided by an assistant that learns your vibe.</p>
           <div className='mt-6 flex flex-wrap items-center gap-3'>
             {!user ? (
@@ -269,7 +269,7 @@ export default function Home() {
       </section>
 
       <section className='mt-16 rounded-3xl bg-slate-900 px-6 py-12 text-white shadow-lg sm:px-12'>
-        <h2 className='text-3xl font-bold'>Why choose ZMODA AI?</h2>
+        <h2 className='text-3xl font-bold'>Why choose Echo Shop?</h2>
         <p className='mt-2 max-w-2xl text-sm text-slate-200'>Stylists, colour experts, and a smart assistant work together so you never run out of outfit ideas.</p>
         <div className='mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
           {benefits.map((benefit) => (
@@ -284,7 +284,7 @@ export default function Home() {
       {!user && (
         <section className='mt-16 space-y-4 rounded-3xl bg-gradient-to-br from-purple-600 via-fuchsia-600 to-purple-700 p-10 text-center text-white shadow-lg'>
           <h2 className='text-3xl font-bold'>Ready to transform your style?</h2>
-          <p className='text-lg text-white/80'>Join thousands of users who have already upgraded their daily looks with ZMODA.</p>
+          <p className='text-lg text-white/80'>Join thousands of users who have already upgraded their daily looks with Echo Shop.</p>
           <div className='flex flex-wrap justify-center gap-3'>
             <Link href='/auth'>
               <Button size='lg' variant='secondary'>

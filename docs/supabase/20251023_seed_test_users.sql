@@ -33,12 +33,12 @@ $$ language plpgsql security definer;
 do $$
 begin
   -- Admin (owner)
-  perform private.create_user('owner@zmoda.ai', 'password123', 'admin', 'ZMODA Owner');
+  perform private.create_user('owner@echoshop.ai', 'password123', 'admin', 'Echo Shop Owner');
 
   -- Vendor
-  perform private.create_user('vendor@zmoda.ai', 'password123', 'vendor', 'ZMODA Vendor');
+  perform private.create_user('vendor@echoshop.ai', 'password123', 'vendor', 'Echo Shop Vendor');
 
   -- User
-  perform private.create_user('user@zmoda.ai', 'password123', 'user', 'ZMODA User');
+  perform private.create_user('user@echoshop.ai', 'password123', 'user', 'Echo Shop User');
 end;
 $$;

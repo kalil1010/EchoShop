@@ -30,7 +30,7 @@ const DEFAULT_COUNTS: ReactionCounts = {
 
 function getSessionId() {
   if (typeof window === 'undefined') return undefined
-  const key = 'zmoda-feedback-session'
+  const key = 'echo-shop-feedback-session'
   let session = window.localStorage.getItem(key)
   if (!session) {
     const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)

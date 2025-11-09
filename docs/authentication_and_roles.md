@@ -1,6 +1,6 @@
 # Authentication and Roles
 
-This document provides an overview of the role-based authentication and authorization system in the ZMODA AI application.
+This document provides an overview of the role-based authentication and authorization system in the Echo Shop application.
 
 ## Overview
 
@@ -51,8 +51,8 @@ To assign a role to a user, you can update the `role` column for the correspondi
 
 The `docs/supabase/20251023_seed_test_users.sql` script can be used to seed the database with test users for each role. This script creates the following users:
 
-- `owner@zmoda.ai` (admin)
-- `vendor@zmoda.ai` (vendor)
-- `user@zmoda.ai` (user)
+- `owner@echoshop.ai` (admin)
+- `vendor@echoshop.ai` (vendor)
+- `user@echoshop.ai` (user)
 
 The password for all test users is `password123`.

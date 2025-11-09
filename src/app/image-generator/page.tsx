@@ -28,7 +28,7 @@ export default function ImageGeneratorPage() {
         <Card className="mx-auto max-w-md border-slate-200 shadow-sm">
           <CardContent className="space-y-3 p-6 text-center">
             <h2 className="text-xl font-semibold text-slate-900">Sign in required</h2>
-            <p className="text-slate-600">Create a free account to generate fashion images with ZMODA AI.</p>
+            <p className="text-slate-600">Create a free account to generate fashion images with Echo Shop.</p>
             <Link href="/auth">
               <Button>Go to sign in</Button>
             </Link>

@@ -16,8 +16,8 @@ const formatPrice = (price: number, currency: string) => {
 }
 
 export const metadata = {
-  title: 'Marketplace | ZMODA AI',
-  description: 'Discover fresh looks from verified ZMODA vendors and independent creators.',
+  title: 'Marketplace | Echo Shop',
+  description: 'Discover fresh looks from verified Echo Shop vendors and independent creators.',
 }
 
 export default async function MarketplacePage() {
@@ -63,7 +63,7 @@ export default async function MarketplacePage() {
       <section className="space-y-2 text-center md:text-left">
         <h1 className="text-3xl font-semibold text-foreground">Marketplace</h1>
         <p className="text-muted-foreground md:max-w-2xl">
-          Browse what independent designers and established brands are listing on ZMODA right now. Fresh drops, local
+          Browse what independent designers and established brands are listing on Echo Shop right now. Fresh drops, local
           talent, and AI-curated standouts updated daily.
         </p>
       </section>
@@ -80,7 +80,7 @@ export default async function MarketplacePage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => {
               const coverImage = product.gallery[0]?.url ?? product.primaryImageUrl
-              const vendorName = product.vendorName ?? 'ZMODA Vendor'
+              const vendorName = product.vendorName ?? 'Echo Shop Vendor'
 
               return (
                 <article key={product.id} className="group overflow-hidden rounded-lg border bg-card shadow-sm">

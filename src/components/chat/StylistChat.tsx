@@ -92,7 +92,7 @@ export function StylistChat() {
     const isKnown = firstName && firstName.toLowerCase() !== 'there'
     const base = isKnown ? firstName : 'there'
     const normalized = isKnown ? base.charAt(0).toUpperCase() + base.slice(1) : 'there'
-    return `Hi ${normalized}! I'm ZMODA AI, your personal fashion assistant. I can help with outfit ideas, styling tips, color coordination, and closet questions. What would you like to explore today?`
+    return `Hi ${normalized}! I'm Echo Shop, your personal fashion assistant. I can help with outfit ideas, styling tips, color coordination, and closet questions. What would you like to explore today?`
   }, [firstName])
 
   const [messages, setMessages] = useState<Message[]>(() => ([
@@ -307,17 +307,17 @@ export function StylistChat() {
     }
   }
 
-  const loadingCopy = loadingState === 'image' ? 'ZMODA AI is styling your look...' : 'ZMODA AI is thinking...'
+  const loadingCopy = loadingState === 'image' ? 'Echo Shop is styling your look...' : 'Echo Shop is thinking...'
 
   return (
     <Card className="flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center">
           <MessageCircle className="mr-2 h-5 w-5" />
-          ZMODA AI Chat
+          Echo Shop Chat
         </CardTitle>
         <CardDescription>
-          Get personalized fashion advice and styling tips from ZMODA AI
+          Get personalized fashion advice and styling tips from Echo Shop
         </CardDescription>
       </CardHeader>
 

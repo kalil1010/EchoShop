@@ -1,4 +1,4 @@
-﻿# ZMODA AI UX/UI Revamp Plan
+﻿# Echo Shop UX/UI Revamp Plan
 
 ## Goals
 - Make first-time experience welcoming and self-explanatory.
@@ -10,7 +10,7 @@
 ## Audience Snapshots
 | Persona | Needs | Pain Today |
 | --- | --- | --- |
-| New Visitor | Understand what ZMODA does in 30 seconds. | Hero copy dense, no guided path. |
+| New Visitor | Understand what Echo Shop does in 30 seconds. | Hero copy dense, no guided path. |
 | Returning Stylist | Jump straight to outfit building or closet upload. | Navigation labels long, actions buried. |
 | Fashion Enthusiast | Ongoing inspiration, wants quick tips. | Lacks persistent assistant or bite-sized guidance. |
 
@@ -25,7 +25,7 @@
 ```
 Step 1 Overlay
 +------------------------------------------+
-¦  ?? Welcome to ZMODA AI!                 ¦
+¦  ?? Welcome to Echo Shop!                 ¦
 ¦  [Start tour] (primary CTA)             ¦
 +------------------------------------------+
 ```
@@ -33,7 +33,7 @@ Step 1 Overlay
 - Steps target data attributes (`data-tour='hero-card-outfit'`).
 - Each step uses a translucent scrim with spotlight highlight.
 - Include animated GIF/MP4 for outfit recommendation in step 3.
-- Provide "Skip" and "Replay" actions stored in localStorage (`zmoda-tour-completed`).
+- Provide "Skip" and "Replay" actions stored in localStorage (`echo-shop-tour-completed`).
 
 ### 2. Homepage Layout (Desktop Wireframe)
 ```
@@ -44,7 +44,7 @@ Step 1 Overlay
 ¦  [Outfit Builder] [Digital Closet] [Color Analyzer] [AI Chat] ¦
 ¦  Each card: icon, 2-line copy, CTA chip (Try now ?)           ¦
 +---------------------------------------------------------------¦
-¦ How ZMODA    ¦ Nearby New Arrivals (carousel)                 ¦
+¦ How Echo Shop    ¦ Nearby New Arrivals (carousel)                 ¦
 ¦ Works (3     ¦                                                ¦
 ¦ illustrated  ¦                                                ¦
 ¦ steps)       ¦                                                ¦
@@ -55,7 +55,7 @@ Step 1 Overlay
 - Mobile collapses feature cards into horizontal scroll, steps stack vertically.
 
 ### 3. Persistent Assistant Widget
-- Floating button bottom-right: gradient pill "Need help with ZMODA?".
+- Floating button bottom-right: gradient pill "Need help with Echo Shop?".
 - On click, expands to mini chat (latest messages + quick prompts).
 - Powered by existing `/api/stylist-chat` with context set to onboarding hints.
 

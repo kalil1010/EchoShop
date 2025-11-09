@@ -225,7 +225,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       <CardHeader>
         <CardTitle>Create Account</CardTitle>
         <CardDescription>
-          Join ZMODA AI to get personalized fashion recommendations.
+          Join Echo Shop to get personalized fashion recommendations.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -286,7 +286,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           </div>
           
           <p className="text-sm text-muted-foreground">
-            Interested in selling on ZMODA Marketplace? Complete your account first, then visit the{' '}
+            Interested in selling on Echo Shop Marketplace? Complete your account first, then visit the{' '}
             <Link className="text-purple-600 hover:underline" href="/vendor/hub">
               Vendor Hub
             </Link>

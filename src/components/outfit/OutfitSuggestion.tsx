@@ -389,7 +389,7 @@ export function OutfitSuggestion() {
       : 'png'
     const anchor = document.createElement('a')
     anchor.href = downloadUrl
-    anchor.download = `zmoda-avatar-${Date.now()}.${extension}`
+    anchor.download = `echo-shop-avatar-${Date.now()}.${extension}`
     document.body.appendChild(anchor)
     anchor.click()
     document.body.removeChild(anchor)

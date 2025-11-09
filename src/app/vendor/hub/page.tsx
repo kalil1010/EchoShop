@@ -7,7 +7,7 @@ import { mapVendorRequestRow } from '@/lib/vendorRequests'
 import type { VendorRequest } from '@/types/vendor'
 
 export const metadata = {
-  title: 'Vendor Hub | ZMODA AI',
+  title: 'Vendor Hub | Echo Shop',
   description: 'Submit a marketplace vendor application or view your approval status.',
 }
 

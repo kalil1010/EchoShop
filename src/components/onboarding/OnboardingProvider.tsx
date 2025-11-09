@@ -41,7 +41,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       ]
       return {
         slug: 'vendor_portal_walkthrough',
-        storageKey: 'zmoda-tour-vendor-intro',
+        storageKey: 'echo-shop-tour-vendor-intro',
         steps: vendorSteps,
       }
     }
@@ -70,7 +70,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       ]
       return {
         slug: 'owner_console_walkthrough',
-        storageKey: 'zmoda-tour-owner-intro',
+        storageKey: 'echo-shop-tour-owner-intro',
         steps: ownerSteps,
       }
     }
@@ -96,7 +96,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       },
       {
         id: 'assistant-help',
-        title: 'Chat with ZMODA Assistant',
+        title: 'Chat with Echo Shop Assistant',
         description: 'Tap the assistant any time for a guided tour, styling tips, or troubleshooting help.',
         target: '[data-tour="floating-assistant"]',
       },
@@ -104,7 +104,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
     return {
       slug: 'customer_onboarding',
-      storageKey: 'zmoda-tour-customer-intro',
+      storageKey: 'echo-shop-tour-customer-intro',
       steps: userSteps,
     }
   }, [role, roleMeta])

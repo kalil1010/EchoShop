@@ -142,7 +142,7 @@ export function OwnerLoginForm() {
       <CardHeader>
         <CardTitle>Owner Login</CardTitle>
         <CardDescription>
-          Access to ZMODA Downtown is limited to verified owners.
+          Access to Echo Shop Downtown is limited to verified owners.
         </CardDescription>
       </CardHeader>
       <CardContent>

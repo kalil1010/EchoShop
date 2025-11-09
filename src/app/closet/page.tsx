@@ -60,7 +60,7 @@ export default function ClosetPage() {
             <h2 className="mt-1 text-lg font-semibold text-slate-900">Make the most of your closet</h2>
           </div>
           <ol className="space-y-3 text-sm text-slate-600">
-            <li><span className="font-semibold text-purple-600">1.</span> Upload a garment photo with good lighting - ZMODA auto-detects colors.</li>
+            <li><span className="font-semibold text-purple-600">1.</span> Upload a garment photo with good lighting - Echo Shop auto-detects colors.</li>
             <li><span className="font-semibold text-purple-600">2.</span> Add notes or tags so you can search by occasion later on.</li>
             <li><span className="font-semibold text-purple-600">3.</span> Save the generated palette to reuse when styling outfits.</li>
           </ol>

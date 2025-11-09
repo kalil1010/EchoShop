@@ -82,7 +82,7 @@ export function Footer() {
     <footer className="border-t bg-white">
       <div className="container mx-auto flex flex-col gap-4 px-4 py-6 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-slate-500">
-          <p className="font-medium text-slate-700">ZMODA AI</p>
+          <p className="font-medium text-slate-700">Echo Shop</p>
           <p>Empowering stylists and vendors with clever automation.</p>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
@@ -116,7 +116,7 @@ export function Footer() {
       ) : null}
       <div className="border-t bg-slate-100">
         <div className="container mx-auto flex flex-col gap-2 px-4 py-4 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
-          <p>© {new Date().getFullYear()} ZMODA Labs. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Echo Shop. All rights reserved.</p>
           <div className="flex flex-wrap gap-3">
             <Link href="/privacy" className="hover:text-slate-800">
               Privacy

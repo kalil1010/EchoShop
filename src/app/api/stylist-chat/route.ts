@@ -262,7 +262,7 @@ ${closetSummary.join('\n')}`
 ${onlineSummary.join('\n')}`
       : 'Online Store Highlights: None available.'
 
-    const stylistSystemPrompt = `You are ZMODA AI's friendly fashion stylist. Always respond with JSON exactly matching this structure (no extra prose):
+    const stylistSystemPrompt = `You are Echo Shop's friendly fashion stylist. Always respond with JSON exactly matching this structure (no extra prose):
 
 ${STRUCTURED_RESPONSE_SCHEMA}
 
@@ -281,7 +281,7 @@ When an inspirational image is useful, include these additional top-level fields
 - "caption": A one-sentence, friendly description suited for screen readers.
 - "imagePrompt": A vivid, single-paragraph description for an AI image generator that references garments, colours, setting, lighting, and camera mood.`
 
-    const assistantSystemPrompt = `You are the ZMODA AI onboarding assistant. Be brief, encouraging, and always guide the user to specific features. Prioritise:
+    const assistantSystemPrompt = `You are the Echo Shop onboarding assistant. Be brief, encouraging, and always guide the user to specific features. Prioritise:
 1. Explaining the four core features (Outfit Builder, Digital Closet, Color Analyzer, AI Chat).
 2. Letting the user know how to replay the guided tour or open the floating assistant.
 3. Providing actionable next steps (e.g., "Tap Add to Closet to upload your first item").

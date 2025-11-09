@@ -71,7 +71,7 @@ export function HelpSection() {
         </div>
         <div className='flex-1 rounded-2xl bg-slate-900/90 p-6 text-white shadow-lg'>
           <p className='text-sm font-semibold uppercase tracking-wide text-purple-200'>Quick start clip</p>
-          <h3 className='mt-2 text-xl font-semibold'>Walk through the ZMODA basics in 90 seconds</h3>
+          <h3 className='mt-2 text-xl font-semibold'>Walk through the Echo Shop basics in 90 seconds</h3>
           <div className='mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40'>
             {videoUrl ? (
               <video src={videoUrl} controls className='h-full w-full rounded-2xl'>
@@ -81,7 +81,7 @@ export function HelpSection() {
               <div className='flex h-48 items-center justify-center text-sm text-white/70'>Video coming soon</div>
             )}
           </div>
-          <p className='mt-4 text-xs text-white/70'>Need more help? Ping the assistant or email <a className='underline' href='mailto:support@zmodaai.com'>support@zmodaai.com</a>.</p>
+          <p className='mt-4 text-xs text-white/70'>Need more help? Ping the assistant or email <a className='underline' href='mailto:support@echoshop.ai'>support@echoshop.ai</a>.</p>
         </div>
       </div>
     </section>

@@ -107,7 +107,7 @@ export default function BusinessProfile() {
                 id="vendor-business-name"
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
-                placeholder="ZMODA Boutique"
+                placeholder="Echo Shop Boutique"
                 required
               />
             </div>

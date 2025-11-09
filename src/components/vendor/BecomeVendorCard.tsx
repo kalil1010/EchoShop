@@ -54,7 +54,7 @@ export default function BecomeVendorCard({ headline }: BecomeVendorCardProps) {
   return (
     <Card className="max-w-2xl">
       <CardHeader>
-        <CardTitle>{headline ?? 'Sell on ZMODA Marketplace'}</CardTitle>
+        <CardTitle>{headline ?? 'Sell on Echo Shop Marketplace'}</CardTitle>
         <CardDescription>
           Upload collections, highlight new arrivals, and reach style-conscious shoppers directly from your vendor
           dashboard.
@@ -64,7 +64,7 @@ export default function BecomeVendorCard({ headline }: BecomeVendorCardProps) {
         <ul className="list-inside list-disc text-sm text-muted-foreground">
           <li>Host unlimited listings with rich imagery and product storytelling.</li>
           <li>AI-powered moderation keeps your catalog compliant and brand-safe.</li>
-          <li>Products appear across the ZMODA marketplace and recommendation experiences.</li>
+          <li>Products appear across the Echo Shop marketplace and recommendation experiences.</li>
         </ul>
         <Button onClick={handleActivate} disabled={activating}>
           {activating ? 'Activating…' : 'Activate vendor account'}

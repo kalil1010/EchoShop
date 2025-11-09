@@ -14,7 +14,7 @@ import { GlobalErrorHandler } from '@/components/GlobalErrorHandler'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ZMODA AI - Your Personal Fashion Assistant',
+  title: 'Echo Shop - Your Personal Fashion Assistant',
   description: 'Get personalized outfit recommendations based on weather, occasion, and your personal style preferences.',
 }
 
