@@ -40,7 +40,8 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     }
   }, [])
 
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
+  const hasTurnstile = Boolean(turnstileSiteKey)
 
   const handleCaptchaSuccess = useCallback((token: string) => {
     setCaptchaToken(token)
@@ -327,7 +328,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             />
           </div>
 
-          {turnstileSiteKey && (
+          {hasTurnstile && (
             <div className="space-y-2">
               <div className="flex justify-center">
                 <Turnstile
@@ -360,7 +361,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           
           <Button 
             className="w-full" 
-            disabled={loading || googleLoading || (turnstileSiteKey && !captchaToken)} 
+            disabled={loading || googleLoading || (hasTurnstile && !captchaToken)} 
             type="submit"
           >
             {loading ? 'Creating account...' : 'Sign Up'}
