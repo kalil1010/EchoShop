@@ -95,12 +95,14 @@ const adaptAnalytics = (payload: OwnerAnalyticsResponse | null | undefined): Own
 
 interface OwnerDashboardLayoutProps {
   isLoading?: boolean
+  isRedirecting?: boolean
   user?: { uid: string; role?: string } | null
   userProfile?: { role?: string } | null
 }
 
 export default function OwnerDashboardLayout({
   isLoading: externalLoading = false,
+  isRedirecting: externalRedirecting = false,
 }: OwnerDashboardLayoutProps = {}) {
   // Ensure all hooks are called unconditionally at the top level
   // This is critical to prevent React error #300 during rapid auth state changes
@@ -145,9 +147,13 @@ export default function OwnerDashboardLayout({
     }
   }, [])
 
+  // Only fetch analytics when not loading, not redirecting, and auth is ready
+  // This prevents unnecessary API calls and state updates during auth transitions
   useEffect(() => {
-    fetchAnalytics()
-  }, [fetchAnalytics])
+    if (!externalLoading && !externalRedirecting && !authLoading) {
+      fetchAnalytics()
+    }
+  }, [fetchAnalytics, externalLoading, externalRedirecting, authLoading])
 
   const headerDescription = useMemo(() => {
     switch (activeTab) {
@@ -195,15 +201,17 @@ export default function OwnerDashboardLayout({
     [],
   )
 
-  // Show loading state if auth is still loading or external loading is requested
+  // Show loading/redirecting state if auth is still loading, external loading is requested, or redirecting
   // roleMeta is always defined (computed in useMemo with fallbacks), so no need to check it
-  // This must come AFTER all hooks are called
-  if (authLoading || externalLoading) {
+  // This must come AFTER all hooks are called to prevent React error #300
+  if (authLoading || externalLoading || externalRedirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
-          <p className="text-gray-600">Loading dashboard...</p>
+          <p className="text-gray-600">
+            {externalRedirecting ? 'Redirecting...' : 'Loading dashboard...'}
+          </p>
         </div>
       </div>
     )

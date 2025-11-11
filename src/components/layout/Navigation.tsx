@@ -48,13 +48,15 @@ export function Navigation() {
   }, []);
 
   const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
-  if (normalisedRole === 'owner') {
-    return null
-  }
-
+  
   // Filter nav items based on role
   // Vendors should only see: Home, Marketplace, Profile (no regular user services)
+  // Owners don't see navigation (they use the owner dashboard instead)
   const visibleNavItems = useMemo(() => {
+    // Owners don't see navigation - return empty array to maintain component structure
+    if (normalisedRole === 'owner') {
+      return []
+    }
     if (normalisedRole === 'vendor') {
       // Vendors only see: Home, Marketplace, Profile
       return navItems.filter((item) => 
@@ -75,8 +77,18 @@ export function Navigation() {
     }
   };
 
+  // CRITICAL: Always return the same component structure to prevent React error #300
+  // Never conditionally return different structures - always render the nav element
+  // For owners, hide it with CSS but keep the structure consistent
+  // This ensures hooks are always called in the same order, preventing React error #300
+  const isOwner = normalisedRole === 'owner'
+
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <nav 
+      className="bg-white shadow-sm border-b" 
+      style={isOwner ? { display: 'none' } : undefined}
+      aria-hidden={isOwner ? 'true' : undefined}
+    >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center space-x-2">

@@ -126,38 +126,28 @@ export default function OwnerDashboardPage() {
   }, [user, userProfile, authLoading, router, toast])
 
   // Memoize the loading state to prevent unnecessary re-renders
+  // Include !hasAccess in loading state so dashboard doesn't show until access is confirmed
   const isLoadingState = useMemo(() => {
-    return isLoading || authLoading || isRedirecting
-  }, [isLoading, authLoading, isRedirecting])
+    return isLoading || authLoading || isRedirecting || !hasAccess
+  }, [isLoading, authLoading, isRedirecting, hasAccess])
 
-  // Compute whether to show dashboard based on loading, access state, and redirect status
-  // Only show dashboard when we have access, are not loading, not redirecting, and have a user
-  const showDashboard = hasAccess && !isLoadingState && !isRedirecting && user && !authLoading
-
-  // Always render the same ErrorBoundary structure to prevent React error #300
-  // This ensures the component tree structure remains consistent across re-renders
+  // CRITICAL: Always render the exact same component structure to prevent React error #300
+  // React error #300 occurs when the component tree structure changes between renders,
+  // causing hooks to be called in different orders. By always rendering OwnerDashboardLayout
+  // (even when redirecting), we ensure hooks are always called in the same order.
+  // The layout component will handle showing loading/redirect states internally.
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
         console.error('[owner-dashboard] Error caught by boundary:', error, errorInfo)
       }}
     >
-      {showDashboard ? (
-        <OwnerDashboardLayout
-          isLoading={isLoadingState}
-          user={user}
-          userProfile={userProfile}
-        />
-      ) : (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4" />
-            <p className="text-gray-600">
-              {isRedirecting ? 'Redirecting...' : 'Loading dashboard...'}
-            </p>
-          </div>
-        </div>
-      )}
+      <OwnerDashboardLayout
+        isLoading={isLoadingState}
+        isRedirecting={isRedirecting}
+        user={user}
+        userProfile={userProfile}
+      />
     </ErrorBoundary>
   )
 }
