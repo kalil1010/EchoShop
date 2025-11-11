@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyWebhookSignature, extractSignature } from '@/lib/email/webhook-verification';
-import { sendEmail } from '@/lib/email/service';
+import { sendEmail, maskEmail } from '@/lib/email/service';
 import { getMagicLinkEmailTemplate } from '@/lib/email/templates';
+import { checkRateLimit } from '@/lib/email/rate-limiter';
 
 /**
  * Supabase Auth Hook: User Magic Link Requested
@@ -26,6 +27,14 @@ import { getMagicLinkEmailTemplate } from '@/lib/email/templates';
  */
 
 // Supabase Auth Hooks payload structure
+//
+// Supabase webhook token field mapping by version:
+// - Supabase v1.x / GoTrue v1.x: magic_link_token (standard)
+// - Supabase v2.x / GoTrue v2.x: token (generic field)
+// - Some configurations: magiclink_token (alternative naming, no underscore)
+//
+// This flexible approach ensures compatibility across different Supabase versions
+// and configuration setups. We check multiple field names to handle all cases.
 const MagicLinkRequestSchema = z.object({
   event: z.string().refine((val) => val === 'user_magic_link_requested', {
     message: 'Event must be user_magic_link_requested',
@@ -33,10 +42,10 @@ const MagicLinkRequestSchema = z.object({
   user: z.object({
     id: z.string(),
     email: z.string().email(),
-    // Token might be in different fields depending on Supabase version
-    magic_link_token: z.string().optional(),
-    token: z.string().optional(),
-    magiclink_token: z.string().optional(),
+    // Token field variations (handles multiple Supabase versions):
+    magic_link_token: z.string().optional(), // v1.x standard
+    token: z.string().optional(), // v2.x generic field
+    magiclink_token: z.string().optional(), // alternative naming (no underscore)
     magic_link_sent_at: z.string().optional(),
   }),
   timestamp: z.string().optional(),
@@ -87,6 +96,33 @@ export async function POST(request: NextRequest) {
 
     const { user } = validationResult.data;
     
+    // Rate limiting: Prevent email spam (10 emails per hour per user)
+    // Using user ID as identifier for rate limiting
+    const rateLimit = checkRateLimit(user.id, 10, 60 * 60 * 1000); // 10 requests per hour
+    if (!rateLimit.allowed) {
+      console.warn('[auth-hooks/send-magic-link] Rate limit exceeded', {
+        userId: user.id,
+        email: maskEmail(user.email),
+        remaining: rateLimit.remaining,
+        resetAt: new Date(rateLimit.resetAt).toISOString(),
+      });
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded',
+          message: 'Too many requests. Please try again later.',
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '10',
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            'X-RateLimit-Reset': rateLimit.resetAt.toString(),
+          },
+        }
+      );
+    }
+    
     // Extract token from various possible fields
     const token = user.magic_link_token || user.token || user.magiclink_token;
     if (!token) {
@@ -133,7 +169,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log('[auth-hooks/send-magic-link] Email sent successfully', {
       userId: user.id,
-      email: user.email,
+      email: maskEmail(user.email), // Mask email for privacy
       duration: `${duration}ms`,
       timestamp: new Date().toISOString(),
     });

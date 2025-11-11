@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyWebhookSignature, extractSignature } from '@/lib/email/webhook-verification';
-import { sendEmail } from '@/lib/email/service';
+import { sendEmail, maskEmail } from '@/lib/email/service';
 import { getPasswordResetEmailTemplate } from '@/lib/email/templates';
+import { checkRateLimit } from '@/lib/email/rate-limiter';
 
 /**
  * Supabase Auth Hook: User Password Reset Requested
@@ -26,6 +27,14 @@ import { getPasswordResetEmailTemplate } from '@/lib/email/templates';
  */
 
 // Supabase Auth Hooks payload structure
+//
+// Supabase webhook token field mapping by version:
+// - Supabase v1.x / GoTrue v1.x: recovery_token (standard)
+// - Supabase v2.x / GoTrue v2.x: token (generic field)
+// - Some configurations: password_reset_token (alternative naming)
+//
+// This flexible approach ensures compatibility across different Supabase versions
+// and configuration setups. We check multiple field names to handle all cases.
 const PasswordResetRequestSchema = z.object({
   event: z.string().refine((val) => val === 'user_password_reset_requested', {
     message: 'Event must be user_password_reset_requested',
@@ -33,10 +42,10 @@ const PasswordResetRequestSchema = z.object({
   user: z.object({
     id: z.string(),
     email: z.string().email(),
-    // Token might be in different fields depending on Supabase version
-    recovery_token: z.string().optional(),
-    token: z.string().optional(),
-    password_reset_token: z.string().optional(),
+    // Token field variations (handles multiple Supabase versions):
+    recovery_token: z.string().optional(), // v1.x standard
+    token: z.string().optional(), // v2.x generic field
+    password_reset_token: z.string().optional(), // alternative naming
     recovery_sent_at: z.string().optional(),
   }),
   timestamp: z.string().optional(),
@@ -87,6 +96,33 @@ export async function POST(request: NextRequest) {
 
     const { user } = validationResult.data;
     
+    // Rate limiting: Prevent email spam (10 emails per hour per user)
+    // Using user ID as identifier for rate limiting
+    const rateLimit = checkRateLimit(user.id, 10, 60 * 60 * 1000); // 10 requests per hour
+    if (!rateLimit.allowed) {
+      console.warn('[auth-hooks/send-password-reset] Rate limit exceeded', {
+        userId: user.id,
+        email: maskEmail(user.email),
+        remaining: rateLimit.remaining,
+        resetAt: new Date(rateLimit.resetAt).toISOString(),
+      });
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded',
+          message: 'Too many requests. Please try again later.',
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '10',
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            'X-RateLimit-Reset': rateLimit.resetAt.toString(),
+          },
+        }
+      );
+    }
+    
     // Extract token from various possible fields
     const token = user.recovery_token || user.token || user.password_reset_token;
     if (!token) {
@@ -133,7 +169,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log('[auth-hooks/send-password-reset] Email sent successfully', {
       userId: user.id,
-      email: user.email,
+      email: maskEmail(user.email), // Mask email for privacy
       duration: `${duration}ms`,
       timestamp: new Date().toISOString(),
     });

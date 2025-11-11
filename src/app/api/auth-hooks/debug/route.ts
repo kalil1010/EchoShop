@@ -4,11 +4,27 @@ import { NextRequest, NextResponse } from 'next/server';
  * Debug Endpoint for Auth Hooks
  * 
  * This endpoint logs the raw payload received from Supabase Auth Hooks
- * for debugging purposes. Should be disabled in production or protected.
+ * for debugging purposes. Disabled in production for security.
  * 
  * WARNING: This endpoint logs sensitive information. Use only for debugging.
  */
 export async function POST(request: NextRequest) {
+  // Disable debug endpoint in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Debug endpoint disabled in production' },
+      { status: 403 }
+    );
+  }
+
+  // Also check for explicit debug mode flag (allows disabling even in development)
+  if (process.env.ENABLE_DEBUG_ENDPOINT === 'false') {
+    return NextResponse.json(
+      { error: 'Debug endpoint is disabled' },
+      { status: 403 }
+    );
+  }
+
   try {
     const rawBody = await request.text();
     const headers = Object.fromEntries(request.headers.entries());

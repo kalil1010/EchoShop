@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyEmailConnection } from '@/lib/email/service';
+import { verifyEmailConnection, validateEmailConfiguration } from '@/lib/email/service';
 
 /**
  * Health Check Endpoint
@@ -9,24 +9,14 @@ import { verifyEmailConnection } from '@/lib/email/service';
  */
 export async function GET() {
   try {
-    // Check if required environment variables are set
-    const requiredEnvVars = {
-      ZOHO_EMAIL_FROM: process.env.ZOHO_EMAIL_FROM,
-      ZOHO_EMAIL_USER: process.env.ZOHO_EMAIL_USER,
-      ZOHO_EMAIL_PASSWORD: process.env.ZOHO_EMAIL_PASSWORD ? '***' : undefined,
-      SUPABASE_AUTH_HOOK_SECRET: process.env.SUPABASE_AUTH_HOOK_SECRET ? '***' : undefined,
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    };
-
-    const missingVars = Object.entries(requiredEnvVars)
-      .filter(([_, value]) => !value)
-      .map(([key]) => key);
+    // Validate email configuration using the validation function
+    const configValidation = validateEmailConfiguration();
 
     // Verify SMTP connection
     const smtpConnected = await verifyEmailConnection();
 
     const health = {
-      status: missingVars.length === 0 && smtpConnected ? 'healthy' : 'unhealthy',
+      status: configValidation.valid && smtpConnected ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
       services: {
         smtp: {
@@ -39,8 +29,8 @@ export async function GET() {
         },
       },
       environment: {
-        variablesConfigured: missingVars.length === 0,
-        missingVariables: missingVars,
+        variablesConfigured: configValidation.valid,
+        missingVariables: configValidation.errors,
       },
     };
 

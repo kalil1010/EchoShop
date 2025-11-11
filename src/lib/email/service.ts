@@ -82,9 +82,21 @@ async function sendEmailWithRetry(
     const transporter = createTransporter();
     const info = await transporter.sendMail(mailOptions);
     
+    // Mask email address in logs for privacy
+    let maskedTo = 'unknown';
+    if (typeof mailOptions.to === 'string') {
+      maskedTo = maskEmail(mailOptions.to);
+    } else if (Array.isArray(mailOptions.to)) {
+      maskedTo = mailOptions.to
+        .map(addr => typeof addr === 'string' ? maskEmail(addr) : maskEmail(addr.address || 'unknown'))
+        .join(', ');
+    } else if (mailOptions.to && typeof mailOptions.to === 'object' && 'address' in mailOptions.to) {
+      maskedTo = maskEmail(mailOptions.to.address);
+    }
+    
     console.log('[email-service] Email sent successfully:', {
       messageId: info.messageId,
-      to: mailOptions.to,
+      to: maskedTo,
       subject: mailOptions.subject,
       timestamp: new Date().toISOString(),
     });
@@ -92,9 +104,22 @@ async function sendEmailWithRetry(
     return { success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Mask email address in logs for privacy
+    let maskedTo = 'unknown';
+    if (typeof mailOptions.to === 'string') {
+      maskedTo = maskEmail(mailOptions.to);
+    } else if (Array.isArray(mailOptions.to)) {
+      maskedTo = mailOptions.to
+        .map(addr => typeof addr === 'string' ? maskEmail(addr) : maskEmail(addr.address || 'unknown'))
+        .join(', ');
+    } else if (mailOptions.to && typeof mailOptions.to === 'object' && 'address' in mailOptions.to) {
+      maskedTo = maskEmail(mailOptions.to.address);
+    }
+    
     console.error(`[email-service] Email send attempt ${retryCount + 1} failed:`, {
       error: errorMessage,
-      to: mailOptions.to,
+      to: maskedTo,
       subject: mailOptions.subject,
       timestamp: new Date().toISOString(),
     });
@@ -138,6 +163,14 @@ export async function sendEmail(options: {
     subject: options.subject,
     html: options.html,
     text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+    headers: {
+      // RFC 8058: List-Unsubscribe header for better deliverability
+      // Even for transactional emails, this improves spam score
+      'List-Unsubscribe': `<${getAppBaseUrl()}/unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      // X-Auto-Response-Suppress header to prevent auto-responders
+      'X-Auto-Response-Suppress': 'All',
+    },
   };
 
   return sendEmailWithRetry(mailOptions);
@@ -148,5 +181,63 @@ export async function sendEmail(options: {
  */
 export function getAppBaseUrl(): string {
   return APP_BASE_URL;
+}
+
+/**
+ * Validate email service configuration
+ * 
+ * Checks that all required environment variables are set.
+ * Call this during app startup to catch configuration errors early.
+ * 
+ * @returns Validation result with list of missing variables
+ */
+export function validateEmailConfiguration(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!process.env.ZOHO_EMAIL_FROM) {
+    errors.push('ZOHO_EMAIL_FROM');
+  }
+
+  if (!process.env.ZOHO_EMAIL_USER) {
+    errors.push('ZOHO_EMAIL_USER');
+  }
+
+  if (!process.env.ZOHO_EMAIL_PASSWORD) {
+    errors.push('ZOHO_EMAIL_PASSWORD');
+  }
+
+  if (!process.env.SUPABASE_AUTH_HOOK_SECRET) {
+    errors.push('SUPABASE_AUTH_HOOK_SECRET');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Mask email address for logging
+ * 
+ * Masks the local part of an email address to protect user privacy in logs.
+ * Example: user@example.com -> us***@example.com
+ * 
+ * @param email - Email address to mask
+ * @returns Masked email address
+ */
+export function maskEmail(email: string): string {
+  if (!email || !email.includes('@')) {
+    return email;
+  }
+
+  const [localPart, domain] = email.split('@');
+  
+  if (localPart.length <= 2) {
+    return `${localPart[0]}***@${domain}`;
+  }
+
+  // Show first 2 characters, mask the rest
+  const masked = localPart.substring(0, 2) + '***';
+  return `${masked}@${domain}`;
 }
 
