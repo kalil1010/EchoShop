@@ -50,14 +50,24 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setTurnstileLoadError(false)
   }, [])
 
-  const handleCaptchaError = useCallback(() => {
+  const handleCaptchaError = useCallback((error?: string) => {
     setCaptchaToken(null)
     setCaptchaError(true)
     
     // Check browser console for Turnstile errors
-    // The "invalid-input-secret" error appears in console, not in callback
-    // We'll detect it by checking if the error persists and widget doesn't load
-    console.error('Turnstile CAPTCHA error: Check browser console for details')
+    // Error 400020 typically means:
+    // - Invalid site key
+    // - Domain not in allowed domains list
+    // - Site key from different account
+    // - Site key disabled/revoked
+    console.error('Turnstile CAPTCHA error:', error || 'Check browser console for details')
+    console.error('Common causes of Turnstile errors:')
+    console.error('1. Site key is invalid or from different account')
+    console.error('2. Domain not in allowed domains list in Cloudflare')
+    console.error('3. Site key and secret key mismatch in Supabase')
+    console.error('4. Site key format is incorrect')
+    console.error('5. Turnstile site is disabled in Cloudflare')
+    console.error('See docs/TURNSTILE_ERROR_400020_FIX.md for troubleshooting')
     
     // Set a flag that might indicate configuration issues
     // This will be cleared on successful captcha completion
@@ -394,11 +404,42 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
                 />
               </div>
               {captchaError && (
-                <p className="text-sm text-red-600 text-center">
-                  {turnstileLoadError 
-                    ? 'CAPTCHA configuration error. Please verify your Turnstile site key matches the secret key in Supabase.'
-                    : 'CAPTCHA verification failed. Please try again.'}
-                </p>
+                <div className="text-sm text-red-600 text-center space-y-1">
+                  <p>
+                    {turnstileLoadError 
+                      ? 'CAPTCHA configuration error (Error 400020). This usually means:'
+                      : 'CAPTCHA verification failed. Please try again.'}
+                  </p>
+                  {turnstileLoadError && (
+                    <ul className="text-xs text-left list-disc list-inside mt-2 space-y-1">
+                      <li>Domain not in allowed domains list in Cloudflare Turnstile</li>
+                      <li>Site key is invalid or from a different account</li>
+                      <li>Site key and secret key mismatch in Supabase</li>
+                      <li>Site key format is incorrect</li>
+                    </ul>
+                  )}
+                  <p className="text-xs mt-2">
+                    Check browser console for details. See{' '}
+                    <a 
+                      href="/docs/TURNSTILE_ERROR_400020_FIX.md" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      troubleshooting guide
+                    </a>
+                    {' '}or use{' '}
+                    <a 
+                      href="/api/turnstile-diagnostic" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      diagnostic endpoint
+                    </a>
+                    .
+                  </p>
+                </div>
               )}
             </div>
           )}
