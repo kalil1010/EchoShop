@@ -1001,6 +1001,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
+        const status = error.status ?? 0
+        
+        // Handle CAPTCHA-related errors
+        if (status === 400 && (message.includes('captcha') || message.includes('turnstile') || message.includes('invalid-input-secret'))) {
+          throw new Error(
+            'CAPTCHA verification failed. Please refresh the page and complete the CAPTCHA again. If the problem persists, check your Turnstile configuration.',
+          )
+        }
+        
         if (message.includes('email logins are disabled')) {
           throw new Error(
             'Email/password sign-ins are disabled for this account. Please use the Google option instead.',
@@ -1009,6 +1018,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (message.includes('invalid login credentials')) {
           throw new Error('The email or password you entered is incorrect.')
         }
+        
+        // Provide more context for 400 errors
+        if (status === 400) {
+          console.error('Supabase auth error:', { message, status, error })
+          throw new Error(
+            `Authentication failed: ${error.message || 'Invalid request. Please check your credentials and try again.'}`,
+          )
+        }
+        
         throw error
       }
 
