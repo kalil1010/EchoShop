@@ -1020,11 +1020,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
         const status = error.status ?? 0
+        const errorCode = (error as { code?: string; error?: string; error_description?: string }).code
+        const errorDescription = (error as { error_description?: string }).error_description
+        
+        // Log full error details for debugging
+        console.error('[AuthContext] Supabase sign-in error:', {
+          status,
+          message: error.message,
+          code: errorCode,
+          description: errorDescription,
+          error: error,
+          hasCaptchaToken: !!captchaToken,
+        })
         
         // Handle CAPTCHA-related errors
-        if (status === 400 && (message.includes('captcha') || message.includes('turnstile') || message.includes('invalid-input-secret'))) {
+        if (
+          status === 400 &&
+          (message.includes('captcha') ||
+            message.includes('turnstile') ||
+            message.includes('invalid-input-secret') ||
+            message.includes('captcha_token') ||
+            errorDescription?.toLowerCase().includes('captcha') ||
+            errorDescription?.toLowerCase().includes('turnstile'))
+        ) {
           throw new Error(
-            'CAPTCHA verification failed. Please refresh the page and complete the CAPTCHA again. If the problem persists, check your Turnstile configuration.',
+            `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
           )
         }
         
@@ -1033,15 +1053,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'Email/password sign-ins are disabled for this account. Please use the Google option instead.',
           )
         }
-        if (message.includes('invalid login credentials')) {
+        if (message.includes('invalid login credentials') || message.includes('invalid password') || message.includes('invalid email')) {
           throw new Error('The email or password you entered is incorrect.')
         }
         
         // Provide more context for 400 errors
         if (status === 400) {
-          console.error('Supabase auth error:', { message, status, error })
+          const detailedMessage = errorDescription || error.message || 'Invalid request'
           throw new Error(
-            `Authentication failed: ${error.message || 'Invalid request. Please check your credentials and try again.'}`,
+            `Authentication failed: ${detailedMessage}. ${errorCode ? `Error code: ${errorCode}` : ''}`,
           )
         }
         
@@ -1141,19 +1161,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
         const status = error.status ?? 0
+        const errorCode = (error as { code?: string; error?: string; error_description?: string }).code
+        const errorDescription = (error as { error_description?: string }).error_description
+        
+        // Log full error details for debugging
+        console.error('[AuthContext] Supabase sign-up error:', {
+          status,
+          message: error.message,
+          code: errorCode,
+          description: errorDescription,
+          error: error,
+          hasCaptchaToken: !!captchaToken,
+        })
         
         // Handle CAPTCHA-related errors
-        if (status === 400 && (message.includes('captcha') || message.includes('turnstile') || message.includes('invalid-input-secret'))) {
+        if (
+          status === 400 &&
+          (message.includes('captcha') ||
+            message.includes('turnstile') ||
+            message.includes('invalid-input-secret') ||
+            message.includes('captcha_token') ||
+            errorDescription?.toLowerCase().includes('captcha') ||
+            errorDescription?.toLowerCase().includes('turnstile'))
+        ) {
           throw new Error(
-            'CAPTCHA verification failed. Please refresh the page and complete the CAPTCHA again. If the problem persists, check your Turnstile configuration in Supabase.',
+            `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
           )
         }
         
         // Provide more context for 400 errors
         if (status === 400) {
-          console.error('Supabase sign-up error:', { message, status, error })
+          const detailedMessage = errorDescription || error.message || 'Invalid request'
           throw new Error(
-            `Sign-up failed: ${error.message || 'Invalid request. Please check your information and try again.'}`,
+            `Sign-up failed: ${detailedMessage}. ${errorCode ? `Error code: ${errorCode}` : ''}`,
           )
         }
         
