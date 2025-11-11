@@ -17,30 +17,42 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://challenges.cloudflare.com/turnstile/v0/api.js",
-      "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+      // Scripts: Allow Turnstile, Next.js, and inline scripts
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://*.cloudflare.com",
+      // Styles: Allow Turnstile and inline styles
+      "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.cloudflare.com",
+      // Images: Allow all HTTPS images (needed for Turnstile and user content)
       "img-src 'self' data: https: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co https://*.supabase.in https://challenges.cloudflare.com",
-      "frame-src 'self' https://challenges.cloudflare.com",
-      "worker-src 'self' blob:",
+      // Fonts: Allow self and data URIs
+      "font-src 'self' data: https:",
+      // Connect: Allow Supabase, Cloudflare challenge platform, and Turnstile API
+      "connect-src 'self' https://*.supabase.co https://*.supabase.in https://challenges.cloudflare.com https://*.cloudflare.com https://challenges.cloudflare.com/cdn-cgi/challenge-platform/",
+      // Frames: Allow Turnstile widgets and Cloudflare challenge platform
+      "frame-src 'self' https://challenges.cloudflare.com https://*.cloudflare.com",
+      // Workers: Allow blob workers for Turnstile
+      "worker-src 'self' blob: https://challenges.cloudflare.com",
+      // Objects: Block all objects
       "object-src 'none'",
+      // Base URI: Restrict to self
       "base-uri 'self'",
-      "form-action 'self'",
+      // Form actions: Allow self and Supabase
+      "form-action 'self' https://*.supabase.co",
+      // Frame ancestors: Block all framing
       "frame-ancestors 'none'",
-      "upgrade-insecure-requests",
+      // Media: Allow media from self and Cloudflare
+      "media-src 'self' https://*.cloudflare.com",
     ].join('; '),
   },
-  // Limit powerful APIs by default; extend per your needs
+  // Permissions Policy: Allow Turnstile to use autoplay and fullscreen
   {
     key: 'Permissions-Policy',
     value: [
       "camera=()",
       "microphone=()",
       "geolocation=()",
-      "fullscreen=(self)",
+      "fullscreen=(self https://challenges.cloudflare.com)",
       "payment=()",
-      "autoplay=(self)",
+      "autoplay=(self https://challenges.cloudflare.com)",
     ].join(', '),
   },
   // HSTS: only effective over HTTPS; keep includeSubDomains/preload if you own the domain

@@ -80,7 +80,14 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
   const handleCaptchaExpire = useCallback(() => {
     setCaptchaToken(null)
-  }, [])
+    console.warn('Turnstile CAPTCHA token expired - user will need to complete it again')
+    // Show a subtle notification that CAPTCHA expired
+    toast({
+      variant: 'info',
+      title: 'CAPTCHA expired',
+      description: 'Please complete the CAPTCHA verification again.',
+    })
+  }, [toast])
 
   const resetCaptcha = useCallback(() => {
     setCaptchaToken(null)
@@ -125,6 +132,15 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     setLoading(true)
 
     try {
+      // Log CAPTCHA token status for debugging (don't log the actual token for security)
+      if (hasTurnstile) {
+        console.log('Sign-in attempt with CAPTCHA:', {
+          hasToken: !!captchaToken,
+          tokenLength: captchaToken?.length || 0,
+          tokenPrefix: captchaToken?.substring(0, 10) || 'none',
+        })
+      }
+      
       const result = await signIn(trimmedEmail, trimmedPassword, captchaToken || undefined)
       const { profile, profileStatus, profileIssueMessage, isProfileFallback } = result
       const roleMeta = getRoleMeta(profile.role)

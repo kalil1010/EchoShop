@@ -996,14 +996,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Build sign-in request with CAPTCHA token nested in options if provided
       // Type assertion needed because Supabase types may not include captchaToken in options
       // Supabase will validate the CAPTCHA token server-side using the secret key configured in the dashboard
+      const signInOptions = captchaToken
+        ? ({
+            captchaToken,
+          } as Parameters<typeof supabase.auth.signInWithPassword>[0]['options'] & {
+            captchaToken?: string
+          })
+        : undefined
+
+      // Log for debugging (don't log the actual token)
+      if (captchaToken) {
+        console.log('[AuthContext] Signing in with CAPTCHA token:', {
+          tokenLength: captchaToken.length,
+          tokenPrefix: captchaToken.substring(0, 10),
+        })
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: captchaToken
-          ? ({ captchaToken } as Parameters<typeof supabase.auth.signInWithPassword>[0]['options'] & {
-              captchaToken?: string
-            })
-          : undefined,
+        options: signInOptions,
       })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
