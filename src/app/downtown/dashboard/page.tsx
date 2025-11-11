@@ -34,13 +34,19 @@ export default function OwnerDashboardPage() {
     }
 
     // If no user after auth has loaded, redirect to login immediately
+    // Use a small delay to ensure auth state has fully cleared after logout
     if (!user) {
       console.debug('[owner-dashboard] No user found after auth load, redirecting to login')
       setIsRedirecting(true)
       setIsLoading(false)
       setHasAccess(false)
       lastCheckedUserIdRef.current = null
-      router.replace('/downtown')
+      
+      // Use a timeout to prevent rapid redirects and ensure auth state is cleared
+      // Redirect to /downtown (login page) instead of home to allow re-login
+      timeoutRef.current = setTimeout(() => {
+        router.replace('/downtown')
+      }, 100)
       return
     }
 

@@ -16,6 +16,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = createRouteHandlerClient({ cookies })
+  const response = NextResponse.json({ success: true })
 
   try {
     switch (payload.event) {
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
         }
         break
       case 'SIGNED_OUT':
+        // Sign out from Supabase (clears session and cookies server-side)
+        // This will automatically clear all Supabase-related cookies
         await supabase.auth.signOut()
         break
       default:
@@ -36,5 +39,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Session sync failed' }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true })
+  return response
 }

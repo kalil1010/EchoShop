@@ -118,14 +118,27 @@ export default function OwnerDashboardLayout({
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true)
     try {
+      // Wait for logout to complete (including server session clearing)
       await logout()
-      router.push('/downtown')
+      
+      // Small delay to ensure all state is cleared and server has processed the logout
+      // This prevents redirect loops caused by stale session data
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Redirect to home page after logout, not back to /downtown
+      // This prevents redirect loops and allows the user to access the main site
+      // Use window.location.href for a full page reload to clear any stale state
+      // This ensures a clean state and prevents any React state from persisting
+      window.location.href = '/'
     } catch (error) {
       console.error('Logout failed:', error)
-    } finally {
-      setIsLoggingOut(false)
+      // Even if logout fails, try to redirect to prevent being stuck
+      // Clear any remaining state and do a hard redirect
+      window.location.href = '/'
     }
-  }, [logout, router])
+    // Note: We don't set setIsLoggingOut(false) here because we're doing a full page reload
+    // The component will unmount before this state update would matter
+  }, [logout])
 
   const fetchAnalytics = useCallback(async () => {
     setAnalyticsLoading(true)

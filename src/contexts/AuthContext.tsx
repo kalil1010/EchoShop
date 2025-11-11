@@ -1242,10 +1242,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     if (!supabase) throw new Error('Supabase is not properly configured')
     try {
+      // Clear client-side state first to prevent UI flicker
+      setSession(null)
+      setUser(null)
+      setUserProfile(null)
+      resetProfileState()
+      
+      // Then sign out from Supabase (clears client-side auth)
       const { data } = await supabase.auth.getSession()
       if (data.session) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
+      }
+      
+      // Finally, sync the logout to server to clear server-side session
+      // Wait for this to complete to ensure server session is cleared before redirect
+      try {
+        await syncServerSession('SIGNED_OUT', null)
+      } catch (syncError) {
+        // Log but don't throw - server session clearing is best effort
+        // The client-side logout is more important
+        console.warn('[AuthContext] Failed to sync logout to server:', syncError)
       }
     } catch (error) {
       const tokenError =
@@ -1255,14 +1272,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         typeof (error as { message?: string }).message === 'string' &&
         (error as { message: string }).message.includes('Refresh Token Not Found')
       if (!tokenError) {
+        // Even if logout fails, clear local state
+        setSession(null)
+        setUser(null)
+        setUserProfile(null)
+        resetProfileState()
         throw error
       }
     }
-    void syncServerSession('SIGNED_OUT', null)
-    setSession(null)
-    setUser(null)
-    setUserProfile(null)
-    resetProfileState()
   }, [supabase, resetProfileState])
 
   const updateUserProfile = useCallback(

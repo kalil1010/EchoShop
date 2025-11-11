@@ -12,12 +12,15 @@ const isDowntownPath = (pathname: string | null) => {
 }
 
 export function OwnerPortalRedirect() {
-  const { role, loading, profileStatus } = useAuth()
+  const { role, loading, profileStatus, user } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
+    // Don't redirect if auth is loading or if user is not logged in
+    // This prevents redirects during logout when user becomes null
     if (loading) return
+    if (!user) return
     if (role !== 'owner') return
     if (isDowntownPath(pathname)) return
 
@@ -27,7 +30,7 @@ export function OwnerPortalRedirect() {
     }
 
     router.replace(getDefaultRouteForRole(role))
-  }, [loading, role, profileStatus, pathname, router])
+  }, [loading, role, profileStatus, pathname, router, user])
 
   return null
 }

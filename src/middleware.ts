@@ -190,6 +190,7 @@ export async function middleware(req: NextRequest) {
       pathname === '/terms' ||
       pathname === '/privacy' ||
       pathname === '/vendor/login' ||
+      pathname === '/downtown' || // Allow /downtown (login page) for unauthenticated users
       // Public API routes that don't require authentication
       pathname.startsWith('/api/help') ||
       pathname.startsWith('/api/feedback') ||
