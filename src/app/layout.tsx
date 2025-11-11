@@ -16,6 +16,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Echo Shop - Your Personal Fashion Assistant',
   description: 'Get personalized outfit recommendations based on weather, occasion, and your personal style preferences.',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
 
 export default function RootLayout({

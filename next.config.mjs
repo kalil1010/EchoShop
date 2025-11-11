@@ -44,15 +44,17 @@ const securityHeaders = [
     ].join('; '),
   },
   // Permissions Policy: Allow Turnstile to use autoplay and fullscreen
+  // Note: URLs in allowlists must be quoted. Using * for fullscreen/autoplay since
+  // Turnstile runs in an iframe and needs these permissions
   {
     key: 'Permissions-Policy',
     value: [
       "camera=()",
       "microphone=()",
       "geolocation=()",
-      "fullscreen=(self https://challenges.cloudflare.com)",
+      "fullscreen=*",
       "payment=()",
-      "autoplay=(self https://challenges.cloudflare.com)",
+      "autoplay=*",
     ].join(', '),
   },
   // HSTS: only effective over HTTPS; keep includeSubDomains/preload if you own the domain
