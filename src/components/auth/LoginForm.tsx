@@ -83,7 +83,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     console.warn('Turnstile CAPTCHA token expired - user will need to complete it again')
     // Show a subtle notification that CAPTCHA expired
     toast({
-      variant: 'info',
+      variant: 'warning',
       title: 'CAPTCHA expired',
       description: 'Please complete the CAPTCHA verification again.',
     })
