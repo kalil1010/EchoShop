@@ -988,22 +988,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Supabase is not properly configured')
       }
 
-      // Build sign-in options with CAPTCHA token if provided
-      const signInOptions: {
-        email: string
-        password: string
-        captchaToken?: string
-      } = {
+      // Build sign-in request with CAPTCHA token nested in options if provided
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      }
-
-      // Include CAPTCHA token if provided
-      if (captchaToken) {
-        signInOptions.captchaToken = captchaToken
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword(signInOptions)
+        options: captchaToken ? { captchaToken } : undefined,
+      })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
         if (message.includes('email logins are disabled')) {
