@@ -1043,6 +1043,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             errorDescription?.toLowerCase().includes('captcha') ||
             errorDescription?.toLowerCase().includes('turnstile'))
         ) {
+          // Provide specific error message for invalid-input-secret
+          if (message.includes('invalid-input-secret') || errorDescription?.toLowerCase().includes('invalid-input-secret')) {
+            throw new Error(
+              'CAPTCHA configuration error: The Turnstile Secret Key in Supabase Dashboard is missing, incorrect, or doesn\'t match your Site Key. Please verify: 1) Secret Key is set in Supabase (Authentication → Settings → CAPTCHA Protection), 2) Both keys are from the same Turnstile site in Cloudflare, 3) No extra spaces in the keys. See docs/FIX_INVALID_INPUT_SECRET.md for detailed instructions.',
+            )
+          }
           throw new Error(
             `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
           )
@@ -1184,6 +1190,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             errorDescription?.toLowerCase().includes('captcha') ||
             errorDescription?.toLowerCase().includes('turnstile'))
         ) {
+          // Provide specific error message for invalid-input-secret
+          if (message.includes('invalid-input-secret') || errorDescription?.toLowerCase().includes('invalid-input-secret')) {
+            throw new Error(
+              'CAPTCHA configuration error: The Turnstile Secret Key in Supabase Dashboard is missing, incorrect, or doesn\'t match your Site Key. Please verify: 1) Secret Key is set in Supabase (Authentication → Settings → CAPTCHA Protection), 2) Both keys are from the same Turnstile site in Cloudflare, 3) No extra spaces in the keys. See docs/FIX_INVALID_INPUT_SECRET.md for detailed instructions.',
+            )
+          }
           throw new Error(
             `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
           )
