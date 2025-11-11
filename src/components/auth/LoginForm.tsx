@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { getDefaultRouteForRole, getRoleMeta, getPortalAccess, normaliseRole } from '@/lib/roles'
 import { AccessDeniedBanner } from './AccessDeniedBanner'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 
 interface LoginFormProps {
   onToggleMode: () => void
@@ -20,6 +21,9 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaError, setCaptchaError] = useState(false)
+  const turnstileRef = useRef<TurnstileInstance>(null)
   const { signIn } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -50,6 +54,29 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     }
   }, [])
 
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
+  const hasTurnstile = Boolean(turnstileSiteKey)
+
+  const handleCaptchaSuccess = useCallback((token: string) => {
+    setCaptchaToken(token)
+    setCaptchaError(false)
+  }, [])
+
+  const handleCaptchaError = useCallback(() => {
+    setCaptchaToken(null)
+    setCaptchaError(true)
+  }, [])
+
+  const handleCaptchaExpire = useCallback(() => {
+    setCaptchaToken(null)
+  }, [])
+
+  const resetCaptcha = useCallback(() => {
+    setCaptchaToken(null)
+    setCaptchaError(false)
+    turnstileRef.current?.reset()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedEmail = email.trim().toLowerCase()
@@ -65,10 +92,21 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       return
     }
 
+    // Validate CAPTCHA token if Turnstile is enabled
+    if (hasTurnstile && !captchaToken) {
+      toast({ 
+        variant: 'error', 
+        title: 'CAPTCHA required', 
+        description: 'Please complete the CAPTCHA verification before signing in.' 
+      })
+      setCaptchaError(true)
+      return
+    }
+
     setLoading(true)
 
     try {
-      const result = await signIn(trimmedEmail, trimmedPassword)
+      const result = await signIn(trimmedEmail, trimmedPassword, captchaToken || undefined)
       const { profile, profileStatus, profileIssueMessage, isProfileFallback } = result
       const roleMeta = getRoleMeta(profile.role)
       const destination = getDefaultRouteForRole(profile.role)
@@ -117,6 +155,10 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         title: 'Sign-in failed',
         description: message || 'Please check your credentials and try again.',
       })
+      // Reset CAPTCHA on error to allow retry
+      if (hasTurnstile) {
+        resetCaptcha()
+      }
     } finally {
       setLoading(false)
     }
@@ -204,7 +246,34 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          {hasTurnstile && (
+            <div className="space-y-2">
+              <div className="flex justify-center">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={turnstileSiteKey}
+                  onSuccess={handleCaptchaSuccess}
+                  onError={handleCaptchaError}
+                  onExpire={handleCaptchaExpire}
+                  options={{
+                    theme: 'light',
+                    size: 'normal',
+                  }}
+                />
+              </div>
+              {captchaError && (
+                <p className="text-sm text-red-600 text-center">
+                  CAPTCHA verification failed. Please try again.
+                </p>
+              )}
+            </div>
+          )}
+
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={loading || (hasTurnstile && !captchaToken)}
+          >
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
 

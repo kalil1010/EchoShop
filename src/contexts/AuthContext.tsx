@@ -44,7 +44,7 @@ interface AuthContextType {
   roleMeta: RoleMeta
   loading: boolean
   session: Session | null
-  signIn: (email: string, password: string) => Promise<SignInResult>
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<SignInResult>
   signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
@@ -983,12 +983,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, user?.uid, refreshProfile])
 
   const signIn = useCallback(
-    async (email: string, password: string): Promise<SignInResult> => {
+    async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
       if (!supabase) {
         throw new Error('Supabase is not properly configured')
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      // Build sign-in options with CAPTCHA token if provided
+      const signInOptions: {
+        email: string
+        password: string
+        captchaToken?: string
+      } = {
+        email,
+        password,
+      }
+
+      // Include CAPTCHA token if provided
+      if (captchaToken) {
+        signInOptions.captchaToken = captchaToken
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword(signInOptions)
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
         if (message.includes('email logins are disabled')) {
