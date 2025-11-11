@@ -988,8 +988,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Supabase is not properly configured')
       }
 
+      // Validate CAPTCHA token format if provided
+      if (captchaToken && (typeof captchaToken !== 'string' || captchaToken.trim().length === 0)) {
+        throw new Error('Invalid CAPTCHA token format')
+      }
+
       // Build sign-in request with CAPTCHA token nested in options if provided
       // Type assertion needed because Supabase types may not include captchaToken in options
+      // Supabase will validate the CAPTCHA token server-side using the secret key configured in the dashboard
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -1090,9 +1096,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (email: string, password: string, displayName?: string, captchaToken?: string) => {
       if (!supabase) throw new Error('Supabase is not properly configured')
       
-      // Validate CAPTCHA token if provided
-      if (captchaToken && typeof captchaToken !== 'string') {
-        throw new Error('Invalid CAPTCHA token')
+      // Validate CAPTCHA token format if provided
+      if (captchaToken && (typeof captchaToken !== 'string' || captchaToken.trim().length === 0)) {
+        throw new Error('Invalid CAPTCHA token format')
       }
 
       // Build sign-up options with CAPTCHA token if provided
@@ -1113,12 +1119,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Type assertion to allow captchaToken in options (Supabase supports this but types may not reflect it)
+      // Supabase will validate the CAPTCHA token server-side using the secret key configured in the dashboard
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: signUpOptions as Parameters<typeof supabase.auth.signUp>[0]['options'] & { captchaToken?: string },
       })
-      if (error) throw error
+      
+      if (error) {
+        const message = error.message?.toLowerCase() ?? ''
+        const status = error.status ?? 0
+        
+        // Handle CAPTCHA-related errors
+        if (status === 400 && (message.includes('captcha') || message.includes('turnstile') || message.includes('invalid-input-secret'))) {
+          throw new Error(
+            'CAPTCHA verification failed. Please refresh the page and complete the CAPTCHA again. If the problem persists, check your Turnstile configuration in Supabase.',
+          )
+        }
+        
+        // Provide more context for 400 errors
+        if (status === 400) {
+          console.error('Supabase sign-up error:', { message, status, error })
+          throw new Error(
+            `Sign-up failed: ${error.message || 'Invalid request. Please check your information and try again.'}`,
+          )
+        }
+        
+        throw error
+      }
 
       const newUser = data.user
       if (!newUser) return
