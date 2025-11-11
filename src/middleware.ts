@@ -183,7 +183,12 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/api/auth/callback') ||
       pathname === '/favicon.ico' ||
       pathname.startsWith('/analyzer') ||
-      pathname.startsWith('/marketplace')
+      pathname.startsWith('/marketplace') ||
+      pathname === '/about' ||
+      pathname === '/help' ||
+      pathname === '/terms' ||
+      pathname === '/privacy' ||
+      pathname === '/vendor/login'
     
     if (isPublicRoute) {
       return NextResponse.next()
