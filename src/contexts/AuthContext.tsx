@@ -320,7 +320,7 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     vendorContactEmail: undefined,
     vendorPhone: undefined,
     vendorWebsite: undefined,
-    role: normaliseRole(user.role),
+    role: DEFAULT_ROLE, // Always default to 'user' role for new profiles
     createdAt: now,
     updatedAt: now,
   })

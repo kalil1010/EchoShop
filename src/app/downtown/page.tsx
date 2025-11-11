@@ -63,13 +63,21 @@ export default async function DowntownEntryPage() {
         .eq('id', user.id)
         .maybeSingle<{ role: string | null }>()
 
-      // If profile exists and has a role, redirect to appropriate dashboard
+      // If profile exists and has a role, check if it's owner
       if (!profileError && profile?.role) {
         const role = normaliseRole(profile.role)
-        const defaultRoute = getDefaultRouteForRole(role)
-        redirect(defaultRoute)
+        if (role === 'owner') {
+          // Owner role - redirect to owner dashboard
+          redirect('/downtown/dashboard')
+        } else {
+          // Wrong role - redirect to /auth with message
+          redirect(`/auth?redirect=/downtown&role=${role}`)
+        }
       }
-      // If no profile or error, show login form (user can log in to create/update profile)
+      // If no profile or error, redirect to /auth to create profile
+      if (!profileError && !profile) {
+        redirect('/auth?redirect=/downtown&missingProfile=true')
+      }
     } catch (profileError: unknown) {
       // Check if this is a Next.js redirect (expected behavior, not an error)
       if (
@@ -115,10 +123,6 @@ export default async function DowntownEntryPage() {
     }
   }
 
-  // Default: show login form
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
-      <OwnerLoginForm />
-    </div>
-  )
+  // Default: redirect to unified login
+  redirect('/auth?redirect=/downtown')
 }

@@ -1,14 +1,15 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useMemo, useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSupabaseClient } from '@/lib/supabaseClient'
-import { getDefaultRouteForRole, getRoleMeta } from '@/lib/roles'
+import { getDefaultRouteForRole, getRoleMeta, getPortalAccess, normaliseRole } from '@/lib/roles'
+import { AccessDeniedBanner } from './AccessDeniedBanner'
 
 interface LoginFormProps {
   onToggleMode: () => void
@@ -21,7 +22,25 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   const [googleLoading, setGoogleLoading] = useState(false)
   const { signIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+  
+  // Get redirect and role from URL params
+  const redirectPath = searchParams.get('redirect') || null
+  const wrongRole = searchParams.get('role') || null
+  const missingProfile = searchParams.get('missingProfile') === 'true'
+  
+  // Determine portal from redirect path
+  const portal = redirectPath?.startsWith('/downtown') 
+    ? 'owner' 
+    : redirectPath?.startsWith('/atlas') 
+    ? 'vendor' 
+    : 'customer'
+  
+  // Get access denial info if wrong role
+  const accessDenial = wrongRole 
+    ? getPortalAccess(normaliseRole(wrongRole), portal as 'owner' | 'vendor').denial
+    : null
   const supabase = useMemo(() => {
     try {
       return getSupabaseClient()
@@ -83,7 +102,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         description: roleMeta.welcomeSubtitle,
       })
 
-      setTimeout(() => router.replace(destination), 800)
+      // Use redirect path if provided, otherwise use role-based destination
+      const finalDestination = redirectPath && 
+        getPortalAccess(profile.role, portal as 'owner' | 'vendor').allowed
+        ? redirectPath
+        : destination
+
+      setTimeout(() => router.replace(finalDestination), 800)
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
@@ -134,6 +159,22 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {(accessDenial?.banner || missingProfile) && (
+          <div className="mb-4">
+            {accessDenial?.banner && (
+              <AccessDeniedBanner notice={accessDenial.banner} />
+            )}
+            {missingProfile && !accessDenial?.banner && (
+              <AccessDeniedBanner
+                notice={{
+                  tone: 'info',
+                  title: 'Profile setup required',
+                  description: 'Your account needs a profile to continue. Sign in to create your profile automatically.',
+                }}
+              />
+            )}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">

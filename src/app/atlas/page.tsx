@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import VendorDashboardLayout from '@/components/vendor/VendorDashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { VendorLoginForm } from '@/components/vendor/VendorLoginForm'
 import { getPortalAccess } from '@/lib/roles'
 import type { PortalDenial } from '@/lib/roles'
 import { useToast } from '@/components/ui/toast'
@@ -12,12 +12,20 @@ import { useToast } from '@/components/ui/toast'
 export default function AtlasPage() {
   const { user, profile, loading, logout } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   const [denial, setDenial] = useState<PortalDenial | null>(null)
   const handledRef = useRef(false)
 
   useEffect(() => {
     if (loading) return
-    if (!profile) return
+    if (!user) {
+      router.replace(`/auth?redirect=/atlas`)
+      return
+    }
+    if (!profile) {
+      router.replace('/auth?redirect=/atlas&missingProfile=true')
+      return
+    }
 
     const access = getPortalAccess(profile.role, 'vendor')
     if (!access.allowed) {
@@ -39,16 +47,15 @@ export default function AtlasPage() {
             'You do not have permission to open the vendor dashboard.',
         })
 
-        if (access.denial?.requiresLogout) {
-          logout().catch(() => undefined)
-        }
+        // Redirect to /auth with role info
+        router.replace(`/auth?redirect=/atlas&role=${profile.role}`)
       }
       return
     }
 
     setDenial(null)
     handledRef.current = false
-  }, [loading, profile, logout, toast, user])
+  }, [loading, profile, user, router, logout, toast])
 
   if (loading) {
     return (
@@ -58,17 +65,11 @@ export default function AtlasPage() {
     )
   }
 
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-lg">
-          <VendorLoginForm initialNotice={denial} />
-        </div>
-      </div>
-    )
+  if (!user || !profile) {
+    return null // useEffect handles redirect
   }
 
-  if (profile?.role === 'vendor') {
+  if (profile.role === 'vendor') {
     return (
       <main className="container mx-auto max-w-6xl px-4 py-8">
         <VendorDashboardLayout />
@@ -76,5 +77,5 @@ export default function AtlasPage() {
     )
   }
 
-  return null
+  return null // useEffect handles redirect for wrong role
 }

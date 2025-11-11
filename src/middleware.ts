@@ -152,8 +152,13 @@ export async function middleware(req: NextRequest) {
         if (pathname.startsWith('/api')) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
-        const target = access.denial?.redirect ?? getDefaultRouteForRole(role)
-        const response = NextResponse.redirect(new URL(target, req.url))
+        
+        // Redirect to /auth with role and redirect info for clear messaging
+        const redirectUrl = new URL('/auth', req.url)
+        redirectUrl.searchParams.set('redirect', pathname)
+        redirectUrl.searchParams.set('role', role)
+        const response = NextResponse.redirect(redirectUrl)
+        
         if (access.denial?.requiresLogout) {
           for (const cookie of req.cookies.getAll()) {
             if (
@@ -169,11 +174,18 @@ export async function middleware(req: NextRequest) {
       }
       console.info('[middleware] portal access granted', { userId: user.id, role, portal, path: pathname })
     }
-  } else if (portal !== 'customer') {
-    // Allow access to login pages for unauthenticated users
-    const isLoginPage = pathname === '/downtown' || pathname === '/atlas' || pathname === '/vendor/login'
-    if (isLoginPage) {
-      // Allow unauthenticated access to login pages
+  } else {
+    // Allow public routes for unauthenticated users
+    const isPublicRoute = 
+      pathname === '/auth' ||
+      pathname === '/' ||
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/api/auth/callback') ||
+      pathname === '/favicon.ico' ||
+      pathname.startsWith('/analyzer') ||
+      pathname.startsWith('/marketplace')
+    
+    if (isPublicRoute) {
       return NextResponse.next()
     }
     // Check if there are any Supabase auth cookies (user might be logged in but session not detected)
@@ -189,11 +201,15 @@ export async function middleware(req: NextRequest) {
       // This is expected behavior when cookies exist but session is invalid/expired
       return NextResponse.next()
     }
-    console.info('[middleware] unauthenticated portal access blocked', { portal, path: pathname })
+    console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
     if (pathname.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.redirect(new URL('/auth', req.url))
+    
+    // Redirect to /auth with return URL
+    const redirectUrl = new URL('/auth', req.url)
+    redirectUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // Enforce HTTPS in production
