@@ -25,6 +25,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [profileLoading, setProfileLoading] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaError, setCaptchaError] = useState(false)
+  const [turnstileLoadError, setTurnstileLoadError] = useState(false)
   const turnstileRef = useRef<TurnstileInstance>(null)
 
   const { signUp } = useAuth()
@@ -46,16 +47,33 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const handleCaptchaSuccess = useCallback((token: string) => {
     setCaptchaToken(token)
     setCaptchaError(false)
+    setTurnstileLoadError(false)
   }, [])
 
   const handleCaptchaError = useCallback(() => {
     setCaptchaToken(null)
     setCaptchaError(true)
+    
+    // Check browser console for Turnstile errors
+    // The "invalid-input-secret" error appears in console, not in callback
+    // We'll detect it by checking if the error persists and widget doesn't load
+    console.error('Turnstile CAPTCHA error: Check browser console for details')
+    
+    // Set a flag that might indicate configuration issues
+    // This will be cleared on successful captcha completion
+    setTurnstileLoadError(true)
   }, [])
 
   const handleCaptchaExpire = useCallback(() => {
     setCaptchaToken(null)
-  }, [])
+    console.warn('Turnstile CAPTCHA token expired - user will need to complete it again')
+    // Show a subtle notification that CAPTCHA expired
+    toast({
+      variant: 'warning',
+      title: 'CAPTCHA expired',
+      description: 'Please complete the CAPTCHA verification again.',
+    })
+  }, [toast])
 
   const resetCaptcha = useCallback(() => {
     setCaptchaToken(null)
@@ -154,23 +172,38 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       return
     }
 
-    // Validate CAPTCHA token
-    if (!captchaToken) {
-      const errorMsg = 'Please complete the CAPTCHA verification.'
-      setError(errorMsg)
+    // Validate CAPTCHA token if Turnstile is enabled
+    if (hasTurnstile && !captchaToken) {
+      if (turnstileLoadError) {
+        toast({ 
+          variant: 'error', 
+          title: 'CAPTCHA configuration error', 
+          description: 'CAPTCHA verification is not working. Please check your Turnstile site key configuration or contact support.' 
+        })
+      } else {
+        toast({ 
+          variant: 'error', 
+          title: 'CAPTCHA required', 
+          description: 'Please complete the CAPTCHA verification before signing up.' 
+        })
+      }
       setCaptchaError(true)
-      toast({ 
-        variant: 'error', 
-        title: 'CAPTCHA required', 
-        description: 'Please complete the CAPTCHA verification before signing up.' 
-      })
       return
     }
 
     setLoading(true)
     
     try {
-      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined, captchaToken)
+      // Log CAPTCHA token status for debugging (don't log the actual token for security)
+      if (hasTurnstile) {
+        console.log('Sign-up attempt with CAPTCHA:', {
+          hasToken: !!captchaToken,
+          tokenLength: captchaToken?.length || 0,
+          tokenPrefix: captchaToken?.substring(0, 10) || 'none',
+        })
+      }
+      
+      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined, captchaToken || undefined)
 
       const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
@@ -196,13 +229,30 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
       setError(message)
-      // Reset CAPTCHA on error to allow retry
-      resetCaptcha()
-      toast({ 
-        variant: 'error', 
-        title: 'Sign-up failed', 
-        description: message || 'Please try again.' 
-      })
+      
+      // Check if error is related to CAPTCHA
+      const errorMessage = message.toLowerCase()
+      if (errorMessage.includes('captcha') || errorMessage.includes('turnstile')) {
+        toast({
+          variant: 'error',
+          title: 'CAPTCHA verification failed',
+          description: 'The CAPTCHA verification failed. Please refresh the page and try again. If the problem persists, check your Turnstile configuration in Supabase.',
+        })
+        // Reset CAPTCHA on error to allow retry
+        if (hasTurnstile) {
+          resetCaptcha()
+        }
+      } else {
+        toast({ 
+          variant: 'error', 
+          title: 'Sign-up failed', 
+          description: message || 'Please try again.' 
+        })
+        // Reset CAPTCHA on error to allow retry
+        if (hasTurnstile) {
+          resetCaptcha()
+        }
+      }
     } finally {
       setLoading(false)
     }
@@ -345,7 +395,9 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               </div>
               {captchaError && (
                 <p className="text-sm text-red-600 text-center">
-                  CAPTCHA verification failed. Please try again.
+                  {turnstileLoadError 
+                    ? 'CAPTCHA configuration error. Please verify your Turnstile site key matches the secret key in Supabase.'
+                    : 'CAPTCHA verification failed. Please try again.'}
                 </p>
               )}
             </div>
