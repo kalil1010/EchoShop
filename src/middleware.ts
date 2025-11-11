@@ -178,6 +178,7 @@ export async function middleware(req: NextRequest) {
     // Allow public routes for unauthenticated users
     const isPublicRoute = 
       pathname === '/auth' ||
+      pathname.startsWith('/auth/') || // Allow all /auth/* routes including /auth/callback
       pathname === '/' ||
       pathname.startsWith('/_next') ||
       pathname.startsWith('/api/auth/callback') ||
@@ -188,7 +189,12 @@ export async function middleware(req: NextRequest) {
       pathname === '/help' ||
       pathname === '/terms' ||
       pathname === '/privacy' ||
-      pathname === '/vendor/login'
+      pathname === '/vendor/login' ||
+      // Public API routes that don't require authentication
+      pathname.startsWith('/api/help') ||
+      pathname.startsWith('/api/feedback') ||
+      pathname.startsWith('/api/user-tour') ||
+      pathname.startsWith('/api/local-arrivals')
     
     if (isPublicRoute) {
       return NextResponse.next()
