@@ -25,8 +25,8 @@ const securityHeaders = [
       "img-src 'self' data: https: blob:",
       // Fonts: Allow self and data URIs
       "font-src 'self' data: https:",
-      // Connect: Allow Supabase (HTTP/HTTPS and WebSocket), Cloudflare challenge platform, and Turnstile API
-      "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co wss://*.supabase.in https://challenges.cloudflare.com https://*.cloudflare.com https://challenges.cloudflare.com/cdn-cgi/challenge-platform/",
+      // Connect: Allow Supabase (HTTP/HTTPS and WebSocket), Cloudflare challenge platform, Turnstile API, and ipinfo.io for location
+      "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co wss://*.supabase.in https://challenges.cloudflare.com https://*.cloudflare.com https://challenges.cloudflare.com/cdn-cgi/challenge-platform/ https://ipinfo.io",
       // Frames: Allow Turnstile widgets and Cloudflare challenge platform
       "frame-src 'self' https://challenges.cloudflare.com https://*.cloudflare.com",
       // Workers: Allow blob workers for Turnstile
