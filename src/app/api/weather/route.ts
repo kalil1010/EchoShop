@@ -95,6 +95,17 @@ const requestAccuWeather = async (
   throw new Error('AccuWeather request failed after all retries')
 }
 
+type AccuLocationResponse = {
+  Key?: string
+  LocalizedName?: string
+  AdministrativeArea?: {
+    LocalizedName?: string
+  }
+  Country?: {
+    LocalizedName?: string
+  }
+}
+
 const resolveLocationKey = async (
   latitude: number,
   longitude: number,
@@ -114,7 +125,7 @@ const resolveLocationKey = async (
     language: "en-us",
   })
 
-  const data = await requestAccuWeather("locations/v1/cities/geoposition/search", params, apiKey)
+  const data = (await requestAccuWeather("locations/v1/cities/geoposition/search", params, apiKey)) as AccuLocationResponse
 
   if (!data?.Key) {
     throw new Error("Unable to resolve AccuWeather location key")
@@ -263,12 +274,12 @@ export async function GET(request: NextRequest) {
 
     if (diff === 0) {
       const params = new URLSearchParams({ language: 'en-us', details: 'true' })
-      const payload = await requestAccuWeather(`currentconditions/v1/${location.key}`, params, apiKey)
+      const payload = (await requestAccuWeather(`currentconditions/v1/${location.key}`, params, apiKey)) as AccuCurrentConditionsResponse
       return NextResponse.json(mapCurrentConditions(payload, location))
     }
 
     const params = new URLSearchParams({ language: 'en-us', metric: 'true', details: 'true' })
-    const payload = await requestAccuWeather(`forecasts/v1/daily/5day/${location.key}`, params, apiKey)
+    const payload = (await requestAccuWeather(`forecasts/v1/daily/5day/${location.key}`, params, apiKey)) as AccuDailyForecastResponse
     return NextResponse.json(mapDailyForecast(payload, diff, location))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
