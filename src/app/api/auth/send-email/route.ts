@@ -28,10 +28,6 @@ const ConfirmationRequestSchema = z.object({
     confirmation_sent_at: z.string().optional(),
   }),
   timestamp: z.string().optional(),
-}).refine((data) => {
-  return data.user.confirmation_token || data.user.token || data.user.email_confirm_token;
-}, {
-  message: 'Token is required in user object',
 });
 
 // Schema for password reset request
@@ -46,10 +42,6 @@ const PasswordResetRequestSchema = z.object({
     recovery_sent_at: z.string().optional(),
   }),
   timestamp: z.string().optional(),
-}).refine((data) => {
-  return data.user.recovery_token || data.user.token || data.user.password_reset_token;
-}, {
-  message: 'Token is required in user object',
 });
 
 // Schema for magic link request
@@ -64,10 +56,6 @@ const MagicLinkRequestSchema = z.object({
     magic_link_sent_at: z.string().optional(),
   }),
   timestamp: z.string().optional(),
-}).refine((data) => {
-  return data.user.magic_link_token || data.user.token || data.user.magiclink_token;
-}, {
-  message: 'Token is required in user object',
 });
 
 // Union schema for all event types
@@ -121,6 +109,24 @@ export async function POST(request: NextRequest) {
     }
 
     const { event, user } = validationResult.data;
+    
+    // Validate that at least one token field exists based on event type
+    let hasToken = false;
+    if (event === 'user_confirmation_requested') {
+      hasToken = !!(user.confirmation_token || user.token || user.email_confirm_token);
+    } else if (event === 'user_password_reset_requested') {
+      hasToken = !!(user.recovery_token || user.token || user.password_reset_token);
+    } else if (event === 'user_magic_link_requested') {
+      hasToken = !!(user.magic_link_token || user.token || user.magiclink_token);
+    }
+    
+    if (!hasToken) {
+      console.error('[auth/send-email] No token found in user object for', event);
+      return NextResponse.json(
+        { error: 'Token is required in user object' },
+        { status: 400 }
+      );
+    }
     
     // Rate limiting: Prevent email spam (10 emails per hour per user)
     const rateLimit = checkRateLimit(user.id, 10, 60 * 60 * 1000); // 10 requests per hour
