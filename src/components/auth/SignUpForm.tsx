@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState, useRef, useCallback } from 'react'
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
@@ -26,7 +26,9 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaError, setCaptchaError] = useState(false)
   const [turnstileLoadError, setTurnstileLoadError] = useState(false)
+  const [turnstileLoading, setTurnstileLoading] = useState(true)
   const turnstileRef = useRef<TurnstileInstance>(null)
+  const turnstileErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const { signUp } = useAuth()
   const router = useRouter()
@@ -48,6 +50,12 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setCaptchaToken(token)
     setCaptchaError(false)
     setTurnstileLoadError(false)
+    setTurnstileLoading(false)
+    // Clear any pending error timeout
+    if (turnstileErrorTimeoutRef.current) {
+      clearTimeout(turnstileErrorTimeoutRef.current)
+      turnstileErrorTimeoutRef.current = null
+    }
   }, [])
 
   const handleCaptchaError = useCallback((error?: string) => {
@@ -55,27 +63,32 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setCaptchaError(true)
     
     // Check browser console for Turnstile errors
-    // Error 400020 typically means:
-    // - Invalid site key
-    // - Domain not in allowed domains list
-    // - Site key from different account
-    // - Site key disabled/revoked
     console.error('Turnstile CAPTCHA error:', error || 'Check browser console for details')
-    console.error('Common causes of Turnstile errors:')
-    console.error('1. Site key is invalid or from different account')
-    console.error('2. Domain not in allowed domains list in Cloudflare')
-    console.error('3. Site key and secret key mismatch in Supabase')
-    console.error('4. Site key format is incorrect')
-    console.error('5. Turnstile site is disabled in Cloudflare')
-    console.error('See docs/TURNSTILE_ERROR_400020_FIX.md for troubleshooting')
     
-    // Set a flag that might indicate configuration issues
-    // This will be cleared on successful captcha completion
-    setTurnstileLoadError(true)
+    // Only set load error after a delay to allow for retry/recovery
+    // This prevents false positives from transient network issues
+    if (turnstileErrorTimeoutRef.current) {
+      clearTimeout(turnstileErrorTimeoutRef.current)
+    }
+    
+    turnstileErrorTimeoutRef.current = setTimeout(() => {
+      console.error('Common causes of Turnstile errors:')
+      console.error('1. Site key is invalid or from different account')
+      console.error('2. Domain not in allowed domains list in Cloudflare')
+      console.error('3. Site key and secret key mismatch in Supabase')
+      console.error('4. Site key format is incorrect')
+      console.error('5. Turnstile site is disabled in Cloudflare')
+      console.error('See docs/TURNSTILE_ERROR_400020_FIX.md for troubleshooting')
+      
+      // Only set load error if we still don't have a token after delay
+      setTurnstileLoadError(true)
+      setTurnstileLoading(false)
+    }, 3000) // Wait 3 seconds before showing error
   }, [])
 
   const handleCaptchaExpire = useCallback(() => {
     setCaptchaToken(null)
+    setTurnstileLoadError(false) // Reset error state on expire
     console.warn('Turnstile CAPTCHA token expired - user will need to complete it again')
     // Show a subtle notification that CAPTCHA expired
     toast({
@@ -84,6 +97,22 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       description: 'Please complete the CAPTCHA verification again.',
     })
   }, [toast])
+  
+  // Reset Turnstile on mount/remount to allow retry
+  useEffect(() => {
+    if (hasTurnstile) {
+      // Reset loading state when component mounts
+      setTurnstileLoading(true)
+      setTurnstileLoadError(false)
+    }
+    
+    return () => {
+      // Cleanup timeout on unmount
+      if (turnstileErrorTimeoutRef.current) {
+        clearTimeout(turnstileErrorTimeoutRef.current)
+      }
+    }
+  }, [hasTurnstile])
 
   const resetCaptcha = useCallback(() => {
     setCaptchaToken(null)
@@ -412,8 +441,20 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
                   <p>
                     CAPTCHA widget failed to load. You can still sign up without CAPTCHA verification.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTurnstileLoadError(false)
+                      setTurnstileLoading(true)
+                      setCaptchaError(false)
+                      turnstileRef.current?.reset()
+                    }}
+                    className="text-xs underline mt-1 text-blue-600 hover:text-blue-800"
+                  >
+                    Retry loading CAPTCHA
+                  </button>
                   <p className="text-xs mt-2 text-muted-foreground">
-                    If you need to enable CAPTCHA, check your Turnstile configuration. See{' '}
+                    If the problem persists, check your Turnstile configuration. See{' '}
                     <a 
                       href="/docs/TURNSTILE_ERROR_400020_FIX.md" 
                       target="_blank" 
