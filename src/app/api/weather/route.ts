@@ -40,20 +40,59 @@ const buildUrl = (path: string, params: URLSearchParams, apiKey: string) => {
   return url.toString()
 }
 
-const requestAccuWeather = async (path: string, params: URLSearchParams, apiKey: string) => {
-  const response = await fetch(buildUrl(path, params, apiKey), {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    next: { revalidate: 0 },
-  })
+const requestAccuWeather = async (
+  path: string,
+  params: URLSearchParams,
+  apiKey: string,
+  retries = 2,
+): Promise<unknown> => {
+  const url = buildUrl(path, params, apiKey)
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null)
-    throw new Error(`AccuWeather request failed (${response.status}): ${JSON.stringify(errorBody)}`)
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: controller.signal,
+        next: { revalidate: 0 },
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null)
+        const errorMessage = `AccuWeather request failed (${response.status}): ${JSON.stringify(errorBody)}`
+        
+        // Retry on 5xx errors or rate limiting (429)
+        if ((response.status >= 500 || response.status === 429) && attempt < retries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 3000) // Exponential backoff, max 3s
+          console.warn(`[api/weather] Retrying AccuWeather request (attempt ${attempt + 1}/${retries + 1}) after ${delay}ms`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      return response.json()
+    } catch (error) {
+      // Retry on network errors or timeouts
+      if (attempt < retries && (error instanceof Error && (error.name === 'AbortError' || error.message.includes('fetch')))) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 3000)
+        console.warn(`[api/weather] Retrying AccuWeather request after network error (attempt ${attempt + 1}/${retries + 1}) after ${delay}ms`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        continue
+      }
+      
+      throw error
+    }
   }
-
-  return response.json()
+  
+  throw new Error('AccuWeather request failed after all retries')
 }
 
 const resolveLocationKey = async (
@@ -232,7 +271,23 @@ export async function GET(request: NextRequest) {
     const payload = await requestAccuWeather(`forecasts/v1/daily/5day/${location.key}`, params, apiKey)
     return NextResponse.json(mapDailyForecast(payload, diff, location))
   } catch (error) {
-    console.error('[api/weather] failed', error)
-    return NextResponse.json({ error: 'Failed to fetch weather data' }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorDetails = error instanceof Error && error.cause ? String(error.cause) : undefined
+    
+    console.error('[api/weather] failed', {
+      error: errorMessage,
+      details: errorDetails,
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    
+    // Return more specific error information in development
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch weather data',
+        ...(isDevelopment && { details: errorMessage }),
+      },
+      { status: 500 }
+    )
   }
 }
