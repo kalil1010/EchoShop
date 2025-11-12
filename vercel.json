@@ -22,7 +22,6 @@
     "MINIO_ACCESS_KEY": "@minio_access_key",
     "MINIO_SECRET_KEY": "@minio_secret_key",
     "MINIO_BUCKET": "@minio_bucket",
-    "MINIO_USE_SSL": "@minio_use_ssl",
-    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "@turnstile_site_key"
+    "MINIO_USE_SSL": "@minio_use_ssl"
   }
 }

@@ -44,8 +44,8 @@ interface AuthContextType {
   roleMeta: RoleMeta
   loading: boolean
   session: Session | null
-  signIn: (email: string, password: string, captchaToken?: string) => Promise<SignInResult>
-  signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<SignInResult>
+  signUp: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
   isSupabaseEnabled: boolean
@@ -983,39 +983,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, user?.uid, refreshProfile])
 
   const signIn = useCallback(
-    async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
+    async (email: string, password: string): Promise<SignInResult> => {
       if (!supabase) {
         throw new Error('Supabase is not properly configured')
-      }
-
-      // Validate CAPTCHA token format if provided
-      if (captchaToken && (typeof captchaToken !== 'string' || captchaToken.trim().length === 0)) {
-        throw new Error('Invalid CAPTCHA token format')
-      }
-
-      // Build sign-in request with CAPTCHA token nested in options if provided
-      // Type assertion needed because Supabase types may not include captchaToken in options
-      // Supabase will validate the CAPTCHA token server-side using the secret key configured in the dashboard
-      const signInOptions = captchaToken
-        ? ({
-            captchaToken,
-          } as Parameters<typeof supabase.auth.signInWithPassword>[0]['options'] & {
-            captchaToken?: string
-          })
-        : undefined
-
-      // Log for debugging (don't log the actual token)
-      if (captchaToken) {
-        console.log('[AuthContext] Signing in with CAPTCHA token:', {
-          tokenLength: captchaToken.length,
-          tokenPrefix: captchaToken.substring(0, 10),
-        })
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: signInOptions,
       })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
@@ -1030,29 +1005,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           code: errorCode,
           description: errorDescription,
           error: error,
-          hasCaptchaToken: !!captchaToken,
         })
-        
-        // Handle CAPTCHA-related errors
-        if (
-          status === 400 &&
-          (message.includes('captcha') ||
-            message.includes('turnstile') ||
-            message.includes('invalid-input-secret') ||
-            message.includes('captcha_token') ||
-            errorDescription?.toLowerCase().includes('captcha') ||
-            errorDescription?.toLowerCase().includes('turnstile'))
-        ) {
-          // Provide specific error message for invalid-input-secret
-          if (message.includes('invalid-input-secret') || errorDescription?.toLowerCase().includes('invalid-input-secret')) {
-            throw new Error(
-              'CAPTCHA configuration error: The Turnstile Secret Key in Supabase Dashboard is missing, incorrect, or doesn\'t match your Site Key. Please verify: 1) Secret Key is set in Supabase (Authentication → Settings → CAPTCHA Protection), 2) Both keys are from the same Turnstile site in Cloudflare, 3) No extra spaces in the keys. See docs/FIX_INVALID_INPUT_SECRET.md for detailed instructions.',
-            )
-          }
-          throw new Error(
-            `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
-          )
-        }
         
         if (message.includes('email logins are disabled')) {
           throw new Error(
@@ -1131,37 +1084,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = useCallback(
-    async (email: string, password: string, displayName?: string, captchaToken?: string) => {
+    async (email: string, password: string, displayName?: string) => {
       if (!supabase) throw new Error('Supabase is not properly configured')
-      
-      // Validate CAPTCHA token format if provided
-      if (captchaToken && (typeof captchaToken !== 'string' || captchaToken.trim().length === 0)) {
-        throw new Error('Invalid CAPTCHA token format')
-      }
 
-      // Build sign-up options with CAPTCHA token if provided
-      const signUpOptions: {
-        data: {
-          display_name: string | null
-        }
-        captchaToken?: string
-      } = {
-        data: {
-          display_name: displayName ?? null,
-        },
-      }
-
-      // Include CAPTCHA token if provided
-      if (captchaToken) {
-        signUpOptions.captchaToken = captchaToken
-      }
-
-      // Type assertion to allow captchaToken in options (Supabase supports this but types may not reflect it)
-      // Supabase will validate the CAPTCHA token server-side using the secret key configured in the dashboard
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: signUpOptions as Parameters<typeof supabase.auth.signUp>[0]['options'] & { captchaToken?: string },
+        options: {
+          data: {
+            display_name: displayName ?? null,
+          },
+        },
       })
       
       if (error) {
@@ -1177,29 +1110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           code: errorCode,
           description: errorDescription,
           error: error,
-          hasCaptchaToken: !!captchaToken,
         })
-        
-        // Handle CAPTCHA-related errors
-        if (
-          status === 400 &&
-          (message.includes('captcha') ||
-            message.includes('turnstile') ||
-            message.includes('invalid-input-secret') ||
-            message.includes('captcha_token') ||
-            errorDescription?.toLowerCase().includes('captcha') ||
-            errorDescription?.toLowerCase().includes('turnstile'))
-        ) {
-          // Provide specific error message for invalid-input-secret
-          if (message.includes('invalid-input-secret') || errorDescription?.toLowerCase().includes('invalid-input-secret')) {
-            throw new Error(
-              'CAPTCHA configuration error: The Turnstile Secret Key in Supabase Dashboard is missing, incorrect, or doesn\'t match your Site Key. Please verify: 1) Secret Key is set in Supabase (Authentication → Settings → CAPTCHA Protection), 2) Both keys are from the same Turnstile site in Cloudflare, 3) No extra spaces in the keys. See docs/FIX_INVALID_INPUT_SECRET.md for detailed instructions.',
-            )
-          }
-          throw new Error(
-            `CAPTCHA verification failed: ${errorDescription || error.message || 'Please refresh the page and complete the CAPTCHA again. If the problem persists, verify your Turnstile secret key is correctly configured in Supabase Dashboard.'}`,
-          )
-        }
         
         // Provide more context for 400 errors
         if (status === 400) {

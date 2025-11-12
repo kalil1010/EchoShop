@@ -1,6 +1,6 @@
 /**
  * Next.js configuration with basic security headers applied to all routes.
- * CSP allows Cloudflare Turnstile and Supabase resources.
+ * CSP allows Supabase resources.
  */
 
 // Get Supabase URL for CSP and image configuration
@@ -12,25 +12,25 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  // Content Security Policy: Allow Turnstile, Supabase, and necessary resources
+  // Content Security Policy: Allow Supabase and necessary resources
   {
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      // Scripts: Allow Turnstile, Next.js, and inline scripts
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://*.cloudflare.com",
-      // Styles: Allow Turnstile and inline styles
-      "style-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.cloudflare.com",
-      // Images: Allow all HTTPS images (needed for Turnstile and user content)
+      // Scripts: Allow Next.js and inline scripts
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Styles: Allow inline styles
+      "style-src 'self' 'unsafe-inline'",
+      // Images: Allow all HTTPS images
       "img-src 'self' data: https: blob:",
       // Fonts: Allow self and data URIs
       "font-src 'self' data: https:",
-      // Connect: Allow Supabase, Cloudflare challenge platform, and Turnstile API
-      "connect-src 'self' https://*.supabase.co https://*.supabase.in https://challenges.cloudflare.com https://*.cloudflare.com https://challenges.cloudflare.com/cdn-cgi/challenge-platform/",
-      // Frames: Allow Turnstile widgets and Cloudflare challenge platform
-      "frame-src 'self' https://challenges.cloudflare.com https://*.cloudflare.com",
-      // Workers: Allow blob workers for Turnstile
-      "worker-src 'self' blob: https://challenges.cloudflare.com",
+      // Connect: Allow Supabase
+      "connect-src 'self' https://*.supabase.co https://*.supabase.in",
+      // Frames: Allow self
+      "frame-src 'self'",
+      // Workers: Allow blob workers
+      "worker-src 'self' blob:",
       // Objects: Block all objects
       "object-src 'none'",
       // Base URI: Restrict to self
@@ -39,13 +39,11 @@ const securityHeaders = [
       "form-action 'self' https://*.supabase.co",
       // Frame ancestors: Block all framing
       "frame-ancestors 'none'",
-      // Media: Allow media from self and Cloudflare
-      "media-src 'self' https://*.cloudflare.com",
+      // Media: Allow media from self
+      "media-src 'self'",
     ].join('; '),
   },
-  // Permissions Policy: Allow Turnstile to use autoplay and fullscreen
-  // Note: URLs in allowlists must be quoted. Using * for fullscreen/autoplay since
-  // Turnstile runs in an iframe and needs these permissions
+  // Permissions Policy
   {
     key: 'Permissions-Policy',
     value: [

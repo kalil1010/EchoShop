@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSupabaseClient } from '@/lib/supabaseClient'
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 
 interface SignUpFormProps {
   onToggleMode: () => void
@@ -23,12 +22,6 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [success, setSuccess] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const [captchaError, setCaptchaError] = useState(false)
-  const [turnstileLoadError, setTurnstileLoadError] = useState(false)
-  const [turnstileLoading, setTurnstileLoading] = useState(true)
-  const turnstileRef = useRef<TurnstileInstance>(null)
-  const turnstileErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const { signUp } = useAuth()
   const router = useRouter()
@@ -41,78 +34,6 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       console.error('Failed to initialise Supabase client for OAuth:', clientError)
       return null
     }
-  }, [])
-
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
-  const hasTurnstile = Boolean(turnstileSiteKey)
-
-  const handleCaptchaSuccess = useCallback((token: string) => {
-    setCaptchaToken(token)
-    setCaptchaError(false)
-    setTurnstileLoadError(false)
-    setTurnstileLoading(false)
-    // Clear any pending error timeout
-    if (turnstileErrorTimeoutRef.current) {
-      clearTimeout(turnstileErrorTimeoutRef.current)
-      turnstileErrorTimeoutRef.current = null
-    }
-  }, [])
-
-  const handleCaptchaError = useCallback((error?: string) => {
-    setCaptchaToken(null)
-    setCaptchaError(true)
-    
-    // Only log error once to reduce console noise
-    // Error 400020 typically means domain not whitelisted or site key mismatch
-    if (!turnstileLoadError) {
-      console.warn('[Turnstile] CAPTCHA widget error:', error || 'Error 400020 - Check Cloudflare Turnstile configuration')
-    }
-    
-    // Only set load error after a delay to allow for retry/recovery
-    // This prevents false positives from transient network issues
-    if (turnstileErrorTimeoutRef.current) {
-      clearTimeout(turnstileErrorTimeoutRef.current)
-    }
-    
-    turnstileErrorTimeoutRef.current = setTimeout(() => {
-      // Only set load error if we still don't have a token after delay
-      setTurnstileLoadError(true)
-      setTurnstileLoading(false)
-    }, 3000) // Wait 3 seconds before showing error
-  }, [turnstileLoadError])
-
-  const handleCaptchaExpire = useCallback(() => {
-    setCaptchaToken(null)
-    setTurnstileLoadError(false) // Reset error state on expire
-    console.warn('Turnstile CAPTCHA token expired - user will need to complete it again')
-    // Show a subtle notification that CAPTCHA expired
-    toast({
-      variant: 'warning',
-      title: 'CAPTCHA expired',
-      description: 'Please complete the CAPTCHA verification again.',
-    })
-  }, [toast])
-  
-  // Reset Turnstile on mount/remount to allow retry
-  useEffect(() => {
-    if (hasTurnstile) {
-      // Reset loading state when component mounts
-      setTurnstileLoading(true)
-      setTurnstileLoadError(false)
-    }
-    
-    return () => {
-      // Cleanup timeout on unmount
-      if (turnstileErrorTimeoutRef.current) {
-        clearTimeout(turnstileErrorTimeoutRef.current)
-      }
-    }
-  }, [hasTurnstile])
-
-  const resetCaptcha = useCallback(() => {
-    setCaptchaToken(null)
-    setCaptchaError(false)
-    turnstileRef.current?.reset()
   }, [])
 
   // Function to get user profile and redirect based on role
@@ -170,7 +91,6 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     // Clear previous states
     setError('')
     setSuccess('')
-    setCaptchaError(false)
 
     // Validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
@@ -206,37 +126,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       return
     }
 
-    // Validate CAPTCHA token if Turnstile is enabled and successfully loaded
-    // If Turnstile failed to load (turnstileLoadError), allow proceeding without CAPTCHA
-    // since Supabase CAPTCHA is disabled anyway
-    if (hasTurnstile && !captchaToken && !turnstileLoadError) {
-      toast({ 
-        variant: 'error', 
-        title: 'CAPTCHA required', 
-        description: 'Please complete the CAPTCHA verification before signing up.' 
-      })
-      setCaptchaError(true)
-      return
-    }
-    
-    // If Turnstile failed to load, log a warning but allow proceeding
-    if (hasTurnstile && turnstileLoadError) {
-      console.warn('Turnstile failed to load, proceeding without CAPTCHA (CAPTCHA is disabled in Supabase)')
-    }
-
     setLoading(true)
     
     try {
-      // Log CAPTCHA token status for debugging (don't log the actual token for security)
-      if (hasTurnstile) {
-        console.log('Sign-up attempt with CAPTCHA:', {
-          hasToken: !!captchaToken,
-          tokenLength: captchaToken?.length || 0,
-          tokenPrefix: captchaToken?.substring(0, 10) || 'none',
-        })
-      }
-      
-      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined, captchaToken || undefined)
+      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
 
       const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
@@ -263,29 +156,11 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       const message = unknownError instanceof Error ? unknownError.message : 'Failed to sign up'
       setError(message)
       
-      // Check if error is related to CAPTCHA
-      const errorMessage = message.toLowerCase()
-      if (errorMessage.includes('captcha') || errorMessage.includes('turnstile')) {
-        toast({
-          variant: 'error',
-          title: 'CAPTCHA verification failed',
-          description: 'The CAPTCHA verification failed. Please refresh the page and try again. If the problem persists, check your Turnstile configuration in Supabase.',
-        })
-        // Reset CAPTCHA on error to allow retry
-        if (hasTurnstile) {
-          resetCaptcha()
-        }
-      } else {
-        toast({ 
-          variant: 'error', 
-          title: 'Sign-up failed', 
-          description: message || 'Please try again.' 
-        })
-        // Reset CAPTCHA on error to allow retry
-        if (hasTurnstile) {
-          resetCaptcha()
-        }
-      }
+      toast({ 
+        variant: 'error', 
+        title: 'Sign-up failed', 
+        description: message || 'Please try again.' 
+      })
     } finally {
       setLoading(false)
     }
@@ -410,60 +285,6 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               disabled={loading || googleLoading}
             />
           </div>
-
-          {hasTurnstile && (
-            <div className="space-y-2">
-              <div className="flex justify-center">
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={turnstileSiteKey}
-                  onSuccess={handleCaptchaSuccess}
-                  onError={handleCaptchaError}
-                  onExpire={handleCaptchaExpire}
-                  options={{
-                    theme: 'light',
-                    size: 'normal',
-                  }}
-                />
-              </div>
-              {captchaError && !turnstileLoadError && (
-                <div className="text-sm text-red-600 text-center">
-                  <p>CAPTCHA verification failed. Please try again.</p>
-                </div>
-              )}
-              {turnstileLoadError && (
-                <div className="text-sm text-amber-600 text-center space-y-1">
-                  <p>
-                    CAPTCHA widget failed to load. You can still sign up without CAPTCHA verification.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTurnstileLoadError(false)
-                      setTurnstileLoading(true)
-                      setCaptchaError(false)
-                      turnstileRef.current?.reset()
-                    }}
-                    className="text-xs underline mt-1 text-blue-600 hover:text-blue-800"
-                  >
-                    Retry loading CAPTCHA
-                  </button>
-                  <p className="text-xs mt-2 text-muted-foreground">
-                    If the problem persists, check your Turnstile configuration. See{' '}
-                    <a 
-                      href="/docs/TURNSTILE_ERROR_400020_FIX.md" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      troubleshooting guide
-                    </a>
-                    .
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
           
           <p className="text-sm text-muted-foreground">
             Interested in selling on Echo Shop Marketplace? Complete your account first, then visit the{' '}
@@ -475,7 +296,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           
           <Button 
             className="w-full" 
-            disabled={loading || googleLoading || (hasTurnstile && !captchaToken && !turnstileLoadError)} 
+            disabled={loading || googleLoading} 
             type="submit"
           >
             {loading ? 'Creating account...' : 'Sign Up'}
