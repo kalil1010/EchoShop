@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 
 interface SignUpFormProps {
   onToggleMode: () => void
@@ -22,6 +23,8 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [success, setSuccess] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance>(null)
 
   const { signUp } = useAuth()
   const router = useRouter()
@@ -34,6 +37,23 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       console.error('Failed to initialise Supabase client for OAuth:', clientError)
       return null
     }
+  }, [])
+
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
+  const hasTurnstile = Boolean(turnstileSiteKey)
+
+  const handleCaptchaSuccess = useCallback((token: string) => {
+    setCaptchaToken(token)
+  }, [])
+
+  const handleCaptchaError = useCallback(() => {
+    setCaptchaToken(null)
+    console.warn('[Turnstile] CAPTCHA widget error')
+  }, [])
+
+  const handleCaptchaExpire = useCallback(() => {
+    setCaptchaToken(null)
+    turnstileRef.current?.reset()
   }, [])
 
   // Function to get user profile and redirect based on role
@@ -126,10 +146,20 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       return
     }
 
+    // Validate CAPTCHA token if Turnstile is enabled
+    if (hasTurnstile && !captchaToken) {
+      toast({ 
+        variant: 'error', 
+        title: 'CAPTCHA required', 
+        description: 'Please complete the CAPTCHA verification before signing up.' 
+      })
+      return
+    }
+
     setLoading(true)
     
     try {
-      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined)
+      await signUp(trimmedEmail, trimmedPassword, trimmedDisplayName || undefined, captchaToken || undefined)
 
       const name = trimmedDisplayName || trimmedEmail.split('@')[0] || 'there'
       setSuccess(`Account created successfully! Welcome, ${name}. Redirecting...`)
@@ -285,6 +315,24 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               disabled={loading || googleLoading}
             />
           </div>
+
+          {hasTurnstile && (
+            <div className="space-y-2">
+              <div className="flex justify-center">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={turnstileSiteKey}
+                  onSuccess={handleCaptchaSuccess}
+                  onError={handleCaptchaError}
+                  onExpire={handleCaptchaExpire}
+                  options={{
+                    theme: 'light',
+                    size: 'normal',
+                  }}
+                />
+              </div>
+            </div>
+          )}
           
           <p className="text-sm text-muted-foreground">
             Interested in selling on Echo Shop Marketplace? Complete your account first, then visit the{' '}
@@ -296,7 +344,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           
           <Button 
             className="w-full" 
-            disabled={loading || googleLoading} 
+            disabled={loading || googleLoading || (hasTurnstile && !captchaToken)} 
             type="submit"
           >
             {loading ? 'Creating account...' : 'Sign Up'}

@@ -44,8 +44,8 @@ interface AuthContextType {
   roleMeta: RoleMeta
   loading: boolean
   session: Session | null
-  signIn: (email: string, password: string) => Promise<SignInResult>
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<SignInResult>
+  signUp: (email: string, password: string, displayName?: string, captchaToken?: string) => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>
   isSupabaseEnabled: boolean
@@ -983,14 +983,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, user?.uid, refreshProfile])
 
   const signIn = useCallback(
-    async (email: string, password: string): Promise<SignInResult> => {
+    async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
       if (!supabase) {
         throw new Error('Supabase is not properly configured')
       }
 
+      // Build sign-in options with CAPTCHA token if provided
+      const signInOptions = captchaToken
+        ? ({
+            captchaToken,
+          } as Parameters<typeof supabase.auth.signInWithPassword>[0]['options'] & {
+            captchaToken?: string
+          })
+        : undefined
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: signInOptions,
       })
       if (error) {
         const message = error.message?.toLowerCase() ?? ''
@@ -1084,17 +1094,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = useCallback(
-    async (email: string, password: string, displayName?: string) => {
+    async (email: string, password: string, displayName?: string, captchaToken?: string) => {
       if (!supabase) throw new Error('Supabase is not properly configured')
+
+      // Build sign-up options with CAPTCHA token if provided
+      const signUpOptions: {
+        data: {
+          display_name: string | null
+        }
+        captchaToken?: string
+      } = {
+        data: {
+          display_name: displayName ?? null,
+        },
+      }
+
+      // Include CAPTCHA token if provided
+      if (captchaToken) {
+        signUpOptions.captchaToken = captchaToken
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            display_name: displayName ?? null,
-          },
-        },
+        options: signUpOptions as Parameters<typeof supabase.auth.signUp>[0]['options'] & { captchaToken?: string },
       })
       
       if (error) {
