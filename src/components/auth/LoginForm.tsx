@@ -120,23 +120,22 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       return
     }
 
-    // Validate CAPTCHA token if Turnstile is enabled
-    if (hasTurnstile && !captchaToken) {
-      if (turnstileLoadError) {
-        toast({ 
-          variant: 'error', 
-          title: 'CAPTCHA configuration error', 
-          description: 'CAPTCHA verification is not working. Please check your Turnstile site key configuration or contact support.' 
-        })
-      } else {
-        toast({ 
-          variant: 'error', 
-          title: 'CAPTCHA required', 
-          description: 'Please complete the CAPTCHA verification before signing in.' 
-        })
-      }
+    // Validate CAPTCHA token if Turnstile is enabled and successfully loaded
+    // If Turnstile failed to load (turnstileLoadError), allow proceeding without CAPTCHA
+    // since Supabase CAPTCHA is disabled anyway
+    if (hasTurnstile && !captchaToken && !turnstileLoadError) {
+      toast({ 
+        variant: 'error', 
+        title: 'CAPTCHA required', 
+        description: 'Please complete the CAPTCHA verification before signing in.' 
+      })
       setCaptchaError(true)
       return
+    }
+    
+    // If Turnstile failed to load, log a warning but allow proceeding
+    if (hasTurnstile && turnstileLoadError) {
+      console.warn('Turnstile failed to load, proceeding without CAPTCHA (CAPTCHA is disabled in Supabase)')
     }
 
     setLoading(true)
@@ -321,23 +320,18 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   }}
                 />
               </div>
-              {captchaError && (
-                <div className="text-sm text-red-600 text-center space-y-1">
+              {captchaError && !turnstileLoadError && (
+                <div className="text-sm text-red-600 text-center">
+                  <p>CAPTCHA verification failed. Please try again.</p>
+                </div>
+              )}
+              {turnstileLoadError && (
+                <div className="text-sm text-amber-600 text-center space-y-1">
                   <p>
-                    {turnstileLoadError 
-                      ? 'CAPTCHA configuration error (Error 400020). This usually means:'
-                      : 'CAPTCHA verification failed. Please try again.'}
+                    CAPTCHA widget failed to load. You can still sign in without CAPTCHA verification.
                   </p>
-                  {turnstileLoadError && (
-                    <ul className="text-xs text-left list-disc list-inside mt-2 space-y-1">
-                      <li>Domain not in allowed domains list in Cloudflare Turnstile</li>
-                      <li>Site key is invalid or from a different account</li>
-                      <li>Site key and secret key mismatch in Supabase</li>
-                      <li>Site key format is incorrect</li>
-                    </ul>
-                  )}
-                  <p className="text-xs mt-2">
-                    Check browser console for details. See{' '}
+                  <p className="text-xs mt-2 text-muted-foreground">
+                    If you need to enable CAPTCHA, check your Turnstile configuration. See{' '}
                     <a 
                       href="/docs/TURNSTILE_ERROR_400020_FIX.md" 
                       target="_blank" 
@@ -345,15 +339,6 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                       className="underline"
                     >
                       troubleshooting guide
-                    </a>
-                    {' '}or use{' '}
-                    <a 
-                      href="/api/turnstile-diagnostic" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      diagnostic endpoint
                     </a>
                     .
                   </p>
@@ -365,7 +350,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           <Button 
             type="submit" 
             className="w-full" 
-            disabled={loading || (hasTurnstile && !captchaToken)}
+            disabled={loading || (hasTurnstile && !captchaToken && !turnstileLoadError)}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
