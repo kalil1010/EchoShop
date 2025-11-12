@@ -76,13 +76,11 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     setCaptchaToken(null)
     setCaptchaError(true)
     
-    // Check browser console for Turnstile errors
-    // Error 400020 typically means:
-    // - Invalid site key
-    // - Domain not in allowed domains list
-    // - Site key from different account
-    // - Site key disabled/revoked
-    console.error('Turnstile CAPTCHA error:', error || 'Check browser console for details')
+    // Only log error once to reduce console noise
+    // Error 400020 typically means domain not whitelisted or site key mismatch
+    if (!turnstileLoadError) {
+      console.warn('[Turnstile] CAPTCHA widget error:', error || 'Error 400020 - Check Cloudflare Turnstile configuration')
+    }
     
     // Only set load error after a delay to allow for retry/recovery
     // This prevents false positives from transient network issues
@@ -91,19 +89,11 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     }
     
     turnstileErrorTimeoutRef.current = setTimeout(() => {
-      console.error('Common causes of Turnstile errors:')
-      console.error('1. Site key is invalid or from different account')
-      console.error('2. Domain not in allowed domains list in Cloudflare')
-      console.error('3. Site key and secret key mismatch in Supabase')
-      console.error('4. Site key format is incorrect')
-      console.error('5. Turnstile site is disabled in Cloudflare')
-      console.error('See docs/TURNSTILE_ERROR_400020_FIX.md for troubleshooting')
-      
       // Only set load error if we still don't have a token after delay
       setTurnstileLoadError(true)
       setTurnstileLoading(false)
     }, 3000) // Wait 3 seconds before showing error
-  }, [])
+  }, [turnstileLoadError])
 
   const handleCaptchaExpire = useCallback(() => {
     setCaptchaToken(null)
