@@ -18,10 +18,20 @@ export default function AtlasPage() {
   const sessionCheckAttemptsRef = useRef(0)
   const MAX_SESSION_CHECK_ATTEMPTS = 5 // Wait up to 2.5 seconds for session restoration
 
+  // Track if we've already verified access to prevent re-checks
+  const verifiedRef = useRef(false)
+  const verifiedUserIdRef = useRef<string | null>(null)
+
   useEffect(() => {
     // Wait for loading to complete AND give extra time for session restoration from localStorage
     if (loading) {
       sessionCheckAttemptsRef.current = 0
+      return
+    }
+
+    // If we've already verified access for this user, skip re-check
+    // This prevents reloads when tab regains focus
+    if (verifiedRef.current && verifiedUserIdRef.current === user?.uid && profile) {
       return
     }
 
@@ -51,6 +61,8 @@ export default function AtlasPage() {
       }
       // No auth storage found, redirect to login
       console.debug('[atlas] No user and no auth storage, redirecting to login')
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
       router.replace(`/auth?redirect=/atlas`)
       return
     }
@@ -59,6 +71,8 @@ export default function AtlasPage() {
     sessionCheckAttemptsRef.current = 0
 
     if (!profile) {
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
       router.replace('/auth?redirect=/atlas&missingProfile=true')
       return
     }
@@ -71,6 +85,8 @@ export default function AtlasPage() {
         denial: access.denial ?? null,
       })
       setDenial(access.denial ?? null)
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
 
       if (!handledRef.current) {
         handledRef.current = true
@@ -83,12 +99,15 @@ export default function AtlasPage() {
             'You do not have permission to open the vendor dashboard.',
         })
 
-        // Redirect to /auth with role info
-        router.replace(`/auth?redirect=/atlas&role=${profile.role}`)
+        // Redirect to their correct dashboard based on role
+        router.replace(access.denial?.redirect ?? `/auth?redirect=/atlas&role=${profile.role}`)
       }
       return
     }
 
+    // Access granted - mark as verified
+    verifiedRef.current = true
+    verifiedUserIdRef.current = user.uid
     setDenial(null)
     handledRef.current = false
   }, [loading, profile, user, router, logout, toast])

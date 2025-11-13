@@ -6,6 +6,7 @@ import { ImageGenerator } from '@/components/image/ImageGenerator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
+import { RoleGuard } from '@/components/auth/RoleGuard'
 
 export default function ImageGeneratorPage() {
   const { user, isAuthenticated, loading } = useRequireAuth()
@@ -39,16 +40,18 @@ export default function ImageGeneratorPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Fashion Image Lab</h1>
-        <p className="text-slate-600">
-          Generate editorial-grade visuals using the dedicated Mistral image agent—no keys ever leave the server.
-        </p>
+    <RoleGuard allowedRoles={['user']}>
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8 space-y-2">
+          <h1 className="text-3xl font-bold text-slate-900">Fashion Image Lab</h1>
+          <p className="text-slate-600">
+            Generate editorial-grade visuals using the dedicated Mistral image agent—no keys ever leave the server.
+          </p>
+        </div>
+        <div className="mx-auto max-w-5xl">
+          <ImageGenerator />
+        </div>
       </div>
-      <div className="mx-auto max-w-5xl">
-        <ImageGenerator />
-      </div>
-    </div>
+    </RoleGuard>
   )
 }

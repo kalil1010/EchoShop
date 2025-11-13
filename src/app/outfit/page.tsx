@@ -6,6 +6,7 @@ import { OutfitSuggestion } from '@/components/outfit/OutfitSuggestion'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { RoleGuard } from '@/components/auth/RoleGuard'
 
 export default function OutfitPage() {
   const { user, loading, isAuthenticated } = useRequireAuth()
@@ -44,15 +45,17 @@ export default function OutfitPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Outfit Suggestions</h1>
-        <p className="text-gray-600">
-          Get AI-powered outfit recommendations based on weather and occasion
-        </p>
-      </div>
+    <RoleGuard allowedRoles={['user']}>
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Outfit Suggestions</h1>
+          <p className="text-gray-600">
+            Get AI-powered outfit recommendations based on weather and occasion
+          </p>
+        </div>
 
-      <OutfitSuggestion />
-    </div>
+        <OutfitSuggestion />
+      </div>
+    </RoleGuard>
   )
 }

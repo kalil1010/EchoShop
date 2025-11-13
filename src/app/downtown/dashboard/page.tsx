@@ -91,41 +91,25 @@ export default function OwnerDashboardPage() {
       lastCheckedUserIdRef.current = user.uid
     }
 
-    // Use a small delay to batch rapid auth state changes and prevent React error #300
-    // This allows the profile to finish loading if it's still in progress
+    // If we already have access and user/profile haven't changed, don't re-check
+    // This prevents unnecessary reloads when tab regains focus
+    if (hasAccess && lastCheckedUserIdRef.current === user.uid && userProfile) {
+      // Already verified access for this user - skip re-check
+      return
+    }
+
+    // Use a minimal delay only if profile is still loading
+    const delay = userProfile ? 0 : 50 // No delay if profile is ready
     timeoutRef.current = setTimeout(() => {
       try {
-        // Log auth state transitions for debugging
-        console.debug('[owner-dashboard] Auth state check', {
-          authLoading,
-          hasUser: !!user,
-          hasUserProfile: !!userProfile,
-          userRole: user?.role,
-          profileRole: userProfile?.role,
-        })
-
         // Determine the user's role - prefer profile role, fall back to user role
-        // If we don't have a profile yet, use the user's role from auth metadata
         const role = normaliseRole(userProfile?.role ?? user.role)
         
         // Check if user has access to owner portal
         const access = getPortalAccess(role, 'owner')
 
-        console.debug('[owner-dashboard] Access check', {
-          userId: user?.uid ?? null,
-          role,
-          allowed: access.allowed,
-          hasProfile: !!userProfile,
-        })
-
         if (!access.allowed) {
           // User doesn't have owner access - redirect them
-          console.debug('[owner-dashboard] Access denied', {
-            userId: user?.uid ?? null,
-            role,
-            denial: access.denial ?? null,
-          })
-          
           setIsRedirecting(true)
           setIsLoading(false)
           setHasAccess(false)
@@ -143,8 +127,7 @@ export default function OwnerDashboardPage() {
           return
         }
 
-        // User has owner access - show dashboard
-        console.debug('[owner-dashboard] Access granted, showing dashboard')
+        // User has owner access - show dashboard immediately
         setIsLoading(false)
         setIsRedirecting(false)
         setHasAccess(true)
@@ -153,7 +136,7 @@ export default function OwnerDashboardPage() {
         setIsLoading(false)
         setHasAccess(false)
       }
-    }, 150) // Small delay to allow profile to load and prevent rapid re-renders
+    }, delay)
 
     // Cleanup function - always returned to prevent React error #300
     return () => {
