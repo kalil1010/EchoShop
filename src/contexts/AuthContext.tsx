@@ -978,6 +978,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe
   }, [supabase, user?.uid, refreshProfile])
 
+  // Handle page visibility changes (browser minimized/restored)
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Page became visible - reconnect WebSocket subscriptions
+        console.debug('[AuthContext] Page became visible, reconnecting realtime subscriptions...')
+        
+        // Small delay to ensure browser has fully restored the tab
+        setTimeout(() => {
+          if (supabase && user?.uid) {
+            realtimeSubscriptionManager.reconnectAll()
+          }
+        }, 500)
+      } else {
+        console.debug('[AuthContext] Page became hidden')
+      }
+    }
+
+    // Also handle window focus/blur as fallback
+    const handleFocus = () => {
+      console.debug('[AuthContext] Window gained focus, checking realtime subscriptions...')
+      setTimeout(() => {
+        if (supabase && user?.uid && document.visibilityState === 'visible') {
+          realtimeSubscriptionManager.reconnectAll()
+        }
+      }, 500)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [supabase, user?.uid])
+
   const signIn = useCallback(
     async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
       if (!supabase) {

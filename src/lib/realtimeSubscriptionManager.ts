@@ -213,6 +213,107 @@ class RealtimeSubscriptionManager {
   }
 
   /**
+   * Reconnect all active subscriptions
+   * Useful when page becomes visible again after being minimized
+   */
+  reconnectAll(): void {
+    if (!this.supabase) {
+      console.warn('[RealtimeManager] Cannot reconnect: Supabase client not initialized')
+      return
+    }
+
+    const channelKeys = Array.from(this.channels.keys())
+    console.debug(`[RealtimeManager] Reconnecting ${channelKeys.length} subscriptions...`)
+
+    channelKeys.forEach((channelKey) => {
+      const managed = this.channels.get(channelKey)
+      if (!managed) return
+
+      try {
+        // Always attempt to reconnect when page becomes visible
+        // This ensures connections are restored even if they appear active but are actually stale
+        
+        // Unsubscribe old channel first
+        try {
+          if (typeof this.supabase?.removeChannel === 'function') {
+            this.supabase.removeChannel(managed.channel)
+          } else if (typeof managed.channel.unsubscribe === 'function') {
+            managed.channel.unsubscribe()
+          }
+        } catch (error) {
+          // Ignore errors during cleanup - channel might already be closed
+          console.debug(`[RealtimeManager] Channel ${channelKey} cleanup note:`, error)
+        }
+
+        // Recreate channel with same config
+        const createChannel = (): RealtimeChannel => {
+          const channel = this.supabase!
+            .channel(managed.config.channelName)
+            .on(
+              'postgres_changes' as any,
+              {
+                event: managed.config.event || '*',
+                schema: managed.config.schema || 'public',
+                table: managed.config.table,
+                filter: managed.config.filter,
+              },
+              async (payload) => {
+                try {
+                  await managed.config.callback(payload)
+                } catch (error) {
+                  console.error(`[RealtimeManager] Callback error for ${channelKey}:`, error)
+                }
+              },
+            )
+            .subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                managed.reconnectAttempts = 0
+                console.debug(`[RealtimeManager] Reconnected: ${channelKey}`)
+              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                // Use existing reconnection logic
+                if (managed.reconnectAttempts < managed.maxReconnectAttempts) {
+                  managed.reconnectAttempts += 1
+                  const delay = this.calculateBackoffDelay(managed.reconnectAttempts - 1)
+                  console.warn(
+                    `[RealtimeManager] Reconnection attempt ${managed.reconnectAttempts}/${managed.maxReconnectAttempts} for ${channelKey} in ${delay}ms`,
+                  )
+                  
+                  setTimeout(() => {
+                    const stillManaged = this.channels.get(channelKey)
+                    if (stillManaged) {
+                      try {
+                        if (typeof this.supabase?.removeChannel === 'function') {
+                          this.supabase.removeChannel(stillManaged.channel)
+                        } else if (typeof stillManaged.channel.unsubscribe === 'function') {
+                          stillManaged.channel.unsubscribe()
+                        }
+                      } catch (error) {
+                        console.warn(`[RealtimeManager] Error cleaning up old channel:`, error)
+                      }
+                      
+                      const newChannel = createChannel()
+                      stillManaged.channel = newChannel
+                    }
+                  }, delay)
+                }
+              }
+            })
+          
+          return channel
+        }
+
+        const newChannel = createChannel()
+        managed.channel = newChannel
+        managed.reconnectAttempts = 0 // Reset attempts on manual reconnect
+      } catch (error) {
+        console.error(`[RealtimeManager] Error reconnecting ${channelKey}:`, error)
+      }
+    })
+
+    console.debug(`[RealtimeManager] Reconnection process initiated for ${channelKeys.length} channels`)
+  }
+
+  /**
    * Log subscription statistics (for monitoring/debugging)
    */
   logStatistics(): void {

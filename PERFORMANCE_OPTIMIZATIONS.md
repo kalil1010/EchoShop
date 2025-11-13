@@ -119,6 +119,24 @@ realtimeSubscriptionManager.logStatistics()
 - Marketplace queries already had limits (36, 48 items) - no changes needed
 - All optimizations maintain backward compatibility
 
+## 🔄 WebSocket Reconnection Fix (Browser Minimize Issue)
+
+**Problem**: Application disappeared/required reload when browser was minimized due to WebSocket connection loss.
+
+**Solution**: Added page visibility API handling to automatically reconnect WebSocket subscriptions when the tab becomes visible again.
+
+**Implementation**:
+- Added `reconnectAll()` method to `RealtimeSubscriptionManager` that checks and reconnects all active subscriptions
+- Added visibility change listener in `AuthContext` that triggers reconnection when page becomes visible
+- Handles both `visibilitychange` event and `focus` event as fallback
+- Includes 500ms delay to ensure browser has fully restored the tab before reconnecting
+
+**Files Changed**:
+- `src/lib/realtimeSubscriptionManager.ts` - Added `reconnectAll()` method
+- `src/contexts/AuthContext.tsx` - Added visibility change handling
+
+**Expected Impact**: Application will automatically reconnect and work properly when browser tab is restored from minimized state.
+
 ## 🚀 Next Steps (Optional Future Improvements)
 
 1. **UI Pagination**: Add "Load More" buttons for lists that exceed default limits
