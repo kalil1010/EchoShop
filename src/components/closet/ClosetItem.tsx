@@ -34,6 +34,7 @@ export function ClosetItem({ item, onDelete, onView, canManage = true }: ClosetI
         <img
           src={item.imageUrl}
           alt={item.description || 'Clothing item'}
+          loading="lazy"
           className={`w-full h-full object-cover cursor-pointer transition-opacity ${
             imageLoaded ? 'opacity-100' : 'opacity-0'
           }`}

@@ -15,6 +15,7 @@ import { DEFAULT_ROLE, getRoleMeta, normaliseRole } from '@/lib/roles'
 import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfilePayload } from '@/lib/profileSchema'
 import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
+import { realtimeSubscriptionManager } from '@/lib/realtimeSubscriptionManager'
 
 type SignInResult = {
   user: AuthUser
@@ -955,31 +956,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!supabase || !user?.uid) return
 
-    const channel = supabase
-      .channel(`profile-updates-${user.uid}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.uid}`,
-        },
-        () => {
-          refreshProfile().catch((error) =>
-            console.warn('[AuthContext] Failed to refresh profile after realtime update:', error),
-          )
-        },
-      )
-      .subscribe()
-
-    return () => {
-      if (typeof supabase.removeChannel === 'function') {
-        supabase.removeChannel(channel)
-      } else if (typeof channel.unsubscribe === 'function') {
-        channel.unsubscribe()
-      }
+    // Initialize subscription manager
+    if (realtimeSubscriptionManager.getActiveSubscriptionCount() === 0) {
+      realtimeSubscriptionManager.initialize(supabase)
     }
+
+    // Subscribe with proper filtering (already filtered by user_id)
+    const unsubscribe = realtimeSubscriptionManager.subscribe({
+      channelName: `profile-updates-${user.uid}`,
+      table: 'profiles',
+      filter: `id=eq.${user.uid}`, // Critical: filter by user_id to prevent processing all profile changes
+      schema: 'public',
+      event: '*',
+      callback: () => {
+        refreshProfile().catch((error) =>
+          console.warn('[AuthContext] Failed to refresh profile after realtime update:', error),
+        )
+      },
+    })
+
+    return unsubscribe
   }, [supabase, user?.uid, refreshProfile])
 
   const signIn = useCallback(

@@ -89,6 +89,7 @@ export default async function MarketplacePage() {
                       <img
                         src={coverImage}
                         alt={product.title}
+                        loading="lazy"
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     ) : (

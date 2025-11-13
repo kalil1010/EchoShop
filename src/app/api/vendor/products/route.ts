@@ -48,11 +48,24 @@ export async function GET(request: NextRequest) {
     await requireVendorUser(userId)
 
     const supabase = createServiceClient()
-    const { data, error } = await supabase
+    
+    // Parse pagination parameters from query string
+    const { searchParams } = new URL(request.url)
+    const limit = Math.min(Number.parseInt(searchParams.get('limit') || '100', 10), 500) // Max 500 items
+    const offset = Math.max(Number.parseInt(searchParams.get('offset') || '0', 10), 0)
+
+    let query = supabase
       .from('vendor_products')
       .select('*')
       .eq('vendor_id', userId)
       .order('updated_at', { ascending: false })
+      .limit(limit)
+
+    if (offset > 0) {
+      query = query.range(offset, offset + limit - 1)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       throw error

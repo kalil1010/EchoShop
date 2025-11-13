@@ -311,7 +311,7 @@ function VendorProductCard({ product, isBusy, onStatusChange, onDelete }: Vendor
     <Card className="overflow-hidden">
       {coverImage ? (
         <div className="aspect-video w-full overflow-hidden bg-muted">
-          <img src={coverImage} alt={product.title} className="h-full w-full object-cover" />
+          <img src={coverImage} alt={product.title} loading="lazy" className="h-full w-full object-cover" />
         </div>
       ) : null}
       <CardContent className="space-y-4 p-4">

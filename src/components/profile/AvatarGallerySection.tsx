@@ -162,6 +162,7 @@ export function AvatarGallerySection() {
                         <img
                           src={item.publicUrl}
                           alt="Saved avatar"
+                          loading="lazy"
                           className="h-32 w-full object-cover transition duration-150 hover:scale-[1.02]"
                         />
                       ) : (

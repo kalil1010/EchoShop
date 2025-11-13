@@ -103,15 +103,31 @@ export function mapClothingRow(row: ClothingRow): ClothingItem {
   }
 }
 
-export async function getUserClothing(requestedUserId: string): Promise<ClothingItem[]> {
+export async function getUserClothing(
+  requestedUserId: string,
+  options?: { limit?: number; offset?: number },
+): Promise<ClothingItem[]> {
   const supabase = getSupabaseClient()
   const sessionUserId = await requireSessionUser(supabase, requestedUserId)
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('clothing')
     .select('*')
     .eq('user_id', sessionUserId)
     .order('created_at', { ascending: false })
+
+  // Add pagination if specified (default limit of 100 to prevent excessive queries)
+  if (options?.limit !== undefined) {
+    query = query.limit(options.limit)
+    if (options.offset !== undefined) {
+      query = query.range(options.offset, options.offset + options.limit - 1)
+    }
+  } else {
+    // Default limit to prevent loading all items at once
+    query = query.limit(100)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     throw mapSupabaseError(error)
