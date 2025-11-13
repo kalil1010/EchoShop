@@ -82,7 +82,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       // Redirect based on role
       switch (profile?.role) {
         case 'vendor':
-          router.push('/vendor/hub')
+          router.push('/atlas') // Vendor dashboard
           break
         case 'owner':
           router.push('/downtown')
@@ -215,7 +215,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ 
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${window.location.origin}/auth/callback`,
         }
       })
       

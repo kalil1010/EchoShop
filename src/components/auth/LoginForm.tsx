@@ -132,6 +132,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         description: roleMeta.welcomeSubtitle,
       })
 
+      // Vendor users always go to vendor dashboard
+      if (profile.role === 'vendor') {
+        setTimeout(() => router.replace('/atlas'), 800)
+        return
+      }
+
       // Use redirect path if provided, otherwise use role-based destination
       const finalDestination = redirectPath && 
         getPortalAccess(profile.role, portal as 'owner' | 'vendor').allowed
@@ -165,7 +171,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
     setGoogleLoading(true)
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google' })
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        }
+      })
       if (oauthError) {
         throw oauthError
       }
