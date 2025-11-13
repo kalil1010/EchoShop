@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { getDefaultRouteForRole } from '@/lib/roles'
 import { getSupabaseClient } from '@/lib/supabaseClient'
@@ -9,7 +9,6 @@ import { getSupabaseClient } from '@/lib/supabaseClient'
 export default function AuthCallbackPage() {
   const { userProfile, loading, session } = useAuth()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [syncing, setSyncing] = useState(true)
 
   // Handle OAuth callback - sync session to server immediately
