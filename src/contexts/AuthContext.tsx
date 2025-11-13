@@ -811,7 +811,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data?.session ?? null
         setSession(nextSession)
         if (nextSession) {
-          void syncServerSession('SIGNED_IN', nextSession)
+          // Immediately sync session to server to ensure cookies are set
+          // This is critical for OAuth flows and page refreshes
+          try {
+            await syncServerSession('SIGNED_IN', nextSession)
+            console.debug('[AuthContext] Initial session synced to server')
+          } catch (error) {
+            console.warn('[AuthContext] Failed to sync initial session to server:', error)
+          }
         } else {
           void syncServerSession('SIGNED_OUT', null)
         }
@@ -865,7 +872,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+      // For OAuth sign-ins, immediately sync session to server
+      // This ensures cookies are set before middleware checks
+      if (event === 'SIGNED_IN' && newSession) {
+        console.debug('[AuthContext] OAuth sign-in detected, syncing session to server immediately')
+        // Sync immediately and wait for it to complete
+        try {
+          await syncServerSession('SIGNED_IN', newSession)
+          console.debug('[AuthContext] Session synced to server successfully')
+        } catch (error) {
+          console.warn('[AuthContext] Failed to sync session to server:', error)
+        }
+      } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+        // For other events, sync asynchronously
         void syncServerSession(event, newSession ?? null)
       }
 
