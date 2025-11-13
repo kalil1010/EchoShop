@@ -769,6 +769,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
+        // First, try to get session from storage (this reads from localStorage)
+        // Add a small delay to ensure localStorage is accessible after page navigation
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) {
           const message = typeof sessionError.message === 'string' ? sessionError.message : ''
@@ -834,7 +838,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (isMounted) {
           setLoading(false)
-          console.log('[AuthContext] Session initialization complete')
+          console.log('[AuthContext] Session initialization complete', {
+            hasUser: Boolean(user),
+            hasSession: Boolean(session),
+          })
         }
       }
     }
@@ -993,30 +1000,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof document === 'undefined') return
 
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        // Page became visible - reconnect WebSocket subscriptions
-        console.debug('[AuthContext] Page became visible, reconnecting realtime subscriptions...')
+        // Page became visible - restore session and reconnect WebSocket subscriptions
+        console.debug('[AuthContext] Page became visible, restoring session and reconnecting subscriptions...')
         
-        // Small delay to ensure browser has fully restored the tab
-        setTimeout(() => {
-          if (supabase && user?.uid) {
+        // Small delay to ensure browser has fully restored the tab and localStorage is accessible
+        setTimeout(async () => {
+          if (!supabase) return
+          
+          // First, restore/validate session from localStorage
+          // This ensures session state is current after tab was hidden
+          try {
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+            if (!sessionError && sessionData?.session) {
+              // Session exists - update state if needed
+              const currentSession = sessionData.session
+              if (currentSession.access_token !== session?.access_token) {
+                console.debug('[AuthContext] Session restored from storage after visibility change')
+                setSession(currentSession)
+                const sessionUser = currentSession.user
+                if (sessionUser) {
+                  const mapped = mapAuthUser(sessionUser)
+                  setUser(mapped)
+                  // Only reload profile if we don't have one or user changed
+                  if (!userProfile || userProfile.uid !== mapped.uid) {
+                    await loadUserProfileWithTimeout(mapped)
+                  }
+                }
+              }
+            } else if (!sessionData?.session && user) {
+              // Session was lost - try to restore from cookies/storage
+              console.debug('[AuthContext] Session not found after visibility change, attempting restoration')
+              // Don't clear user immediately - let the normal auth flow handle it
+            }
+          } catch (error) {
+            console.warn('[AuthContext] Error restoring session after visibility change:', error)
+            // Don't clear state on error - session might still be valid
+          }
+          
+          // Reconnect WebSocket subscriptions if user exists
+          if (user?.uid) {
             realtimeSubscriptionManager.reconnectAll()
           }
-        }, 500)
+        }, 300)
       } else {
         console.debug('[AuthContext] Page became hidden')
+        // Don't clear session when page is hidden - it should persist
       }
     }
 
     // Also handle window focus/blur as fallback
-    const handleFocus = () => {
-      console.debug('[AuthContext] Window gained focus, checking realtime subscriptions...')
-      setTimeout(() => {
-        if (supabase && user?.uid && document.visibilityState === 'visible') {
+    const handleFocus = async () => {
+      console.debug('[AuthContext] Window gained focus, checking session and subscriptions...')
+      setTimeout(async () => {
+        if (!supabase || document.visibilityState !== 'visible') return
+        
+        // Restore session on focus as well
+        try {
+          const { data: sessionData } = await supabase.auth.getSession()
+          if (sessionData?.session && sessionData.session.access_token !== session?.access_token) {
+            console.debug('[AuthContext] Session restored from storage after focus')
+            setSession(sessionData.session)
+            const sessionUser = sessionData.session.user
+            if (sessionUser) {
+              const mapped = mapAuthUser(sessionUser)
+              setUser(mapped)
+              if (!userProfile || userProfile.uid !== mapped.uid) {
+                await loadUserProfileWithTimeout(mapped)
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('[AuthContext] Error restoring session after focus:', error)
+        }
+        
+        if (user?.uid) {
           realtimeSubscriptionManager.reconnectAll()
         }
-      }, 500)
+      }, 300)
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -1026,7 +1088,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [supabase, user?.uid])
+  }, [supabase, user?.uid, session?.access_token, userProfile?.uid, loadUserProfileWithTimeout])
 
   const signIn = useCallback(
     async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {

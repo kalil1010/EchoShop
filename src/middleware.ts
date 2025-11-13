@@ -200,19 +200,27 @@ export async function middleware(req: NextRequest) {
     if (isPublicRoute) {
       return NextResponse.next()
     }
+    
     // Check if there are any Supabase auth cookies (user might be logged in but session not detected)
+    // This handles the case where:
+    // 1. User has valid auth cookies in browser
+    // 2. Session restoration from localStorage hasn't completed yet
+    // 3. Middleware can't detect session due to timing/cookie handling limitations
     const hasAuthCookies = req.cookies.getAll().some(
       (cookie) =>
         cookie.name.startsWith('sb-') ||
         cookie.name.startsWith('sb:') ||
         cookie.name.startsWith('__Secure-sb-')
     )
+    
     if (hasAuthCookies) {
-      // User has auth cookies but session wasn't detected - might be a timing issue or expired session
-      // Allow the request through and let the page/API route handle authentication
-      // This is expected behavior when cookies exist but session is invalid/expired
+      // User has auth cookies but session wasn't detected - this is likely a timing issue
+      // Allow the request through and let the client-side AuthContext restore the session
+      // The page components will handle auth checks after session is restored
+      console.debug('[middleware] Auth cookies present but session not detected, allowing request through for client-side session restoration', { pathname })
       return NextResponse.next()
     }
+    
     console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
     if (pathname.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

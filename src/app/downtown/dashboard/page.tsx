@@ -19,6 +19,8 @@ export default function OwnerDashboardPage() {
   const [hasAccess, setHasAccess] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastCheckedUserIdRef = useRef<string | null>(null)
+  const sessionCheckAttemptsRef = useRef(0)
+  const MAX_SESSION_CHECK_ATTEMPTS = 5 // Wait up to 2.5 seconds for session restoration
 
   useEffect(() => {
     // Clear any existing timeout to prevent multiple simultaneous checks
@@ -29,14 +31,42 @@ export default function OwnerDashboardPage() {
 
     // Wait for auth context to finish initializing
     if (authLoading) {
+      sessionCheckAttemptsRef.current = 0
       setIsLoading(true)
       return
     }
 
-    // If no user after auth has loaded, redirect to login immediately
-    // Use a small delay to ensure auth state has fully cleared after logout
+    // If no user after auth has loaded, wait a bit for session restoration from localStorage
+    // This handles the race condition where middleware allows the request but
+    // AuthContext hasn't finished restoring session from localStorage yet
     if (!user) {
-      console.debug('[owner-dashboard] No user found after auth load, redirecting to login')
+      if (sessionCheckAttemptsRef.current < MAX_SESSION_CHECK_ATTEMPTS) {
+        sessionCheckAttemptsRef.current += 1
+        // Wait 500ms before checking again (allows localStorage session to be restored)
+        timeoutRef.current = setTimeout(() => {
+          // The useEffect will run again due to dependency changes
+        }, 500)
+        return () => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current)
+            timeoutRef.current = null
+          }
+        }
+      }
+      // After max attempts, check localStorage directly as a last resort
+      // Only redirect if we're certain there's no session
+      if (typeof window !== 'undefined') {
+        const hasAuthStorage = Object.keys(localStorage).some(key => 
+          key.includes('supabase.auth') || key.includes('sb-')
+        )
+        if (hasAuthStorage) {
+          // Auth storage exists, wait a bit more for restoration
+          console.debug('[owner-dashboard] Auth storage found, waiting for session restoration...')
+          return
+        }
+      }
+      // No auth storage found, redirect to login
+      console.debug('[owner-dashboard] No user and no auth storage, redirecting to login')
       setIsRedirecting(true)
       setIsLoading(false)
       setHasAccess(false)
@@ -49,6 +79,9 @@ export default function OwnerDashboardPage() {
       }, 100)
       return
     }
+
+    // Reset attempts once we have a user
+    sessionCheckAttemptsRef.current = 0
 
     // Check if this is a different user than we last checked
     // If so, reset access state to re-check
