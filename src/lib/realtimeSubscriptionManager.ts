@@ -76,10 +76,10 @@ class RealtimeSubscriptionManager {
     }
 
     const createChannel = (): RealtimeChannel => {
-      return this.supabase!
+      const channel = this.supabase!
         .channel(config.channelName)
         .on(
-          'postgres_changes',
+          'postgres_changes' as any,
           {
             event: config.event || '*',
             schema: config.schema || 'public',
@@ -138,6 +138,8 @@ class RealtimeSubscriptionManager {
             }
           }
         })
+      
+      return channel
     }
 
     const channel = createChannel()
