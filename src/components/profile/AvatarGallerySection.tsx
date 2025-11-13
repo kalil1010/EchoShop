@@ -7,15 +7,20 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { AvatarRenderRecord } from '@/types/avatar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { Loader2, RefreshCw, Trash2, ChevronDown } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
+
+const AVATARS_PER_PAGE = 50
 
 export function AvatarGallerySection() {
   const { user, session } = useAuth()
   const { toast } = useToast()
   const [items, setItems] = useState<AvatarRenderRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [offset, setOffset] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxCaption, setLightboxCaption] = useState<string | undefined>(undefined)
@@ -23,30 +28,57 @@ export function AvatarGallerySection() {
 
   const isAuthenticated = useMemo(() => Boolean(user && session), [user, session])
 
-  const loadGallery = useCallback(async () => {
+  const loadGallery = useCallback(async (reset = false) => {
     if (!isAuthenticated || !user?.uid) {
       setItems([])
       setError('Sign in to view your avatar gallery.')
       return
     }
 
-    setLoading(true)
+    if (reset) {
+      setLoading(true)
+      setOffset(0)
+    } else {
+      setLoadingMore(true)
+    }
     setError(null)
     try {
-      const result = await fetchAvatarGallery({ accessToken: session?.access_token })
-      setItems(result)
+      const currentOffset = reset ? 0 : offset
+      const url = `/api/avatar-renders?limit=${AVATARS_PER_PAGE}&offset=${currentOffset}`
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        throw new Error(`Failed to load avatar gallery: ${res.status}`)
+      }
+      const data = (await res.json()) as { items?: AvatarRenderRecord[] }
+      const result = Array.isArray(data.items) ? data.items : []
+      
+      if (reset) {
+        setItems(result)
+      } else {
+        setItems((prev) => [...prev, ...result])
+      }
+      
+      setHasMore(result.length === AVATARS_PER_PAGE)
+      setOffset(currentOffset + result.length)
     } catch (err) {
       console.error('[profile-avatar-gallery] failed to load', err)
       const message = err instanceof Error ? err.message : 'Could not load avatar gallery.'
       setError(message.includes('401') ? 'Sign in to view your avatar gallery.' : message)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [isAuthenticated, session?.access_token, user?.uid])
+  }, [isAuthenticated, session?.access_token, user?.uid, offset])
 
   useEffect(() => {
-    void loadGallery()
-  }, [loadGallery])
+    void loadGallery(true)
+  }, [user?.uid, session?.access_token]) // Only depend on auth, loadGallery will be recreated when needed
 
   const handleDelete = useCallback(
     async (storagePath: string) => {
@@ -84,7 +116,7 @@ export function AvatarGallerySection() {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => void loadGallery()}
+            onClick={() => void loadGallery(true)}
             disabled={loading || !isAuthenticated}
             className="gap-2"
           >
@@ -174,6 +206,29 @@ export function AvatarGallerySection() {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={() => void loadGallery(false)}
+                disabled={loadingMore}
+                className="gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Load More ({items.length} loaded)
+                  </>
+                )}
+              </Button>
             </div>
           )}
         </CardContent>

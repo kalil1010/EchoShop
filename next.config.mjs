@@ -90,6 +90,25 @@ const nextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      // CDN caching headers for static images
+      {
+        source: '/api/image-generator',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/_next/image',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
     ]
   },
 }

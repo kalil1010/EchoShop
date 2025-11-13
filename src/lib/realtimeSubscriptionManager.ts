@@ -324,6 +324,60 @@ class RealtimeSubscriptionManager {
       timestamp: new Date().toISOString(),
     })
   }
+
+  /**
+   * Track subscription analytics (for production monitoring)
+   */
+  trackAnalytics(): {
+    count: number
+    channels: string[]
+    timestamp: string
+    warning: boolean
+  } {
+    const count = this.getActiveSubscriptionCount()
+    const channels = this.getActiveChannels()
+    const MAX_RECOMMENDED_SUBSCRIPTIONS = 10
+    const warning = count > MAX_RECOMMENDED_SUBSCRIPTIONS
+
+    if (warning) {
+      console.warn(
+        `[RealtimeManager] High subscription count detected: ${count} (recommended max: ${MAX_RECOMMENDED_SUBSCRIPTIONS})`,
+        { channels },
+      )
+    }
+
+    // In production, you could send this to your analytics service
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+      // Example: Send to analytics endpoint
+      // fetch('/api/analytics/realtime', {
+      //   method: 'POST',
+      //   body: JSON.stringify({ count, channels, timestamp: new Date().toISOString() }),
+      // }).catch(() => {})
+    }
+
+    return {
+      count,
+      channels,
+      timestamp: new Date().toISOString(),
+      warning,
+    }
+  }
+
+  /**
+   * Monitor connections and alert if excessive
+   */
+  monitorConnections(): void {
+    const analytics = this.trackAnalytics()
+    
+    if (analytics.warning) {
+      // Log warning for developers
+      console.warn(
+        `[RealtimeManager] Connection monitoring: ${analytics.count} active subscriptions detected.`,
+        'Consider reviewing subscription usage to optimize performance.',
+        { channels: analytics.channels },
+      )
+    }
+  }
 }
 
 // Singleton instance

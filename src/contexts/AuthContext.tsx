@@ -975,7 +975,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     })
 
-    return unsubscribe
+    // Monitor connections periodically (every 5 minutes)
+    const monitorInterval = setInterval(() => {
+      realtimeSubscriptionManager.monitorConnections()
+    }, 5 * 60 * 1000) // 5 minutes
+
+    // Track analytics on subscription
+    realtimeSubscriptionManager.trackAnalytics()
+
+    return () => {
+      unsubscribe()
+      clearInterval(monitorInterval)
+    }
   }, [supabase, user?.uid, refreshProfile])
 
   // Handle page visibility changes (browser minimized/restored)

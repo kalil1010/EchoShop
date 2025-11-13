@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronDown, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -371,6 +372,8 @@ function VendorProductCard({ product, isBusy, onStatusChange, onDelete }: Vendor
   )
 }
 
+const PRODUCTS_PER_PAGE = 100
+
 export default function VendorDashboard({ initialProducts, vendorName }: VendorDashboardProps) {
   const { toast } = useToast()
   const router = useRouter()
@@ -378,10 +381,47 @@ export default function VendorDashboard({ initialProducts, vendorName }: VendorD
     Array.isArray(initialProducts) ? initialProducts.map(mapProductFromApi) : [],
   )
   const [busyProducts, setBusyProducts] = useState<Record<string, 'status' | 'delete'>>({})
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [offset, setOffset] = useState(products.length)
 
   const handleProductCreated = (product: VendorProduct) => {
     setProducts((prev) => [product, ...prev])
   }
+
+  const loadMoreProducts = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    
+    setLoadingMore(true)
+    try {
+      const url = `/api/vendor/products?limit=${PRODUCTS_PER_PAGE}&offset=${offset}`
+      const response = await fetch(url, { credentials: 'include' })
+      
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload?.error ?? 'Failed to load more products.')
+      }
+      
+      const payload = await response.json()
+      const newProducts: VendorProduct[] = Array.isArray(payload?.products)
+        ? payload.products.map(mapProductFromApi)
+        : []
+      
+      setProducts((prev) => [...prev, ...newProducts])
+      setHasMore(newProducts.length === PRODUCTS_PER_PAGE)
+      setOffset((prev) => prev + newProducts.length)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load more products.'
+      toast({ variant: 'error', title: 'Load failed', description: message })
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, offset, toast])
+
+  // Check if we should show "Load More" on initial load
+  React.useEffect(() => {
+    setHasMore(products.length >= PRODUCTS_PER_PAGE)
+  }, [products.length])
 
   const handleStatusChange = async (productId: string, status: VendorProductStatus) => {
     setBusyProducts((prev) => ({ ...prev, [productId]: 'status' }))
@@ -483,17 +523,42 @@ export default function VendorDashboard({ initialProducts, vendorName }: VendorD
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {products.map((product) => (
-              <VendorProductCard
-                key={product.id}
-                product={product}
-                isBusy={busyProducts[product.id] ?? null}
-                onStatusChange={handleStatusChange}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {products.map((product) => (
+                <VendorProductCard
+                  key={product.id}
+                  product={product}
+                  isBusy={busyProducts[product.id] ?? null}
+                  onStatusChange={handleStatusChange}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+            
+            {hasMore && (
+              <div className="flex justify-center pt-6">
+                <Button
+                  variant="outline"
+                  onClick={loadMoreProducts}
+                  disabled={loadingMore}
+                  className="gap-2"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      Load More ({products.length} loaded)
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>
