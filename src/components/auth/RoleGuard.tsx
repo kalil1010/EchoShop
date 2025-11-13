@@ -35,7 +35,7 @@ export function RoleGuard({ children, allowedRoles = ['user'], redirectTo }: Rol
       const destination = redirectTo || getDefaultRouteForRole(role)
       
       toast({
-        variant: 'info',
+        variant: 'default',
         title: 'Redirected to your dashboard',
         description: `This page is only available to ${allowedRoles.join(' or ')} accounts.`,
       })
