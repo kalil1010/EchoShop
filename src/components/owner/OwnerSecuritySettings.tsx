@@ -148,7 +148,7 @@ export default function OwnerSecuritySettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AuditLogViewer vendorId={user?.id} apiPrefix="/api/admin" />
+          <AuditLogViewer vendorId={user?.uid} apiPrefix="/api/admin" />
         </CardContent>
       </Card>
 

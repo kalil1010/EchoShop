@@ -141,7 +141,7 @@ export default function UserSecuritySettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AuditLogViewer vendorId={user?.id} apiPrefix="/api/user" />
+          <AuditLogViewer vendorId={user?.uid} apiPrefix="/api/user" />
         </CardContent>
       </Card>
 
