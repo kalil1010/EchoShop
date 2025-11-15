@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { TrendingUp, AlertCircle, X, Sparkles } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +21,7 @@ interface TrendingAlertsProps {
 }
 
 export default function TrendingAlerts({ vendorId }: TrendingAlertsProps) {
+  const router = useRouter()
   const [alerts, setAlerts] = useState<TrendingAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -103,12 +105,17 @@ export default function TrendingAlerts({ vendorId }: TrendingAlertsProps) {
               </div>
               <p className="text-sm text-slate-600">{alert.message}</p>
               {alert.actionUrl && (
-                <a
-                  href={alert.actionUrl}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Use Next.js router for client-side navigation
+                    // This preserves the session and avoids middleware blocking
+                    router.push(alert.actionUrl!)
+                  }}
                   className="mt-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-9 rounded-md px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
                 >
                   View Details
-                </a>
+                </button>
               )}
             </div>
             <button
