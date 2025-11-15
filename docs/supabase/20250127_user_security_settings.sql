@@ -1,4 +1,8 @@
 -- ------------------------------------------------------------------
+-- Drop problematic constraint if it exists to allow migration to run idempotently
+alter table if exists public.two_factor_sessions drop constraint if exists two_factor_sessions_user_id_fkey;
+-- Additional constraint drops for idempotency
+do $$ declare r record; begin for r in select constraint_name from information_schema.table_constraints where table_name = 'two_factor_sessions' and constraint_type = 'FOREIGN KEY' loop execute 'alter table public.two_factor_sessions drop constraint if exists ' || r.constraint_name; end loop; end $$;
 -- User Security Settings Table for 2FA
 -- ------------------------------------------------------------------
 -- This table stores encrypted 2FA secrets and security settings
@@ -388,4 +392,3 @@ $$;
 -- SELECT routine_name FROM information_schema.routines 
 -- WHERE routine_schema = 'public' 
 -- AND routine_name IN ('log_security_event', 'is_account_locked', 'increment_failed_2fa_attempts', 'reset_2fa_attempts');
-
