@@ -248,18 +248,19 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next()
     }
     
+    // For API routes, always allow them through - they use createRouteHandlerClient
+    // which can properly handle cookies and validate sessions server-side
+    // The API routes will return 401 if the session is truly invalid
+    // This prevents middleware from blocking valid requests due to cookie detection issues
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.next()
+    }
+    
     // Handle stale cookies (cookies exist but session is invalid)
     // This happens when:
     // 1. Refresh token is invalid/expired (cookies exist but session is invalid)
     // 2. Session restoration from localStorage hasn't completed yet (timing issue)
     if (hasStaleCookies) {
-      // For API routes, allow them through - they use createRouteHandlerClient
-      // which can properly handle cookies and validate sessions server-side
-      // The API routes will return 401 if the session is truly invalid
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.next()
-      }
-      
       // For page routes, allow through once for client-side session restoration
       // Client-side will detect invalid tokens and clear cookies via /api/auth/callback
       // If cookies are truly stale, the client will clear them and redirect to login
@@ -267,9 +268,6 @@ export async function middleware(req: NextRequest) {
     }
     
     console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
-    if (pathname.startsWith('/api')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
     
     // Redirect to /auth with return URL
     const redirectUrl = new URL('/auth', req.url)
