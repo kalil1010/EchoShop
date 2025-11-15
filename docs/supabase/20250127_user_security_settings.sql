@@ -138,3 +138,84 @@ create policy "Users can update their own 2FA sessions"
 -- SELECT tablename, rowsecurity FROM pg_tables 
 -- WHERE schemaname = 'public' AND tablename = 'user_security_settings';
 
+
+
+
+
+-- ------------------------------------------------------------------
+-- ADMIN/OWNER MANAGEMENT POLICIES
+-- ------------------------------------------------------------------
+-- Admins and owners can manage other users' 2FA settings for support
+drop policy if exists "Admins can view all security settings" on public.user_security_settings;
+create policy "Admins can view all security settings"
+ on public.user_security_settings
+ for select
+ using (
+   (auth.uid() = user_id) or
+   (exists(
+     select 1 from public.profiles
+     where id = auth.uid() and role in ('admin', 'owner')
+   ))
+ );
+
+-- ------------------------------------------------------------------
+-- SECURITY AUDIT LOGGING TABLE
+-- ------------------------------------------------------------------
+create table if not exists public.security_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_type text not null,
+  details jsonb,
+  ip_address inet,
+  user_agent text,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists idx_security_audit_log_user_id on public.security_audit_log (user_id);
+alter table public.security_audit_log enable row level security;
+
+-- HELPER FUNCTIONS FOR 2FA OPERATIONS
+-- Function to log security events
+create or replace function public.log_security_event(p_user_id uuid, p_event_type text, p_details jsonb)
+returns uuid language plpgsql as $$
+declare v_event_id uuid;
+begin
+  insert into public.security_audit_log (user_id, event_type, details)
+  values (p_user_id, p_event_type, p_details)
+  returning id into v_event_id;
+  return v_event_id;
+end;
+$$;
+
+-- Function to check if account is locked
+create or replace function public.is_account_locked(p_user_id uuid)
+returns boolean language sql stable as $$
+  select coalesce(locked_until > timezone('utc', now()), false)
+  from public.user_security_settings where user_id = p_user_id;
+$$;
+
+-- Function to increment failed 2FA attempts and lock if needed
+create or replace function public.increment_failed_2fa_attempts(p_user_id uuid)
+returns integer language plpgsql as $$
+declare v_attempts integer;
+begin
+  update public.user_security_settings set failed_2fa_attempts = failed_2fa_attempts + 1
+  where user_id = p_user_id returning failed_2fa_attempts into v_attempts;
+  
+  if v_attempts >= 5 then
+    update public.user_security_settings
+    set locked_until = timezone('utc', now()) + interval '15 minutes'
+    where user_id = p_user_id;
+    perform public.log_security_event(p_user_id, '2fa_failed_max_attempts', jsonb_build_object('attempts', v_attempts));
+  end if;
+  return v_attempts;
+end;
+$$;
+
+-- Function to reset failed attempts
+create or replace function public.reset_2fa_attempts(p_user_id uuid)
+returns void language plpgsql as $$
+begin
+  update public.user_security_settings set failed_2fa_attempts = 0 where user_id = p_user_id;
+end;
+$$;
