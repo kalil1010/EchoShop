@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShieldCheck, Inbox, BarChart3, Users, LogOut } from 'lucide-react'
+import { ShieldCheck, Inbox, BarChart3, Users, LogOut, Shield } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import VendorRequestsPanel from './VendorRequestsPanel'
 import VendorManagement from './VendorManagement'
 import SystemAnalytics from './SystemAnalytics'
 import OwnerInvitations from './OwnerInvitations'
+import OwnerSecuritySettings from './OwnerSecuritySettings'
 import type { OwnerAnalyticsSnapshot } from './types'
 
 type OwnerTab =
@@ -23,6 +24,7 @@ type OwnerTab =
   | 'requests'
   | 'invitations'
   | 'analytics'
+  | 'security'
 
 const TABS: Array<{ key: OwnerTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -31,6 +33,7 @@ const TABS: Array<{ key: OwnerTab; label: string }> = [
   { key: 'requests', label: 'Vendor Requests' },
   { key: 'invitations', label: 'Invitations' },
   { key: 'analytics', label: 'Analytics' },
+  { key: 'security', label: 'Security' },
 ]
 
 type OwnerAnalyticsResponse = {
@@ -258,6 +261,8 @@ export default function OwnerDashboardLayout({
             onRetry={fetchAnalytics}
           />
         )
+      case 'security':
+        return <OwnerSecuritySettings />
       default:
         return null
     }

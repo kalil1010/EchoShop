@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { AvatarGallerySection } from '@/components/profile/AvatarGallerySection'
 import { UpgradePathwayBanner } from '@/components/profile/UpgradePathwayBanner'
 import { RoleGuard } from '@/components/auth/RoleGuard'
+import UserSecuritySettings from '@/components/profile/UserSecuritySettings'
 
 export default function ProfilePage() {
   const { user, loading, isAuthenticated } = useRequireAuth()
@@ -50,6 +51,7 @@ export default function ProfilePage() {
         <ProfileForm />
         <AvatarGallerySection />
         <MyPalettes />
+        <UserSecuritySettings />
       </div>
     </RoleGuard>
   )

@@ -21,9 +21,10 @@ interface AuditLogEntry {
 interface AuditLogViewerProps {
   vendorId?: string
   limit?: number
+  apiPrefix?: string // e.g., '/api/vendor' or '/api/admin'
 }
 
-export default function AuditLogViewer({ vendorId, limit = 50 }: AuditLogViewerProps) {
+export default function AuditLogViewer({ vendorId, limit = 50, apiPrefix = '/api/vendor' }: AuditLogViewerProps) {
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +40,7 @@ export default function AuditLogViewer({ vendorId, limit = 50 }: AuditLogViewerP
       setError(null)
 
       try {
-        const response = await fetch(`/api/vendor/security/audit-logs?limit=${limit}`, {
+        const response = await fetch(`${apiPrefix}/security/audit-logs?limit=${limit}`, {
           credentials: 'include',
         })
 

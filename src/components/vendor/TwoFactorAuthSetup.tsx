@@ -11,9 +11,10 @@ import { useToast } from '@/components/ui/toast'
 interface TwoFactorAuthSetupProps {
   onComplete: () => void
   onCancel: () => void
+  apiPrefix?: string // e.g., '/api/vendor' or '/api/admin'
 }
 
-export default function TwoFactorAuthSetup({ onComplete, onCancel }: TwoFactorAuthSetupProps) {
+export default function TwoFactorAuthSetup({ onComplete, onCancel, apiPrefix = '/api/vendor' }: TwoFactorAuthSetupProps) {
   const { toast } = useToast()
   const [step, setStep] = useState<'setup' | 'verify'>('setup')
   const [qrCode, setQrCode] = useState<string | null>(null)
@@ -28,7 +29,7 @@ export default function TwoFactorAuthSetup({ onComplete, onCancel }: TwoFactorAu
     const initialize2FA = async () => {
       setLoading(true)
       try {
-        const response = await fetch('/api/vendor/security/2fa/setup', {
+        const response = await fetch(`${apiPrefix}/security/2fa/setup`, {
           method: 'POST',
           credentials: 'include',
         })
@@ -81,7 +82,7 @@ export default function TwoFactorAuthSetup({ onComplete, onCancel }: TwoFactorAu
 
     setVerifying(true)
     try {
-      const response = await fetch('/api/vendor/security/2fa/verify', {
+      const response = await fetch(`${apiPrefix}/security/2fa/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
