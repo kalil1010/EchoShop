@@ -12,6 +12,7 @@ import EnhancedAnalytics from './EnhancedAnalytics'
 import BusinessProfile from './BusinessProfile'
 import EnhancedOrderManagement from './EnhancedOrderManagement'
 import TrendingAlerts from './TrendingAlerts'
+import VendorOnboardingWizard from './VendorOnboardingWizard'
 import type { VendorAnalyticsSnapshot } from './types'
 
 type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders'
@@ -163,6 +164,29 @@ export default function VendorDashboardLayout() {
     fetchProducts()
     fetchAnalytics()
   }, [fetchProducts, fetchAnalytics])
+
+  // Handle onboarding navigation events
+  useEffect(() => {
+    const handleOnboardingNavigate = (event: CustomEvent<{ tab: string }>) => {
+      const tab = event.detail.tab
+      if (TABS.some((t) => t.key === tab)) {
+        setActiveTab(tab as VendorTab)
+      }
+    }
+
+    window.addEventListener('vendor-onboarding-navigate', handleOnboardingNavigate as EventListener)
+    return () => {
+      window.removeEventListener('vendor-onboarding-navigate', handleOnboardingNavigate as EventListener)
+    }
+  }, [])
+
+  // Mark analytics as visited when tab is switched to analytics
+  useEffect(() => {
+    if (activeTab === 'analytics' && userProfile?.uid) {
+      const analyticsVisitedKey = `vendor_onboarding_analytics_visited_${userProfile.uid}`
+      localStorage.setItem(analyticsVisitedKey, 'true')
+    }
+  }, [activeTab, userProfile?.uid])
 
   const overviewMetrics = analytics?.metrics
 
@@ -378,6 +402,9 @@ export default function VendorDashboardLayout() {
           details current.
         </p>
       </header>
+
+      {/* Onboarding Wizard */}
+      <VendorOnboardingWizard />
 
       {/* Trending Alerts */}
       <TrendingAlerts vendorId={vendorId} />
