@@ -476,7 +476,7 @@ $$;
 create or replace function public.generate_backup_codes(
   p_user_id uuid,
   p_count integer default 10,
-  p_encryption_key text
+  p_encryption_key text default null
 )
 returns text[]
 language plpgsql
@@ -522,7 +522,7 @@ $$;
 create or replace function public.validate_backup_code(
   p_user_id uuid,
   p_code text,
-  p_encryption_key text
+  p_encryption_key text default null
 )
 returns boolean
 language plpgsql
@@ -605,7 +605,7 @@ $$;
 create or replace function public.regenerate_backup_codes(
   p_user_id uuid,
   p_count integer default 10,
-  p_encryption_key text
+  p_encryption_key text default null
 )
 returns text[]
 language plpgsql
@@ -1040,7 +1040,7 @@ create or replace function public.admin_regenerate_backup_codes(
   p_user_id uuid,
   p_admin_user_id uuid default auth.uid(),
   p_count integer default 10,
-  p_encryption_key text
+  p_encryption_key text default null
 )
 returns text[]
 language plpgsql
