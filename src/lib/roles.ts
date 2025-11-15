@@ -230,6 +230,55 @@ export function getDefaultRouteForRole(role: UserRole): string {
   return meta?.defaultRoute ?? ROLE_META[DEFAULT_ROLE].defaultRoute
 }
 
+// Task B1: Route accessibility mapping
+const ROUTE_ACCESS: Record<UserRole, string[]> = {
+  user: ['/marketplace', '/outfit', '/chat', '/closet', '/profile', '/'],
+  vendor: [
+    '/atlas',
+    '/marketplace',
+    '/outfit',
+    '/chat',
+    '/closet',
+    '/profile',
+    '/',
+  ], // Vendors can access all user routes PLUS vendor routes
+  owner: [
+    '/downtown',
+    '/atlas',
+    '/marketplace',
+    '/outfit',
+    '/chat',
+    '/closet',
+    '/profile',
+    '/',
+  ], // Owners can access everything
+  admin: [
+    '/downtown',
+    '/atlas',
+    '/marketplace',
+    '/outfit',
+    '/chat',
+    '/closet',
+    '/profile',
+    '/',
+  ],
+}
+
+/**
+ * Check if a user role can access a specific route
+ * Task B1: Vendor role is a superset of user role - vendors can access all user routes
+ */
+export function isRouteAccessible(userRole: UserRole | null | undefined, targetRoute: string): boolean {
+  if (!userRole) return false
+
+  // Normalize route (remove query params and hash)
+  const normalizedRoute = targetRoute.split('?')[0].split('#')[0]
+
+  // Check exact match or prefix match
+  const accessibleRoutes = ROUTE_ACCESS[userRole] || []
+  return accessibleRoutes.some((route) => normalizedRoute === route || normalizedRoute.startsWith(route + '/'))
+}
+
 export function resolvePortalFromPath(pathname: string): PortalKey {
   if (pathname.startsWith('/downtown') || pathname.startsWith('/api/admin')) return 'owner'
   if (

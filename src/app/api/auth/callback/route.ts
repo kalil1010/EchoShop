@@ -6,6 +6,11 @@ import type { Session } from '@supabase/supabase-js'
 type CallbackPayload = {
   event: string
   session?: Session | null
+  userProfile?: {
+    uid: string
+    role: string
+    vendorStatus?: string | null
+  } | null
 }
 
 export async function POST(request: Request) {

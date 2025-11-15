@@ -238,22 +238,97 @@ async function withRetry<T>(
   }
 }
 
-async function syncServerSession(event: string, session: Session | null) {
-  try {
-    await fetch('/api/auth/callback', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+// Task C1: Improved server session sync with retry logic and vendor data
+async function syncServerSession(
+  event: string,
+  session: Session | null,
+  userProfile?: UserProfile | null,
+): Promise<void> {
+  if (!session?.user) {
+    // For sign out, just send the event
+    try {
+      await fetch('/api/auth/callback', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, session: null }),
+      })
+    } catch (error) {
+      console.warn('[AuthContext] Failed to sync logout to server:', error)
+    }
+    return
+  }
+
+  // Retry logic with exponential backoff
+  let attempt = 0
+  const maxAttempts = 3
+  const TIMEOUT_MS = 5000 // 5 second timeout
+
+  async function attemptSync(): Promise<boolean> {
+    attempt += 1
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+      const payload = {
         event,
         session,
-      }),
-    })
-  } catch (error) {
-    console.warn('[AuthContext] Failed to sync session to server:', error)
+        userProfile: userProfile
+          ? {
+              uid: userProfile.uid,
+              role: userProfile.role,
+              vendorStatus: userProfile.role === 'vendor' ? 'approved' : null,
+            }
+          : null,
+      }
+
+      const response = await fetch('/api/auth/callback', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (response.ok) {
+        console.debug('[AuthContext] Server session synced successfully')
+        return true
+      }
+
+      // Server error (5xx), retry
+      if (response.status >= 500 && attempt < maxAttempts) {
+        const delay = 1000 * attempt // Exponential backoff: 1s, 2s, 3s
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        return attemptSync()
+      }
+
+      // Client error or max retries reached
+      console.warn('[AuthContext] Server sync failed:', response.status)
+      return false
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn('[AuthContext] Server sync timed out after 5s')
+        return false
+      }
+
+      // Network error, retry if attempts remain
+      if (attempt < maxAttempts) {
+        const delay = 1000 * attempt
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        return attemptSync()
+      }
+
+      console.error('[AuthContext] Server sync error after retries:', error)
+      return false
+    }
   }
+
+  // Fire and forget - don't block on this
+  attemptSync().catch(() => {
+    // Silently fail - session sync is best effort
+  })
 }
 
 function mapAuthUser(user: User): AuthUser {
@@ -301,8 +376,46 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
   })
 }
 
-function buildBootstrapProfile(user: AuthUser): UserProfile {
+/**
+ * Check if user has an approved vendor request
+ */
+async function checkVendorStatus(
+  supabase: ReturnType<typeof getSupabaseClient> | null,
+  userId: string,
+): Promise<'approved' | 'pending' | null> {
+  if (!supabase) return null
+
+  try {
+    const { data, error } = await supabase
+      .from('vendor_requests')
+      .select('status')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ status: string }>()
+
+    if (error) {
+      console.warn('[AuthContext] Failed to check vendor status:', error)
+      return null
+    }
+
+    if (data?.status === 'approved') return 'approved'
+    if (data?.status === 'pending') return 'pending'
+    return null
+  } catch (error) {
+    console.warn('[AuthContext] Error checking vendor status:', error)
+    return null
+  }
+}
+
+function buildBootstrapProfile(
+  user: AuthUser,
+  vendorStatus?: 'approved' | 'pending' | null,
+): UserProfile {
   const now = new Date()
+  // If user has approved vendor request, set role to 'vendor', otherwise default to 'user'
+  const role: UserRole = vendorStatus === 'approved' ? 'vendor' : DEFAULT_ROLE
+
   return sanitiseProfile({
     uid: user.uid,
     email: user.email ?? '',
@@ -324,7 +437,7 @@ function buildBootstrapProfile(user: AuthUser): UserProfile {
     vendorContactEmail: undefined,
     vendorPhone: undefined,
     vendorWebsite: undefined,
-    role: DEFAULT_ROLE, // Always default to 'user' role for new profiles
+    role, // Set role based on vendor status
     createdAt: now,
     updatedAt: now,
   })
@@ -508,6 +621,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [supabase],
   )
 
+  // Task A2: Helper functions for cookie/localStorage persistence
+  const setRoleCookie = useCallback((role: UserRole, uid: string) => {
+    if (typeof document === 'undefined') return
+    const maxAge = 604800 // 7 days
+    document.cookie = `user_role=${role}; path=/; max-age=${maxAge}; SameSite=Lax`
+    document.cookie = `user_id=${uid}; path=/; max-age=${maxAge}; SameSite=Lax`
+  }, [])
+
+  const setRoleLocalStorage = useCallback((profile: UserProfile) => {
+    if (typeof window === 'undefined') return
+    try {
+      const data = {
+        uid: profile.uid,
+        role: profile.role,
+        vendorName: profile.vendorBusinessName,
+        timestamp: Date.now(),
+      }
+      localStorage.setItem('echoshop_vendor_status', JSON.stringify(data))
+    } catch (error) {
+      console.warn('[AuthContext] Failed to save role to localStorage:', error)
+    }
+  }, [])
+
+  const clearRoleStorage = useCallback(() => {
+    if (typeof document === 'undefined') return
+    document.cookie = 'user_role=; path=/; max-age=0'
+    document.cookie = 'user_id=; path=/; max-age=0'
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('echoshop_vendor_status')
+      } catch (error) {
+        console.warn('[AuthContext] Failed to clear localStorage:', error)
+      }
+    }
+  }, [])
+
+  const getRoleFromLocalStorage = useCallback((): { role: UserRole; uid: string } | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = localStorage.getItem('echoshop_vendor_status')
+      if (!stored) return null
+      const data = JSON.parse(stored)
+      // Only use if less than 24 hours old
+      if (data.timestamp && Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+        return { role: normaliseRole(data.role), uid: data.uid }
+      }
+      return null
+    } catch (error) {
+      console.warn('[AuthContext] Failed to read role from localStorage:', error)
+      return null
+    }
+  }, [])
+
   const applyProfileToState = useCallback(
     (profile: UserProfile, sourceUser: AuthUser) => {
       setUserProfile(profile)
@@ -520,14 +686,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         return { ...sourceUser, role: profile.role }
       })
+      // Task A2: Persist role to cookie and localStorage
+      setRoleCookie(profile.role, profile.uid)
+      setRoleLocalStorage(profile)
       return profile
     },
-    [],
+    [setRoleCookie, setRoleLocalStorage],
   )
 
   const reconcileProfileAfterAuth = useCallback(
     async (authUser: AuthUser, profile: UserProfile): Promise<UserProfile> => {
       const normalised = normalisePersistedProfile(profile)
+
+      // Task A1: Check if user has an approved vendor request and upgrade role if needed
+      if (normalised.role === 'user' && supabase) {
+        const vendorStatus = await checkVendorStatus(supabase, authUser.uid)
+        if (vendorStatus === 'approved') {
+          console.debug(
+            '[AuthContext] Upgraded user to vendor role based on approved request',
+            { userId: authUser.uid },
+          )
+          normalised.role = 'vendor'
+        }
+      }
+
       await upsertProfileWithRetry(profileToRow(normalised), authUser, 'post-sign-in')
       console.debug(
         '[AuthContext] Post-sign-in profile sync completed',
@@ -535,13 +717,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )
       return applyProfileToState(normalised, authUser)
     },
-    [upsertProfileWithRetry, applyProfileToState],
+    [upsertProfileWithRetry, applyProfileToState, supabase],
   )
 
   const loadUserProfile = useCallback(
     async (authUser: AuthUser): Promise<ProfileLoadResult> => {
       if (!supabase) {
-        const fallback = buildBootstrapProfile(authUser)
+        const fallback = buildBootstrapProfile(authUser, null)
         const unavailableError = normaliseError(
           new Error('SUPABASE_UNAVAILABLE'),
           'Supabase unavailable',
@@ -608,7 +790,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn(
           `[AuthContext] No profile found for ${authUser.uid}. Seeding bootstrap profile.`,
         )
-        const bootstrap = buildBootstrapProfile(authUser)
+        // Task A3: Check vendor status before building bootstrap profile
+        const vendorStatus = await checkVendorStatus(supabase, authUser.uid)
+        const bootstrap = buildBootstrapProfile(authUser, vendorStatus)
         let upsertFailed = false
         let upsertError: Error | null = null
         try {
@@ -649,7 +833,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error,
         )
         const normalised = normaliseError(error, 'Profile fetch failed')
-        const fallback = buildBootstrapProfile(authUser)
+        const fallback = buildBootstrapProfile(authUser, null)
         let upsertFallbackError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(fallback), authUser, 'fetch-error')
@@ -678,7 +862,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [supabase, applyProfileToState, upsertProfileWithRetry],
+    [supabase, applyProfileToState, upsertProfileWithRetry, getRoleFromLocalStorage],
   )
 
   const loadUserProfileWithTimeout = useCallback(
@@ -720,7 +904,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : 'We encountered an unexpected issue while loading your profile. A limited profile is available; please retry when you are ready.'
         setProfileIssueMessage(issueMessage)
         setIsProfileFallback(true)
-        const fallback = buildBootstrapProfile(authUser)
+        const fallback = buildBootstrapProfile(authUser, null)
         const profile = applyProfileToState(fallback, authUser)
         if (timeoutIssue) {
           // Silently retry in background without logging errors
@@ -773,6 +957,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
+        // Task A2: Try to load role from localStorage for faster hydration
+        const cachedRole = getRoleFromLocalStorage()
+        if (cachedRole) {
+          console.debug('[AuthContext] Found cached role in localStorage:', cachedRole.role)
+        }
+
         // First, try to get session from storage (this reads from localStorage)
         // Add a small delay to ensure localStorage is accessible after page navigation
         await new Promise((resolve) => setTimeout(resolve, 100))
@@ -817,8 +1007,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (nextSession) {
           // Immediately sync session to server to ensure cookies are set
           // This is critical for OAuth flows and page refreshes
+          // Note: Profile not loaded yet, so pass null for userProfile
           try {
-            await syncServerSession('SIGNED_IN', nextSession)
+            await syncServerSession('SIGNED_IN', nextSession, null)
             console.debug('[AuthContext] Initial session synced to server')
           } catch (error) {
             console.warn('[AuthContext] Failed to sync initial session to server:', error)
@@ -831,7 +1022,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfileWithTimeout(mapped)
+          const profileResult = await loadUserProfileWithTimeout(mapped)
+          // Task C1: Re-sync with profile data after it's loaded
+          if (profileResult.profile && nextSession) {
+            void syncServerSession('SIGNED_IN', nextSession, profileResult.profile)
+          }
         } else {
           setUser(null)
           setUserProfile(null)
@@ -880,16 +1075,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // This ensures cookies are set before middleware checks
       if (event === 'SIGNED_IN' && newSession) {
         console.debug('[AuthContext] OAuth sign-in detected, syncing session to server immediately')
-        // Sync immediately and wait for it to complete
+        // Sync immediately and wait for it to complete (profile may not be loaded yet)
         try {
-          await syncServerSession('SIGNED_IN', newSession)
+          await syncServerSession('SIGNED_IN', newSession, userProfile)
           console.debug('[AuthContext] Session synced to server successfully')
         } catch (error) {
           console.warn('[AuthContext] Failed to sync session to server:', error)
         }
       } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
         // For other events, sync asynchronously
-        void syncServerSession(event, newSession ?? null)
+        void syncServerSession(event, newSession ?? null, userProfile)
       }
 
       setLoading(true)
@@ -956,7 +1151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data?.session ?? null
         setSession(nextSession)
         if (nextSession) {
-          void syncServerSession('SIGNED_IN', nextSession)
+          void syncServerSession('SIGNED_IN', nextSession, userProfile)
         } else {
           void syncServerSession('SIGNED_OUT', null)
         }
@@ -965,7 +1160,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfileWithTimeout(mapped)
+          const profileResult = await loadUserProfileWithTimeout(mapped)
+          // Re-sync with profile after it's loaded
+          if (profileResult.profile && nextSession) {
+            void syncServerSession('SIGNED_IN', nextSession, profileResult.profile)
+          }
         } else {
           setUser(null)
           setUserProfile(null)
@@ -1177,10 +1376,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const authUser = mapAuthUser(supabaseUser)
       setSession(session)
       if (session) {
-        void syncServerSession('SIGNED_IN', session)
+        void syncServerSession('SIGNED_IN', session, null) // Profile not loaded yet
       }
       setUser(authUser)
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
+      // Task C1: Re-sync with profile after it's loaded
+      if (profileOutcome.profile && session) {
+        void syncServerSession('SIGNED_IN', session, profileOutcome.profile)
+      }
 
       let finalProfile = profileOutcome.profile
       let finalStatus = profileOutcome.status
@@ -1324,6 +1527,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setUserProfile(null)
       resetProfileState()
+      // Task A2: Clear role cookies and localStorage
+      clearRoleStorage()
       
       // Then sign out from Supabase (clears client-side auth)
       const { data } = await supabase.auth.getSession()

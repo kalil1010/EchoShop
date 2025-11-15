@@ -1,19 +1,8 @@
 import { mapVendorProductRow } from '@/lib/vendorProducts'
 import { createServiceClient } from '@/lib/supabaseServer'
+import ProductCard from '@/components/marketplace/ProductCard'
 
 const PRODUCTS_LIMIT = 48
-
-const formatPrice = (price: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    }).format(price)
-  } catch {
-    return `${currency} ${price.toFixed(2)}`
-  }
-}
 
 export const metadata = {
   title: 'Marketplace | Echo Shop',
@@ -78,41 +67,9 @@ export default async function MarketplacePage() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products.map((product) => {
-              const coverImage = product.gallery[0]?.url ?? product.primaryImageUrl
-              const vendorName = product.vendorName ?? 'Echo Shop Vendor'
-
-              return (
-                <article key={product.id} className="group overflow-hidden rounded-lg border bg-card shadow-sm">
-                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
-                    {coverImage ? (
-                      <img
-                        src={coverImage}
-                        alt={product.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-                        Image coming soon
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h2 className="text-base font-semibold text-foreground line-clamp-2">{product.title}</h2>
-                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                        {formatPrice(product.price, product.currency)}
-                      </span>
-                    </div>
-                    <p className="text-xs uppercase tracking-wide text-purple-600">{vendorName}</p>
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {product.description ?? product.aiDescription ?? 'No description provided.'}
-                    </p>
-                  </div>
-                </article>
-              )
-            })}
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
           </div>
         )}
       </section>

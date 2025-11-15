@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation'
 
 import VendorDashboardLayout from '@/components/vendor/VendorDashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { getPortalAccess } from '@/lib/roles'
+import { getPortalAccess, getDefaultRouteForRole } from '@/lib/roles'
 import type { PortalDenial } from '@/lib/roles'
 import { useToast } from '@/components/ui/toast'
 
 export default function AtlasPage() {
-  const { user, profile, loading, logout } = useAuth()
+  const { user, profile, loading, logout, profileStatus } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
   const [denial, setDenial] = useState<PortalDenial | null>(null)
@@ -23,8 +23,8 @@ export default function AtlasPage() {
   const verifiedUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // Wait for loading to complete AND give extra time for session restoration from localStorage
-    if (loading) {
+    // Task B2: Wait for loading to complete AND profile status to be ready
+    if (loading || profileStatus === 'loading') {
       sessionCheckAttemptsRef.current = 0
       return
     }
@@ -99,8 +99,9 @@ export default function AtlasPage() {
             'You do not have permission to open the vendor dashboard.',
         })
 
-        // Redirect to their correct dashboard based on role
-        router.replace(access.denial?.redirect ?? `/auth?redirect=/atlas&role=${profile.role}`)
+        // Task B2: Redirect to their correct dashboard based on role
+        const defaultRoute = getDefaultRouteForRole(profile.role)
+        router.replace(access.denial?.redirect ?? defaultRoute)
       }
       return
     }
@@ -110,9 +111,10 @@ export default function AtlasPage() {
     verifiedUserIdRef.current = user.uid
     setDenial(null)
     handledRef.current = false
-  }, [loading, profile, user, router, logout, toast])
+  }, [loading, profile, user, router, logout, toast, profileStatus])
 
-  if (loading) {
+  // Task B2: Show loading state while auth context is hydrating
+  if (loading || profileStatus === 'loading') {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
