@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getDefaultRouteForRole, getPortalAccess, getRoleMeta } from '@/lib/roles'
+import { getDefaultRouteForRole, getPortalAccess, getRoleMeta, normaliseRole } from '@/lib/roles'
 import type { PortalNotice } from '@/lib/roles'
 import { PortalNoticeBanner } from '@/components/access/PortalNoticeBanner'
 import TwoFactorVerificationModal from '@/components/auth/TwoFactorVerificationModal'
@@ -269,13 +269,14 @@ export function OwnerLoginForm() {
           // 2FA verified - complete login
           setShow2FA(false)
           if (pendingProfile) {
-            const roleMeta = getRoleMeta(pendingProfile.role)
+            const normalisedRole = normaliseRole(pendingProfile.role)
+            const roleMeta = getRoleMeta(normalisedRole)
             toast({
               variant: 'success',
               title: roleMeta.welcomeTitle,
               description: roleMeta.welcomeSubtitle,
             })
-            router.replace(getDefaultRouteForRole(pendingProfile.role))
+            router.replace(getDefaultRouteForRole(normalisedRole))
           }
         }}
         purpose="login"
