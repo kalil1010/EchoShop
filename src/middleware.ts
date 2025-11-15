@@ -66,6 +66,20 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         error: getUserError,
       } = await supabase.auth.getUser()
 
+      // Check if the error is a refresh token error
+      if (getUserError) {
+        const errorCode = (getUserError as { code?: string })?.code
+        const errorMessage = getUserError.message || String(getUserError)
+        
+        // Refresh token errors indicate the session is invalid/expired
+        if (errorCode === 'refresh_token_not_found' || 
+            errorMessage.includes('Refresh Token Not Found') ||
+            errorMessage.includes('refresh_token_not_found')) {
+          // Session is invalid - return null to allow client-side cleanup
+          return null
+        }
+      }
+
       if (getUserResult && !getUserError) {
         return getUserResult
       }
@@ -78,6 +92,15 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       // We catch and suppress these errors since we already allow requests through
       // when cookies are present (see the logic below)
       const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError)
+      const errorCode = (sessionError as { code?: string })?.code || ''
+      
+      // Suppress refresh token errors - these indicate invalid/expired sessions
+      if (errorCode === 'refresh_token_not_found' ||
+          errorMessage.includes('Refresh Token Not Found') ||
+          errorMessage.includes('refresh_token_not_found')) {
+        // Session is invalid - return null to allow client-side cleanup
+        return null
+      }
       
       // Suppress cookie modification errors - these are expected in middleware
       if (errorMessage.includes('cookie') || 
@@ -95,6 +118,15 @@ const getAuthenticatedUser = async (req: NextRequest) => {
   } catch (error: unknown) {
     // Catch any other errors and suppress cookie-related ones
     const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorCode = (error as { code?: string })?.code || ''
+    
+    // Suppress refresh token errors - these indicate invalid/expired sessions
+    if (errorCode === 'refresh_token_not_found' ||
+        errorMessage.includes('Refresh Token Not Found') ||
+        errorMessage.includes('refresh_token_not_found')) {
+      // Session is invalid - return null to allow client-side cleanup
+      return null
+    }
     
     // Suppress cookie-related errors as they're expected in middleware
     if (errorMessage.includes('cookie') || 
@@ -104,10 +136,11 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       return null
     }
     
-    // Log other unexpected errors (but not session/JWT errors which are common)
+    // Log other unexpected errors (but not session/JWT/token errors which are common)
     if (!errorMessage.includes('session') && 
         !errorMessage.includes('JWT') && 
-        !errorMessage.includes('token')) {
+        !errorMessage.includes('token') &&
+        !errorMessage.includes('Refresh Token')) {
       console.warn('[middleware] Error getting authenticated user:', errorMessage)
     }
     
@@ -206,6 +239,7 @@ export async function middleware(req: NextRequest) {
     // 1. User has valid auth cookies in browser
     // 2. Session restoration from localStorage hasn't completed yet
     // 3. Middleware can't detect session due to timing/cookie handling limitations
+    // 4. Refresh token is invalid/expired (cookies exist but session is invalid)
     const hasAuthCookies = req.cookies.getAll().some(
       (cookie) =>
         cookie.name.startsWith('sb-') ||
@@ -214,9 +248,12 @@ export async function middleware(req: NextRequest) {
     )
     
     if (hasAuthCookies) {
-      // User has auth cookies but session wasn't detected - this is likely a timing issue
-      // Allow the request through and let the client-side AuthContext restore the session
-      // The page components will handle auth checks after session is restored
+      // User has auth cookies but session wasn't detected
+      // This could be:
+      // - A timing issue (session restoration in progress)
+      // - Invalid/expired refresh token (will be handled by client-side)
+      // Allow the request through and let the client-side AuthContext restore/cleanup the session
+      // The page components will handle auth checks after session is restored or cleaned up
       console.debug('[middleware] Auth cookies present but session not detected, allowing request through for client-side session restoration', { pathname })
       return NextResponse.next()
     }
