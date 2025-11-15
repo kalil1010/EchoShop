@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
-import { mapSupabaseError } from '@/lib/server/errors'
-import { PermissionError } from '@/lib/server/errors'
+import { mapSupabaseError, PermissionError } from '@/lib/security'
 
 export const runtime = 'nodejs'
 
