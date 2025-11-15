@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { authenticator } from 'otplib'
 
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
-
-// TODO: Install required package: npm install otplib
-// import { authenticator } from 'otplib'
 
 export const runtime = 'nodejs'
 
@@ -26,11 +24,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Secret is required for verification.' }, { status: 400 })
     }
 
-    // Verify the code (placeholder - requires otplib)
+    // Verify the code using TOTP
     // Note: In production, you'd retrieve the secret from the database instead of accepting it from the client
-    // const isValid = authenticator.check(code, secret)
-    // For now, accept any 6-digit code as valid (REMOVE IN PRODUCTION)
-    const isValid = /^\d{6}$/.test(code)
+    let isValid = false
+    try {
+      isValid = authenticator.check(code, secret)
+    } catch (error) {
+      console.error('TOTP verification error:', error)
+      return NextResponse.json({ error: 'Invalid verification code format.' }, { status: 400 })
+    }
 
     if (!isValid) {
       // Log failed verification attempt
@@ -43,14 +45,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid verification code. Please try again.' }, { status: 400 })
     }
 
-    // TODO: Store the 2FA secret in the database (encrypted)
-    // For now, we'll just mark 2FA as enabled in a user preferences table
+    // Store the 2FA secret in the database
     // In production, you'd:
-    // 1. Encrypt the secret
-    // 2. Store it in a secure table (e.g., user_security_settings)
+    // 1. Encrypt the secret before storing
+    // 2. Store it in a dedicated secure table (e.g., user_security_settings)
     // 3. Mark 2FA as enabled for the user
+    // For now, we store it in event_log payload (not ideal for production, but functional)
+    
+    // Store the verified secret (in production, encrypt this)
+    await supabase.from('event_log').insert({
+      event_name: 'vendor_2fa_secret_stored',
+      user_id: userId,
+      payload: {
+        timestamp: new Date().toISOString(),
+        secret, // In production, this should be encrypted
+        verified: true,
+      },
+    })
 
-    // Log successful verification
+    // Log successful verification and enable 2FA
     await supabase.from('event_log').insert({
       event_name: 'vendor_2fa_enabled',
       user_id: userId,

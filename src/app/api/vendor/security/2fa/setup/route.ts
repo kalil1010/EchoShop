@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { authenticator } from 'otplib'
+import QRCode from 'qrcode'
 
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
-
-// TODO: Install required packages: npm install otplib qrcode
-// import { authenticator } from 'otplib'
-// import QRCode from 'qrcode'
 
 export const runtime = 'nodejs'
 
@@ -15,27 +13,39 @@ export async function POST(request: NextRequest) {
     const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
 
-    // TODO: Install otplib and qrcode packages for full 2FA implementation
-    // For now, return placeholder data
-    // Generate a secret for the user (placeholder - requires otplib)
-    const secret = 'PLACEHOLDER_SECRET_' + userId.slice(0, 8) + '_' + Date.now()
+    // Get user email for the account name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .maybeSingle<{ email: string | null }>()
+
+    const accountName = profile?.email || userId
     const serviceName = 'Echo Shop'
-    const accountName = userId // TODO: Get user email or name
 
-    // Generate QR code (placeholder - requires qrcode package)
-    // const otpAuthUrl = authenticator.keyuri(accountName, serviceName, secret)
-    // const qrCode = await QRCode.toDataURL(otpAuthUrl)
-    const qrCode = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2YjcyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RdWlja1JlYWN0IFFSIENvZGU8L3RleHQ+PC9zdmc+'
+    // Generate a secret for the user
+    const secret = authenticator.generateSecret()
 
-    // Store the secret temporarily (in production, you'd store this encrypted in the database)
-    // For now, we'll return it to the client to store temporarily until verification
-    // TODO: Create a 2FA setup table to store pending setups
+    // Generate OTP Auth URL
+    const otpAuthUrl = authenticator.keyuri(accountName, serviceName, secret)
 
-    // Log the 2FA setup initiation
+    // Generate QR code
+    const qrCode = await QRCode.toDataURL(otpAuthUrl)
+
+    // Store the secret temporarily in event_log for verification
+    // In production, you'd store this encrypted in a dedicated table
+    // For now, we store it in the event_log payload so it can be retrieved during verification
+
+    // Log the 2FA setup initiation and store the secret temporarily
+    // Note: In production, store the secret encrypted in a dedicated table
     await supabase.from('event_log').insert({
       event_name: 'vendor_2fa_setup_initiated',
       user_id: userId,
-      payload: { timestamp: new Date().toISOString() },
+      payload: {
+        timestamp: new Date().toISOString(),
+        secret, // Temporarily stored here for verification step
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // Expires in 10 minutes
+      },
     })
 
     return NextResponse.json({
