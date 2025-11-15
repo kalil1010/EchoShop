@@ -293,10 +293,12 @@ begin
   from public.user_security_settings
   where user_id = p_user_id;
   
+  -- Return false if no record exists or locked_until is null
   if v_locked_until is null then
     return false;
   end if;
   
+  -- Return true if lockout period hasn't expired yet
   return v_locked_until > timezone('utc', now());
 end;
 $$;
@@ -315,6 +317,11 @@ declare
   v_current_attempts integer;
   v_new_attempts integer;
 begin
+  -- Ensure user_security_settings record exists
+  insert into public.user_security_settings (user_id, failed_2fa_attempts)
+  values (p_user_id, 0)
+  on conflict (user_id) do nothing;
+  
   -- Get current failed attempts
   select coalesce(failed_2fa_attempts, 0) into v_current_attempts
   from public.user_security_settings
@@ -358,12 +365,14 @@ language plpgsql
 security definer
 as $$
 begin
-  update public.user_security_settings
+  -- Ensure user_security_settings record exists and reset attempts
+  insert into public.user_security_settings (user_id, failed_2fa_attempts, locked_until, two_factor_last_used)
+  values (p_user_id, 0, null, timezone('utc', now()))
+  on conflict (user_id) do update
   set
     failed_2fa_attempts = 0,
     locked_until = null,
-    two_factor_last_used = timezone('utc', now())
-  where user_id = p_user_id;
+    two_factor_last_used = timezone('utc', now());
   
   -- Log successful verification
   perform public.log_security_event(
