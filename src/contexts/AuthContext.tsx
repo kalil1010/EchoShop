@@ -413,8 +413,20 @@ function buildBootstrapProfile(
   vendorStatus?: 'approved' | 'pending' | null,
 ): UserProfile {
   const now = new Date()
-  // If user has approved vendor request, set role to 'vendor', otherwise default to 'user'
-  const role: UserRole = vendorStatus === 'approved' ? 'vendor' : DEFAULT_ROLE
+  
+  // Determine role priority:
+  // 1. Auth metadata role (if set) - highest priority
+  // 2. Approved vendor request - second priority
+  // 3. Default role - fallback
+  let role: UserRole = DEFAULT_ROLE
+  
+  if (user.role !== undefined) {
+    // Auth metadata has explicit role - use it
+    role = normaliseRole(user.role)
+  } else if (vendorStatus === 'approved') {
+    // No auth metadata role, but has approved vendor request
+    role = 'vendor'
+  }
 
   return sanitiseProfile({
     uid: user.uid,
@@ -985,8 +997,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null
     }
     const outcome = await loadUserProfileWithTimeout(currentUser)
+    
+    // Also trigger role sync when refreshing profile (not just on login)
+    // This ensures roles stay in sync even for existing sessions
+    if (outcome.profile) {
+      try {
+        const syncedProfile = await reconcileProfileAfterAuth(currentUser, outcome.profile)
+        return syncedProfile
+      } catch (syncError) {
+        // If sync fails, return the original profile
+        console.warn('[AuthContext] Role sync failed during profile refresh:', syncError)
+        return outcome.profile
+      }
+    }
+    
     return outcome.profile
-  }, [supabase, user, loadUserProfileWithTimeout, resetProfileState])
+  }, [supabase, user, loadUserProfileWithTimeout, resetProfileState, reconcileProfileAfterAuth])
 
   useEffect(() => {
     if (!supabase) {
@@ -1070,9 +1096,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
           const profileResult = await loadUserProfileWithTimeout(mapped)
+          
+          // Sync role from auth metadata to profile (for OAuth flows and existing sessions)
+          let finalProfile = profileResult.profile
+          if (finalProfile) {
+            try {
+              finalProfile = await reconcileProfileAfterAuth(mapped, finalProfile)
+            } catch (syncError) {
+              // If sync fails, use original profile
+              console.warn('[AuthContext] Role sync failed during session initialization:', syncError)
+            }
+          }
+          
           // Task C1: Re-sync with profile data after it's loaded
-          if (profileResult.profile && nextSession) {
-            void syncServerSession('SIGNED_IN', nextSession, profileResult.profile)
+          if (finalProfile && nextSession) {
+            void syncServerSession('SIGNED_IN', nextSession, finalProfile)
           }
         } else {
           setUser(null)
@@ -1141,7 +1179,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          await loadUserProfileWithTimeout(mapped)
+          const profileResult = await loadUserProfileWithTimeout(mapped)
+          
+          // Sync role from auth metadata to profile (for OAuth and auth state changes)
+          if (profileResult.profile) {
+            try {
+              await reconcileProfileAfterAuth(mapped, profileResult.profile)
+            } catch (syncError) {
+              console.warn('[AuthContext] Role sync failed during auth state change:', syncError)
+            }
+          }
         } else {
           setUser(null)
           setUserProfile(null)
@@ -1181,7 +1228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false
       listener.subscription.unsubscribe()
     }
-  }, [supabase, loadUserProfileWithTimeout, resetProfileState])
+  }, [supabase, loadUserProfileWithTimeout, resetProfileState, reconcileProfileAfterAuth])
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return
@@ -1208,9 +1255,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
           const profileResult = await loadUserProfileWithTimeout(mapped)
+          
+          // Sync role from auth metadata to profile (for cross-tab sync)
+          let finalProfile = profileResult.profile
+          if (finalProfile) {
+            try {
+              finalProfile = await reconcileProfileAfterAuth(mapped, finalProfile)
+            } catch (syncError) {
+              console.warn('[AuthContext] Role sync failed during storage sync:', syncError)
+            }
+          }
+          
           // Re-sync with profile after it's loaded
-          if (profileResult.profile && nextSession) {
-            void syncServerSession('SIGNED_IN', nextSession, profileResult.profile)
+          if (finalProfile && nextSession) {
+            void syncServerSession('SIGNED_IN', nextSession, finalProfile)
           }
         } else {
           setUser(null)
@@ -1548,7 +1606,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         favorite_colors: bootstrap.favoriteColors ?? [],
         disliked_colors: bootstrap.dislikedColors ?? [],
         favorite_styles: bootstrap.favoriteStyles ?? [],
-        role: DEFAULT_ROLE,
+        role: bootstrap.role, // Use role from bootstrap (which checks auth metadata)
         created_at: bootstrap.createdAt.toISOString(),
         updated_at: bootstrap.updatedAt.toISOString(),
       }
