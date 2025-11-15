@@ -11,32 +11,45 @@ export async function GET(request: NextRequest) {
     const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
 
-    // TODO: Check if 2FA is enabled in the database
-    // For now, we'll check the event_log for a successful 2FA enable event
-    const { data: events } = await supabase
-      .from('event_log')
-      .select('event_name, created_at')
+    // Check if 2FA is enabled in user_security_settings table
+    const { data: settings, error: settingsError } = await supabase
+      .from('user_security_settings')
+      .select('two_factor_enabled, two_factor_enabled_at')
       .eq('user_id', userId)
-      .eq('event_name', 'vendor_2fa_enabled')
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .maybeSingle<{ two_factor_enabled: boolean; two_factor_enabled_at: string | null }>()
 
-    // Check if there's a disable event after the enable event
-    const { data: disableEvents } = await supabase
-      .from('event_log')
-      .select('event_name, created_at')
-      .eq('user_id', userId)
-      .eq('event_name', 'vendor_2fa_disabled')
-      .order('created_at', { ascending: false })
-      .limit(1)
+    if (settingsError) {
+      console.warn('Failed to check 2FA status:', settingsError)
+      // Fallback to event_log check for backwards compatibility
+      const { data: events } = await supabase
+        .from('event_log')
+        .select('event_name, created_at')
+        .eq('user_id', userId)
+        .eq('event_name', 'vendor_2fa_enabled')
+        .order('created_at', { ascending: false })
+        .limit(1)
 
-    const enabled = events && events.length > 0
-    const disabledAfter = disableEvents && disableEvents.length > 0 && events && events.length > 0
-      ? new Date(disableEvents[0].created_at) > new Date(events[0].created_at)
-      : false
+      const { data: disableEvents } = await supabase
+        .from('event_log')
+        .select('event_name, created_at')
+        .eq('user_id', userId)
+        .eq('event_name', 'vendor_2fa_disabled')
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      const enabled = events && events.length > 0
+      const disabledAfter = disableEvents && disableEvents.length > 0 && events && events.length > 0
+        ? new Date(disableEvents[0].created_at) > new Date(events[0].created_at)
+        : false
+
+      return NextResponse.json({
+        enabled: enabled && !disabledAfter,
+      })
+    }
 
     return NextResponse.json({
-      enabled: enabled && !disabledAfter,
+      enabled: settings?.two_factor_enabled ?? false,
+      enabledAt: settings?.two_factor_enabled_at || null,
     })
   } catch (error) {
     console.error('Failed to check 2FA status:', error)

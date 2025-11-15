@@ -4,6 +4,7 @@ import { authenticator } from 'otplib'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { encrypt, generateBackupCodes } from '@/lib/security/encryption'
 
 export const runtime = 'nodejs'
 
@@ -45,23 +46,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid verification code. Please try again.' }, { status: 400 })
     }
 
-    // Store the 2FA secret in the database
-    // In production, you'd:
-    // 1. Encrypt the secret before storing
-    // 2. Store it in a dedicated secure table (e.g., user_security_settings)
-    // 3. Mark 2FA as enabled for the user
-    // For now, we store it in event_log payload (not ideal for production, but functional)
-    
-    // Store the verified secret (in production, encrypt this)
-    await supabase.from('event_log').insert({
-      event_name: 'vendor_2fa_secret_stored',
-      user_id: userId,
-      payload: {
-        timestamp: new Date().toISOString(),
-        secret, // In production, this should be encrypted
-        verified: true,
-      },
-    })
+    // Encrypt and store the 2FA secret in user_security_settings table
+    const encryptedSecret = encrypt(secret)
+    const backupCodes = generateBackupCodes(8)
+    const encryptedBackupCodes = backupCodes.map((code) => encrypt(code))
+
+    // Upsert security settings
+    const { error: settingsError } = await supabase
+      .from('user_security_settings')
+      .upsert(
+        {
+          user_id: userId,
+          two_factor_enabled: true,
+          two_factor_secret_encrypted: encryptedSecret,
+          two_factor_backup_codes: encryptedBackupCodes,
+          two_factor_enabled_at: new Date().toISOString(),
+          failed_2fa_attempts: 0,
+        },
+        { onConflict: 'user_id' },
+      )
+
+    if (settingsError) {
+      console.error('Failed to store 2FA settings:', settingsError)
+      throw new Error('Failed to save 2FA settings')
+    }
 
     // Log successful verification and enable 2FA
     await supabase.from('event_log').insert({
@@ -73,6 +81,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Two-factor authentication has been enabled for your account.',
+      backupCodes, // Return backup codes to user (they should save these)
     })
   } catch (error) {
     console.error('Failed to verify 2FA:', error)

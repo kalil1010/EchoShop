@@ -5,6 +5,7 @@ import { requireVendorUser } from '@/lib/server/vendor'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
 import { PermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
+import { require2FAForAction, create2FARequiredResponse } from '@/lib/server/require2FA'
 import { mapVendorProductRow } from '@/lib/vendorProducts'
 import type { VendorProductStatus } from '@/types/vendor'
 
@@ -149,6 +150,12 @@ export async function DELETE(
   try {
     const { userId } = await resolveAuthenticatedUser(request)
     await requireVendorUser(userId)
+
+    // Require 2FA for product deletion (critical action)
+    const twoFAResult = await require2FAForAction(request, 'delete_product', { productId })
+    if (twoFAResult.required && !twoFAResult.verified) {
+      return create2FARequiredResponse(twoFAResult)
+    }
 
     const { data: existing, error: fetchError } = await supabase
       .from('vendor_products')

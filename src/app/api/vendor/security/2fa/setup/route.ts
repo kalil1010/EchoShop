@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { encrypt } from '@/lib/security/encryption'
 
 export const runtime = 'nodejs'
 
@@ -32,18 +33,14 @@ export async function POST(request: NextRequest) {
     // Generate QR code
     const qrCode = await QRCode.toDataURL(otpAuthUrl)
 
-    // Store the secret temporarily in event_log for verification
-    // In production, you'd store this encrypted in a dedicated table
-    // For now, we store it in the event_log payload so it can be retrieved during verification
-
-    // Log the 2FA setup initiation and store the secret temporarily
-    // Note: In production, store the secret encrypted in a dedicated table
+    // Store the secret temporarily in event_log for verification step
+    // After verification, it will be encrypted and stored in user_security_settings
     await supabase.from('event_log').insert({
       event_name: 'vendor_2fa_setup_initiated',
       user_id: userId,
       payload: {
         timestamp: new Date().toISOString(),
-        secret, // Temporarily stored here for verification step
+        secret, // Temporarily stored here for verification step only
         expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // Expires in 10 minutes
       },
     })

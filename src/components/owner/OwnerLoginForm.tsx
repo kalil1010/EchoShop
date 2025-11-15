@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getDefaultRouteForRole, getPortalAccess, getRoleMeta } from '@/lib/roles'
 import type { PortalNotice } from '@/lib/roles'
 import { PortalNoticeBanner } from '@/components/access/PortalNoticeBanner'
+import TwoFactorVerificationModal from '@/components/auth/TwoFactorVerificationModal'
 
 export function OwnerLoginForm() {
   const [email, setEmail] = useState('')
@@ -20,6 +21,9 @@ export function OwnerLoginForm() {
   const router = useRouter()
   const { toast } = useToast()
   const [retryingProfile, setRetryingProfile] = useState(false)
+  const [show2FA, setShow2FA] = useState(false)
+  const [twoFASessionToken, setTwoFASessionToken] = useState<string | null>(null)
+  const [pendingProfile, setPendingProfile] = useState<{ role: string } | null>(null)
 
   const handleProfileRetry = useCallback(async () => {
     setRetryingProfile(true)
@@ -115,6 +119,38 @@ export function OwnerLoginForm() {
         return
       }
 
+      // Check if 2FA is required for owner login
+      try {
+        const twoFAResponse = await fetch('/api/auth/2fa/require', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ purpose: 'login' }),
+        })
+
+        if (twoFAResponse.ok) {
+          const twoFAData = await twoFAResponse.json()
+          if (twoFAData.required && twoFAData.enabled) {
+            // 2FA is required and enabled - show verification modal
+            setPendingProfile(profile)
+            setTwoFASessionToken(twoFAData.sessionToken)
+            setShow2FA(true)
+            return
+          } else if (twoFAData.required && !twoFAData.enabled) {
+            // 2FA is required but not enabled
+            toast({
+              variant: 'warning',
+              title: '2FA Required',
+              description: 'Please enable 2FA in your security settings before logging in.',
+            })
+            return
+          }
+        }
+      } catch (twoFAError) {
+        console.warn('Failed to check 2FA requirement:', twoFAError)
+        // Continue with login if 2FA check fails
+      }
+
       const roleMeta = getRoleMeta(profile.role)
       toast({
         variant: 'success',
@@ -200,6 +236,51 @@ export function OwnerLoginForm() {
           </Button>
         </form>
       </CardContent>
+
+      {/* 2FA Verification Modal */}
+      <TwoFactorVerificationModal
+        isOpen={show2FA}
+        onClose={() => {
+          setShow2FA(false)
+          setTwoFASessionToken(null)
+          setPendingProfile(null)
+        }}
+        onVerify={async (code, backupCode) => {
+          if (!twoFASessionToken) {
+            throw new Error('Session token missing')
+          }
+
+          const response = await fetch('/api/auth/2fa/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              code,
+              backupCode,
+              sessionToken: twoFASessionToken,
+            }),
+          })
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}))
+            throw new Error(data.error || '2FA verification failed')
+          }
+
+          // 2FA verified - complete login
+          setShow2FA(false)
+          if (pendingProfile) {
+            const roleMeta = getRoleMeta(pendingProfile.role)
+            toast({
+              variant: 'success',
+              title: roleMeta.welcomeTitle,
+              description: roleMeta.welcomeSubtitle,
+            })
+            router.replace(getDefaultRouteForRole(pendingProfile.role))
+          }
+        }}
+        purpose="login"
+        loading={loading}
+      />
     </Card>
   )
 }

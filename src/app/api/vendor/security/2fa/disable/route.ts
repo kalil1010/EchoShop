@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { mapSupabaseError, PermissionError } from '@/lib/security'
+import { decrypt } from '@/lib/security/encryption'
 
 export const runtime = 'nodejs'
 
@@ -11,8 +12,22 @@ export async function POST(request: NextRequest) {
     const { userId } = await resolveAuthenticatedUser(request)
     const supabase = createServiceClient()
 
-    // TODO: Remove 2FA secret from database
-    // For now, we'll just log the disable event
+    // Disable 2FA in user_security_settings
+    const { error: updateError } = await supabase
+      .from('user_security_settings')
+      .update({
+        two_factor_enabled: false,
+        two_factor_secret_encrypted: null,
+        two_factor_backup_codes: null,
+        failed_2fa_attempts: 0,
+        locked_until: null,
+      })
+      .eq('user_id', userId)
+
+    if (updateError) {
+      console.error('Failed to disable 2FA:', updateError)
+      // Continue anyway - log the event
+    }
 
     // Log 2FA disable
     await supabase.from('event_log').insert({
