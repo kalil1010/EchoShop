@@ -93,12 +93,48 @@ export async function POST(request: NextRequest) {
     const { userId } = await resolveAuthenticatedUser(request)
     await requireVendorUser(userId)
 
-    const formData = await request.formData()
-    const rawTitle = formData.get('title')
-    const rawDescription = formData.get('description')
-    const price = parsePrice(formData.get('price'))
-    const currency = parseCurrency(formData.get('currency'))
-    const imageFiles = gatherImageFiles(formData)
+    // Check if this is a JSON request (for duplication) or FormData (for new product)
+    const contentType = request.headers.get('content-type') || ''
+    let rawTitle: string | null = null
+    let rawDescription: string | null = null
+    let price = 0
+    let currency = 'EGP'
+    let imageFiles: File[] = []
+    let duplicateFrom: string | null = null
+
+    if (contentType.includes('application/json')) {
+      // JSON request for duplication
+      const payload = await request.json().catch(() => ({}))
+      rawTitle = typeof payload.title === 'string' ? payload.title : null
+      rawDescription = typeof payload.description === 'string' ? payload.description : null
+      price = parsePrice(payload.price)
+      currency = parseCurrency(payload.currency)
+      duplicateFrom = typeof payload.duplicateFrom === 'string' ? payload.duplicateFrom : null
+
+      // If duplicating, fetch the original product's images
+      if (duplicateFrom) {
+        const { data: originalProduct, error: fetchError } = await supabase
+          .from('vendor_products')
+          .select('gallery_paths, gallery_urls, primary_image_path, primary_image_url')
+          .eq('id', duplicateFrom)
+          .eq('vendor_id', userId)
+          .maybeSingle()
+
+        if (!fetchError && originalProduct) {
+          // Note: We can't directly copy files, so we'll create the product with the same URLs
+          // In a production system, you'd want to copy the actual files
+          // For now, we'll create a draft without images and let the vendor add new ones
+        }
+      }
+    } else {
+      // FormData request for new product
+      const formData = await request.formData()
+      rawTitle = formData.get('title') as string | null
+      rawDescription = formData.get('description') as string | null
+      price = parsePrice(formData.get('price'))
+      currency = parseCurrency(formData.get('currency'))
+      imageFiles = gatherImageFiles(formData)
+    }
 
     const title = sanitizeText(typeof rawTitle === 'string' ? rawTitle : '', { maxLength: 120 })
     const description =
@@ -110,7 +146,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Please provide a product title.' }, { status: 400 })
     }
 
-    if (!imageFiles.length) {
+    // Images are required for new products, but optional for duplicates (vendor can add later)
+    if (!duplicateFrom && !imageFiles.length) {
       return NextResponse.json({ error: 'Please attach at least one product image.' }, { status: 400 })
     }
 
@@ -194,7 +231,8 @@ export async function POST(request: NextRequest) {
     const primaryImagePath = galleryPaths[0]
     const primaryImageUrl = galleryUrls[0] ?? ''
 
-    const status = moderationStatus === 'ok' ? 'active' : 'pending_review'
+    // For duplicates, always create as draft
+    const status = duplicateFrom ? 'draft' : moderationStatus === 'ok' ? 'active' : 'pending_review'
     const nowIso = new Date().toISOString()
 
     const { data, error } = await supabase
@@ -206,14 +244,14 @@ export async function POST(request: NextRequest) {
         price,
         currency,
         status,
-        primary_image_path: primaryImagePath,
-        primary_image_url: primaryImageUrl,
-        gallery_paths: galleryPaths,
-        gallery_urls: galleryUrls,
-        moderation_status: moderationStatus,
-        moderation_message: moderationMessage,
-        moderation_category: moderationCategory,
-        moderation_reasons: moderationReasons,
+        primary_image_path: primaryImagePath || null,
+        primary_image_url: primaryImageUrl || null,
+        gallery_paths: galleryPaths.length > 0 ? galleryPaths : [],
+        gallery_urls: galleryUrls.length > 0 ? galleryUrls : [],
+        moderation_status: duplicateFrom ? null : moderationStatus,
+        moderation_message: duplicateFrom ? null : moderationMessage,
+        moderation_category: duplicateFrom ? null : moderationCategory,
+        moderation_reasons: duplicateFrom ? null : moderationReasons,
         ai_description: aiDescription ?? null,
         ai_colors: aiColors ?? null,
         created_at: nowIso,

@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
 import type { VendorProduct } from '@/types/vendor'
-import ProductManagement from './ProductManagement'
-import VendorAnalytics from './VendorAnalytics'
+import EnhancedProductManagement from './EnhancedProductManagement'
+import EnhancedAnalytics from './EnhancedAnalytics'
 import BusinessProfile from './BusinessProfile'
-import OrderManagement from './OrderManagement'
+import EnhancedOrderManagement from './EnhancedOrderManagement'
 import type { VendorAnalyticsSnapshot } from './types'
 
 type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders'
@@ -300,10 +300,17 @@ export default function VendorDashboardLayout() {
             </Card>
           )
         }
-        return <ProductManagement key={productKey} products={products} vendorName={vendorName} />
+        return (
+          <EnhancedProductManagement
+            key={productKey}
+            products={products}
+            vendorName={vendorName}
+            onProductUpdated={fetchProducts}
+          />
+        )
       case 'analytics':
         return (
-          <VendorAnalytics
+          <EnhancedAnalytics
             analytics={analytics}
             loading={analyticsLoading}
             error={analyticsError}
@@ -313,7 +320,7 @@ export default function VendorDashboardLayout() {
       case 'business':
         return <BusinessProfile />
       case 'orders':
-        return <OrderManagement />
+        return <EnhancedOrderManagement vendorId={userProfile?.id ?? ''} />
       default:
         return null
     }
