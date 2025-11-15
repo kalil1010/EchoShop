@@ -13,9 +13,10 @@ import BusinessProfile from './BusinessProfile'
 import EnhancedOrderManagement from './EnhancedOrderManagement'
 import TrendingAlerts from './TrendingAlerts'
 import VendorOnboardingWizard from './VendorOnboardingWizard'
+import SecuritySettings from './SecuritySettings'
 import type { VendorAnalyticsSnapshot } from './types'
 
-type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders'
+type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security'
 
 const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -23,6 +24,7 @@ const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'analytics', label: 'Analytics' },
   { key: 'business', label: 'Business profile' },
   { key: 'orders', label: 'Orders' },
+  { key: 'security', label: 'Security' },
 ]
 
 type VendorAnalyticsResponse = {
@@ -348,6 +350,8 @@ export default function VendorDashboardLayout() {
         return <BusinessProfile />
       case 'orders':
         return <EnhancedOrderManagement vendorId={userProfile?.uid ?? ''} />
+      case 'security':
+        return <SecuritySettings />
       default:
         return null
     }
