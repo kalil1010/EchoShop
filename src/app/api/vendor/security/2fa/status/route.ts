@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     // For now, we'll check the event_log for a successful 2FA enable event
     const { data: events } = await supabase
       .from('event_log')
-      .select('event_name')
+      .select('event_name, created_at')
       .eq('user_id', userId)
       .eq('event_name', 'vendor_2fa_enabled')
       .order('created_at', { ascending: false })
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     // Check if there's a disable event after the enable event
     const { data: disableEvents } = await supabase
       .from('event_log')
-      .select('created_at')
+      .select('event_name, created_at')
       .eq('user_id', userId)
       .eq('event_name', 'vendor_2fa_disabled')
       .order('created_at', { ascending: false })
