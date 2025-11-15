@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import type { VendorProduct } from '@/types/vendor'
+import AIAutofillSuggestions from './AIAutofillSuggestions'
 
 interface EnhancedProductUploadProps {
   onProductCreated: (product: VendorProduct) => void
@@ -333,6 +334,15 @@ export default function EnhancedProductUpload({ onProductCreated, onCancel }: En
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* AI Autofill Suggestions */}
+            {images.length > 0 && (
+              <AIAutofillSuggestions
+                imageUrl={images[0].preview}
+                onTitleSuggestion={(title) => setFormData((prev) => ({ ...prev, title }))}
+                onDescriptionSuggestion={(description) => setFormData((prev) => ({ ...prev, description }))}
+              />
             )}
           </div>
 

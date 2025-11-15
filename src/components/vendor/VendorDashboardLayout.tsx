@@ -11,6 +11,7 @@ import EnhancedProductManagement from './EnhancedProductManagement'
 import EnhancedAnalytics from './EnhancedAnalytics'
 import BusinessProfile from './BusinessProfile'
 import EnhancedOrderManagement from './EnhancedOrderManagement'
+import TrendingAlerts from './TrendingAlerts'
 import type { VendorAnalyticsSnapshot } from './types'
 
 type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders'
@@ -88,6 +89,8 @@ export default function VendorDashboardLayout() {
       'Vendor'
     )
   }, [userProfile])
+
+  const vendorId = userProfile?.uid ?? ''
 
   const quickActions = useMemo(
     () => [
@@ -375,6 +378,9 @@ export default function VendorDashboardLayout() {
           details current.
         </p>
       </header>
+
+      {/* Trending Alerts */}
+      <TrendingAlerts vendorId={vendorId} />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((tab) => (
