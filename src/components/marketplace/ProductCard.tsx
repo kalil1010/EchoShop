@@ -2,7 +2,8 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, Store } from 'lucide-react'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -81,7 +82,13 @@ export default function ProductCard({ product }: ProductCardProps) {
             {formatPrice(product.price, product.currency)}
           </span>
         </div>
-        <p className="text-xs uppercase tracking-wide text-purple-600">{vendorName}</p>
+        <Link
+          href={`/shop/${product.vendorId}`}
+          className="text-xs uppercase tracking-wide text-purple-600 hover:text-purple-700 flex items-center gap-1 w-fit"
+        >
+          <Store className="h-3 w-3" />
+          {vendorName}
+        </Link>
         <p className="text-sm text-muted-foreground line-clamp-3">
           {product.description ?? product.aiDescription ?? 'No description provided.'}
         </p>
