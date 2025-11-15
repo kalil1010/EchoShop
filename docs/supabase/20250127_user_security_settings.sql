@@ -1,4 +1,6 @@
 -- ------------------------------------------------------------------
+-- Drop problematic constraint if it exists to allow migration to run idempotently
+alter table if exists public.two_factor_sessions drop constraint if exists two_factor_sessions_user_id_fkey;
 -- User Security Settings Table for 2FA
 -- ------------------------------------------------------------------
 -- This table stores encrypted 2FA secrets and security settings
