@@ -140,7 +140,7 @@ export default function BusinessProfile() {
       toast({
         title: 'Logo upload',
         description: 'Logo upload feature coming soon.',
-        variant: 'info',
+        variant: 'default',
       })
     } catch (error) {
       toast({
@@ -175,7 +175,7 @@ export default function BusinessProfile() {
       toast({
         title: 'Banner upload',
         description: 'Banner upload feature coming soon.',
-        variant: 'info',
+        variant: 'default',
       })
     } catch (error) {
       toast({

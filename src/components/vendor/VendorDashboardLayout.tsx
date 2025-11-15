@@ -320,7 +320,7 @@ export default function VendorDashboardLayout() {
       case 'business':
         return <BusinessProfile />
       case 'orders':
-        return <EnhancedOrderManagement vendorId={userProfile?.id ?? ''} />
+        return <EnhancedOrderManagement vendorId={userProfile?.uid ?? ''} />
       default:
         return null
     }

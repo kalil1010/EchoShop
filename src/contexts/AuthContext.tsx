@@ -76,6 +76,7 @@ interface ProfileRow {
   is_super_admin: boolean | null
   vendor_business_name?: string | null
   vendor_business_address?: string | null
+  vendor_business_description?: string | null
   vendor_contact_email?: string | null
   vendor_phone?: string | null
   vendor_website?: string | null
@@ -110,6 +111,7 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     isSuperAdmin: Boolean(profile.isSuperAdmin),
     vendorBusinessName: profile.vendorBusinessName?.trim() || undefined,
     vendorBusinessAddress: profile.vendorBusinessAddress?.trim() || undefined,
+    vendorBusinessDescription: profile.vendorBusinessDescription?.trim() || undefined,
     vendorContactEmail: profile.vendorContactEmail?.trim() || undefined,
     vendorPhone: profile.vendorPhone?.trim() || undefined,
     vendorWebsite: profile.vendorWebsite?.trim() || undefined,
@@ -289,6 +291,7 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     isSuperAdmin: Boolean(row.is_super_admin),
     vendorBusinessName: row.vendor_business_name ?? undefined,
     vendorBusinessAddress: row.vendor_business_address ?? undefined,
+    vendorBusinessDescription: row.vendor_business_description ?? undefined,
     vendorContactEmail: row.vendor_contact_email ?? undefined,
     vendorPhone: row.vendor_phone ?? undefined,
     vendorWebsite: row.vendor_website ?? undefined,
@@ -346,6 +349,7 @@ function profileToRow(profile: UserProfile): Partial<ProfileRow> {
     is_super_admin: profile.isSuperAdmin ?? null,
     vendor_business_name: profile.vendorBusinessName ?? null,
     vendor_business_address: profile.vendorBusinessAddress ?? null,
+    vendor_business_description: profile.vendorBusinessDescription ?? null,
     vendor_contact_email: profile.vendorContactEmail ?? null,
     vendor_phone: profile.vendorPhone ?? null,
     vendor_website: profile.vendorWebsite ?? null,

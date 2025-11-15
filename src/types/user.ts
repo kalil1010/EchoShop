@@ -23,6 +23,7 @@ export interface UserProfile {
   isSuperAdmin?: boolean
   vendorBusinessName?: string
   vendorBusinessAddress?: string
+  vendorBusinessDescription?: string
   vendorContactEmail?: string
   vendorPhone?: string
   vendorWebsite?: string

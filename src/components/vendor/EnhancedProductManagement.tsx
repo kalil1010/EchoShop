@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useRef } from 'react'
 import { 
   Edit2, Copy, Trash2, Archive, CheckCircle2, XCircle, AlertCircle, 
   Upload, Download, Filter, Search, MoreVertical, Eye, EyeOff,
@@ -61,6 +61,7 @@ export default function EnhancedProductManagement({
   const [statusFilter, setStatusFilter] = useState<VendorProductStatus | 'all'>('all')
   const [bulkImporting, setBulkImporting] = useState(false)
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
+  const bulkImportInputRef = useRef<HTMLInputElement>(null)
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -313,29 +314,30 @@ export default function EnhancedProductManagement({
         </div>
         <div className="flex flex-wrap gap-2">
           <input
+            ref={bulkImportInputRef}
             type="file"
             accept=".csv,.xlsx"
             onChange={handleBulkImport}
             className="hidden"
             id="bulk-import-input"
           />
-          <label htmlFor="bulk-import-input">
-            <Button variant="outline" disabled={bulkImporting} asChild>
-              <span>
-                {bulkImporting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Bulk Import
-                  </>
-                )}
-              </span>
-            </Button>
-          </label>
+          <Button 
+            variant="outline" 
+            disabled={bulkImporting}
+            onClick={() => bulkImportInputRef.current?.click()}
+          >
+            {bulkImporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importing...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Bulk Import
+              </>
+            )}
+          </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV
