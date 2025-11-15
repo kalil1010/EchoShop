@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import { TrendingUp, AlertCircle, X, Sparkles } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
 interface TrendingAlert {
   id: string
@@ -104,9 +103,12 @@ export default function TrendingAlerts({ vendorId }: TrendingAlertsProps) {
               </div>
               <p className="text-sm text-slate-600">{alert.message}</p>
               {alert.actionUrl && (
-                <Button variant="outline" size="sm" className="mt-2" asChild>
-                  <a href={alert.actionUrl}>View Details</a>
-                </Button>
+                <a
+                  href={alert.actionUrl}
+                  className="mt-2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-9 rounded-md px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+                >
+                  View Details
+                </a>
               )}
             </div>
             <button
