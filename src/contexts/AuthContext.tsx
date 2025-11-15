@@ -1054,13 +1054,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             code === 'refresh_token_not_found' ||
             message.includes('refresh_token_not_found')
           ) {
-            console.debug('[AuthContext] Refresh token invalid or expired, clearing session')
+            console.debug('[AuthContext] Refresh token invalid or expired, clearing session and cookies')
+            // Clear local session first
             try {
               await supabase.auth.signOut({ scope: 'local' })
             } catch (signOutError) {
               // Ignore signOut errors if token is already invalid
             }
-            void syncServerSession('SIGNED_OUT', null)
+            // Clear server-side cookies - this is critical to prevent middleware loops
+            try {
+              await syncServerSession('SIGNED_OUT', null)
+            } catch (syncError) {
+              // Log but don't block - cookies might already be cleared
+              console.warn('[AuthContext] Failed to sync sign-out to server (may be expected):', syncError)
+            }
             if (isMounted) {
               setUser(null)
               setUserProfile(null)

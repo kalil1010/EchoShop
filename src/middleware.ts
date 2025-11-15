@@ -21,12 +21,14 @@ const getSupabaseAdmin = () => {
 
 const getAuthenticatedUser = async (req: NextRequest) => {
   // Check if auth cookies exist first
-  const hasAuthCookies = req.cookies.getAll().some(
+  const authCookies = req.cookies.getAll().filter(
     (cookie) =>
       cookie.name.startsWith('sb-') ||
       cookie.name.startsWith('sb:') ||
       cookie.name.startsWith('__Secure-sb-')
   )
+  
+  const hasAuthCookies = authCookies.length > 0
 
   if (!hasAuthCookies) {
     // No auth cookies, user is definitely not authenticated
@@ -60,6 +62,7 @@ const getAuthenticatedUser = async (req: NextRequest) => {
     // Try to get the user
     // This may trigger internal session management that tries to modify cookies
     // We catch and suppress those errors since we can't modify cookies in middleware
+    let refreshTokenError = false
     try {
       const {
         data: { user: getUserResult },
@@ -75,7 +78,8 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         if (errorCode === 'refresh_token_not_found' || 
             errorMessage.includes('Refresh Token Not Found') ||
             errorMessage.includes('refresh_token_not_found')) {
-          // Session is invalid - return null to allow client-side cleanup
+          refreshTokenError = true
+          // Session is invalid - cookies are stale
           return null
         }
       }
@@ -98,6 +102,7 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       if (errorCode === 'refresh_token_not_found' ||
           errorMessage.includes('Refresh Token Not Found') ||
           errorMessage.includes('refresh_token_not_found')) {
+        refreshTokenError = true
         // Session is invalid - return null to allow client-side cleanup
         return null
       }
@@ -167,6 +172,15 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const user = await getAuthenticatedUser(req)
   const portal = resolvePortalFromPath(pathname)
+  
+  // Track if we detected stale cookies (for cookie cleanup)
+  const authCookies = req.cookies.getAll().filter(
+    (cookie) =>
+      cookie.name.startsWith('sb-') ||
+      cookie.name.startsWith('sb:') ||
+      cookie.name.startsWith('__Secure-sb-')
+  )
+  const hasStaleCookies = authCookies.length > 0 && !user
 
   if (user) {
     const profile = await fetchUserProfile(user.id)
@@ -234,28 +248,22 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next()
     }
     
-    // Check if there are any Supabase auth cookies (user might be logged in but session not detected)
-    // This handles the case where:
-    // 1. User has valid auth cookies in browser
-    // 2. Session restoration from localStorage hasn't completed yet
-    // 3. Middleware can't detect session due to timing/cookie handling limitations
-    // 4. Refresh token is invalid/expired (cookies exist but session is invalid)
-    const hasAuthCookies = req.cookies.getAll().some(
-      (cookie) =>
-        cookie.name.startsWith('sb-') ||
-        cookie.name.startsWith('sb:') ||
-        cookie.name.startsWith('__Secure-sb-')
-    )
-    
-    if (hasAuthCookies) {
-      // User has auth cookies but session wasn't detected
-      // This could be:
-      // - A timing issue (session restoration in progress)
-      // - Invalid/expired refresh token (will be handled by client-side)
-      // Allow the request through and let the client-side AuthContext restore/cleanup the session
-      // The page components will handle auth checks after session is restored or cleaned up
-      console.debug('[middleware] Auth cookies present but session not detected, allowing request through for client-side session restoration', { pathname })
-      return NextResponse.next()
+    // Handle stale cookies (cookies exist but session is invalid)
+    // This happens when:
+    // 1. Refresh token is invalid/expired (cookies exist but session is invalid)
+    // 2. Session restoration from localStorage hasn't completed yet (timing issue)
+    if (hasStaleCookies) {
+      // User has auth cookies but session wasn't detected (likely stale/invalid cookies)
+      // For API routes, return 401 immediately to force client-side cleanup
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      
+      // For page routes, allow through once for client-side session restoration
+      // Client-side will detect invalid tokens and clear cookies via /api/auth/callback
+      // If cookies are truly stale, the client will clear them and redirect to login
+      const response = NextResponse.next()
+      return response
     }
     
     console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
