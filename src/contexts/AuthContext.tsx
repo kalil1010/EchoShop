@@ -694,9 +694,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [setRoleCookie, setRoleLocalStorage],
   )
 
+  /**
+   * Determine if authRole should override profileRole based on role hierarchy
+   * Role hierarchy: user < vendor < owner/admin
+   * Only upgrades are allowed (never downgrade for security)
+   */
+  const shouldUpgradeRole = useCallback((profileRole: UserRole, authRole: UserRole): boolean => {
+    const roleHierarchy: Record<UserRole, number> = {
+      user: 1,
+      vendor: 2,
+      owner: 3,
+      admin: 3, // admin is same level as owner
+    }
+    const profileLevel = roleHierarchy[profileRole] ?? 0
+    const authLevel = roleHierarchy[authRole] ?? 0
+    return authLevel > profileLevel
+  }, [])
+
   const reconcileProfileAfterAuth = useCallback(
     async (authUser: AuthUser, profile: UserProfile): Promise<UserProfile> => {
       const normalised = normalisePersistedProfile(profile)
+      let roleChanged = false
 
       // Task A1: Check if user has an approved vendor request and upgrade role if needed
       if (normalised.role === 'user' && supabase) {
@@ -707,17 +725,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             { userId: authUser.uid },
           )
           normalised.role = 'vendor'
+          roleChanged = true
         }
       }
 
-      await upsertProfileWithRetry(profileToRow(normalised), authUser, 'post-sign-in')
-      console.debug(
-        '[AuthContext] Post-sign-in profile sync completed',
-        { userId: authUser.uid, role: normalised.role },
-      )
+      // Sync role from auth metadata to profile if auth role is higher
+      // This handles cases where role is set in auth metadata (e.g., via admin update)
+      // but profile hasn't been updated yet
+      // Only sync if authUser.role is explicitly set (not undefined)
+      if (authUser.role !== undefined) {
+        const authRole = normaliseRole(authUser.role)
+        if (authRole !== normalised.role && shouldUpgradeRole(normalised.role, authRole)) {
+          console.debug(
+            '[AuthContext] Syncing role from auth metadata to profile',
+            {
+              userId: authUser.uid,
+              profileRole: normalised.role,
+              authRole,
+            },
+          )
+          normalised.role = authRole
+          roleChanged = true
+        }
+      }
+
+      // Only upsert if role changed to avoid unnecessary database writes
+      if (roleChanged) {
+        await upsertProfileWithRetry(profileToRow(normalised), authUser, 'post-sign-in')
+        console.debug(
+          '[AuthContext] Post-sign-in profile sync completed with role update',
+          { userId: authUser.uid, role: normalised.role },
+        )
+      } else {
+        console.debug(
+          '[AuthContext] Post-sign-in profile sync completed (no changes)',
+          { userId: authUser.uid, role: normalised.role },
+        )
+      }
       return applyProfileToState(normalised, authUser)
     },
-    [upsertProfileWithRetry, applyProfileToState, supabase],
+    [upsertProfileWithRetry, applyProfileToState, supabase, shouldUpgradeRole],
   )
 
   const loadUserProfile = useCallback(
