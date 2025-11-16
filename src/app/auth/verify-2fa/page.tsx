@@ -153,7 +153,7 @@ export default function Verify2FAPage() {
 
   const handleResend = async () => {
     toast({
-      variant: 'info',
+      variant: 'default',
       title: 'Code Resent',
       description: 'Check your authenticator app for a new code.',
     })

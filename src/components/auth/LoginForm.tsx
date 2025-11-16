@@ -115,7 +115,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         console.debug('[LoginForm] 2FA required, showing verification modal')
         
         toast({
-          variant: 'info',
+          variant: 'default',
           title: '2FA Verification Required',
           description: 'Please enter the 6-digit code from your authenticator app to complete sign-in.',
         })
