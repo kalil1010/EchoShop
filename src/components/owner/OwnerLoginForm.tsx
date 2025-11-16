@@ -24,6 +24,7 @@ export function OwnerLoginForm() {
   const [show2FA, setShow2FA] = useState(false)
   const [twoFASessionToken, setTwoFASessionToken] = useState<string | null>(null)
   const [pendingProfile, setPendingProfile] = useState<{ role: string } | null>(null)
+  const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null)
 
   const handleProfileRetry = useCallback(async () => {
     setRetryingProfile(true)
@@ -119,8 +120,9 @@ export function OwnerLoginForm() {
         return
       }
 
-      // Check if 2FA is required for owner login
-      // Pass userId in request body since session might not be fully established yet
+      // CRITICAL: Check 2FA requirement BEFORE allowing login to complete
+      // If 2FA is required, sign out immediately and show verification modal
+      // This prevents the session from being used until 2FA is verified
       try {
         const twoFAResponse = await fetch('/api/auth/2fa/require', {
           method: 'POST',
@@ -144,6 +146,8 @@ export function OwnerLoginForm() {
               role: profile.role,
               response: twoFAData
             })
+            // Sign out immediately since session was created
+            await logout().catch(() => undefined)
             setError('Security configuration error: 2FA is required for owner accounts but was not detected. Please contact support.')
             toast({
               variant: 'error',
@@ -155,14 +159,22 @@ export function OwnerLoginForm() {
           }
           
           if (twoFAData.required && twoFAData.enabled) {
-            // 2FA is required and enabled - show verification modal
+            // 2FA is required and enabled - sign out immediately and show verification modal
+            // This ensures the session is not usable until 2FA is verified
+            console.debug('[owner-login] 2FA required and enabled, signing out and showing verification modal')
+            await logout().catch(() => undefined)
+            
+            // Store credentials and profile for re-authentication after 2FA verification
             setPendingProfile(profile)
+            setPendingCredentials({ email: trimmedEmail, password: trimmedPassword })
             setTwoFASessionToken(twoFAData.sessionToken)
             setShow2FA(true)
             setLoading(false) // Stop loading since we're showing 2FA modal
             return
           } else if (twoFAData.required && !twoFAData.enabled) {
-            // 2FA is required but not enabled - BLOCK LOGIN
+            // 2FA is required but not enabled - sign out and BLOCK LOGIN
+            console.debug('[owner-login] 2FA required but not enabled, signing out')
+            await logout().catch(() => undefined)
             setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
             toast({
               variant: 'error',
@@ -177,6 +189,8 @@ export function OwnerLoginForm() {
           if (twoFAResponse.status === 403) {
             const errorData = await twoFAResponse.json().catch(() => ({}))
             if (errorData.message?.includes('2FA is required')) {
+              // Sign out since 2FA is required but not enabled
+              await logout().catch(() => undefined)
               setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
               toast({
                 variant: 'error',
@@ -187,13 +201,22 @@ export function OwnerLoginForm() {
               return
             }
           }
-          // For other errors, log but don't block (might be temporary server issue)
+          // For other errors, sign out to be safe and show error
           console.warn('Failed to check 2FA requirement:', twoFAResponse.status)
+          await logout().catch(() => undefined)
+          setError('Unable to verify 2FA status. Please try again or contact support.')
+          toast({
+            variant: 'error',
+            title: 'Verification Error',
+            description: 'Failed to check 2FA status. Please try again.',
+          })
+          setLoading(false)
+          return
         }
       } catch (twoFAError) {
         console.error('Failed to check 2FA requirement:', twoFAError)
-        // If 2FA check fails completely, we should still block login for owners
-        // to be safe, unless it's clearly a network/server error
+        // If 2FA check fails completely, sign out to be safe
+        await logout().catch(() => undefined)
         setError('Unable to verify 2FA status. Please try again or contact support.')
         toast({
           variant: 'error',
@@ -204,14 +227,13 @@ export function OwnerLoginForm() {
         return
       }
 
-      const roleMeta = getRoleMeta(profile.role)
-      toast({
-        variant: 'success',
-        title: roleMeta.welcomeTitle,
-        description: roleMeta.welcomeSubtitle,
-      })
-
-      router.replace(getDefaultRouteForRole(profile.role))
+      // If we reach here, 2FA is not required (should never happen for owners)
+      // But if it does, sign out to be safe
+      console.error('[owner-login] Reached login completion without 2FA check - this should never happen!')
+      await logout().catch(() => undefined)
+      setError('Security error: Login flow incomplete. Please try again.')
+      setLoading(false)
+      return
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
@@ -297,6 +319,7 @@ export function OwnerLoginForm() {
           setShow2FA(false)
           setTwoFASessionToken(null)
           setPendingProfile(null)
+          setPendingCredentials(null)
         }}
         onVerify={async (code, backupCode) => {
           if (!twoFASessionToken) {
@@ -319,17 +342,41 @@ export function OwnerLoginForm() {
             throw new Error(data.error || '2FA verification failed')
           }
 
-          // 2FA verified - complete login
+          // 2FA verified - now sign in again to create the session
+          // We signed out earlier to prevent unauthorized session use
           setShow2FA(false)
-          if (pendingProfile) {
-            const normalisedRole = normaliseRole(pendingProfile.role)
+          setLoading(true)
+          
+          try {
+            // Use stored credentials for re-authentication after 2FA verification
+            const credentials = pendingCredentials || { email: email.trim().toLowerCase(), password: password.trim() }
+            if (!credentials.email || !credentials.password) {
+              throw new Error('Credentials not available. Please sign in again.')
+            }
+            
+            // Re-authenticate now that 2FA is verified
+            const result = await signIn(credentials.email, credentials.password)
+            const { profile } = result
+            const normalisedRole = normaliseRole(profile.role)
             const roleMeta = getRoleMeta(normalisedRole)
+            
+            // Clear stored credentials
+            setPendingCredentials(null)
+            setPendingProfile(null)
+            setTwoFASessionToken(null)
+            
             toast({
               variant: 'success',
               title: roleMeta.welcomeTitle,
               description: roleMeta.welcomeSubtitle,
             })
+            
             router.replace(getDefaultRouteForRole(normalisedRole))
+          } catch (signInError) {
+            console.error('[owner-login] Failed to sign in after 2FA verification:', signInError)
+            throw new Error('Failed to complete login after 2FA verification. Please try again.')
+          } finally {
+            setLoading(false)
           }
         }}
         purpose="login"
