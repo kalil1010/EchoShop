@@ -137,13 +137,28 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Graceful error handling (continues if image copy fails)
 - ✅ Preserves image quality and metadata during copy
 
+### 5. Vendor-Owner Messaging System ✅
+- ✅ Database schema for vendor-owner messages (`docs/supabase/20250131_vendor_owner_messages.sql`)
+- ✅ Conversation threading (messages grouped by conversation_id)
+- ✅ Send/receive messages between vendors and owners
+- ✅ Message read/unread status tracking
+- ✅ Unread message count badges
+- ✅ Real-time message display
+- ✅ Message subject support (optional)
+- ✅ Character limits (2000 chars for message, 200 for subject)
+- ✅ UI component in vendor dashboard (`VendorOwnerMessages.tsx`)
+- ✅ API routes for sending/receiving messages (`/api/vendor/messages`)
+- ✅ Mark messages as read functionality
+- ✅ Auto-scroll to latest message
+- ✅ Conversation list with unread indicators
+
 ## 📋 Remaining Features (Not Yet Implemented)
 
 ### 1. Notifications System
 - In-app notifications for moderation status
 - Order update notifications
 - Payout date reminders
-- Message notifications
+- Message notifications (basic messaging implemented, notifications pending)
 - **Implementation needed**: Notification table, real-time updates, notification center UI
 
 ### 2. Payouts & Financials

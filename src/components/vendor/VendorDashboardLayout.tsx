@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { UploadCloud, BarChart3, Building2 } from 'lucide-react'
+import { UploadCloud, BarChart3, Building2, MessageSquare } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,9 +14,10 @@ import EnhancedOrderManagement from './EnhancedOrderManagement'
 import TrendingAlerts from './TrendingAlerts'
 import VendorOnboardingWizard from './VendorOnboardingWizard'
 import SecuritySettings from './SecuritySettings'
+import VendorOwnerMessages from './VendorOwnerMessages'
 import type { VendorAnalyticsSnapshot } from './types'
 
-type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security'
+type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security' | 'messages'
 
 const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -24,6 +25,7 @@ const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'analytics', label: 'Analytics' },
   { key: 'business', label: 'Business profile' },
   { key: 'orders', label: 'Orders' },
+  { key: 'messages', label: 'Messages' },
   { key: 'security', label: 'Security' },
 ]
 
@@ -350,6 +352,8 @@ export default function VendorDashboardLayout() {
         return <BusinessProfile />
       case 'orders':
         return <EnhancedOrderManagement vendorId={userProfile?.uid ?? ''} />
+      case 'messages':
+        return <VendorOwnerMessages />
       case 'security':
         return <SecuritySettings />
       default:
