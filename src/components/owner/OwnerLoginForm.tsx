@@ -134,6 +134,26 @@ export function OwnerLoginForm() {
 
         if (twoFAResponse.ok) {
           const twoFAData = await twoFAResponse.json()
+          console.debug('[owner-login] 2FA check response:', twoFAData)
+          
+          // For owners, 2FA should ALWAYS be required
+          // If the API says it's not required, that's an error - block login for security
+          if (!twoFAData.required) {
+            console.error('[owner-login] 2FA not required for owner - this should never happen!', {
+              userId: profile.uid,
+              role: profile.role,
+              response: twoFAData
+            })
+            setError('Security configuration error: 2FA is required for owner accounts but was not detected. Please contact support.')
+            toast({
+              variant: 'error',
+              title: 'Security Error',
+              description: '2FA is required for owner accounts. Please contact support.',
+            })
+            setLoading(false)
+            return
+          }
+          
           if (twoFAData.required && twoFAData.enabled) {
             // 2FA is required and enabled - show verification modal
             setPendingProfile(profile)

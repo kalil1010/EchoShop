@@ -48,17 +48,43 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
 
     // Get user role
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .maybeSingle<{ role: string | null }>()
 
-    const userRole = profile?.role as 'user' | 'vendor' | 'owner' | 'admin' | null
+    if (profileError) {
+      console.error('[2FA-require] Failed to fetch profile:', profileError)
+      return NextResponse.json({ error: 'Failed to fetch user profile.' }, { status: 500 })
+    }
+
+    if (!profile) {
+      console.error('[2FA-require] Profile not found for userId:', userId)
+      return NextResponse.json({ error: 'User profile not found.' }, { status: 404 })
+    }
+
+    const userRole = profile.role as 'user' | 'vendor' | 'owner' | 'admin' | null
+    console.debug('[2FA-require] Checking 2FA requirement', {
+      userId,
+      userRole,
+      purpose,
+      actionType,
+    })
 
     // Check if 2FA is required for this user and action
     const required = is2FARequired(userRole, purpose, actionType)
+    console.debug('[2FA-require] is2FARequired result:', required)
+    
     if (!required) {
+      // Log warning if owner/admin doesn't require 2FA (should never happen)
+      if (userRole === 'owner' || userRole === 'admin') {
+        console.error('[2FA-require] SECURITY WARNING: 2FA not required for owner/admin!', {
+          userId,
+          userRole,
+          purpose,
+        })
+      }
       return NextResponse.json({
         required: false,
         message: '2FA is not required for this action.',
