@@ -21,7 +21,7 @@ export default async function VendorStorefrontPage({ params }: VendorStorefrontP
   // Fetch vendor profile
   const { data: vendorProfile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, display_name, vendor_business_name, vendor_business_description, vendor_website, vendor_contact_email, photo_url')
+    .select('id, display_name, vendor_business_name, vendor_business_description, vendor_website, vendor_contact_email, photo_url, vendor_logo_url, vendor_banner_url')
     .eq('id', vendorId)
     .maybeSingle()
 
@@ -65,6 +65,8 @@ export default async function VendorStorefrontPage({ params }: VendorStorefrontP
       vendorWebsite={vendorProfile.vendor_website || undefined}
       vendorContactEmail={vendorProfile.vendor_contact_email || undefined}
       vendorPhotoUrl={vendorProfile.photo_url || undefined}
+      vendorLogoUrl={vendorProfile.vendor_logo_url || undefined}
+      vendorBannerUrl={vendorProfile.vendor_banner_url || undefined}
       products={products}
     />
   )

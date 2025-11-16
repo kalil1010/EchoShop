@@ -83,6 +83,8 @@ interface ProfileRow {
   vendor_contact_email?: string | null
   vendor_phone?: string | null
   vendor_website?: string | null
+  vendor_logo_url?: string | null
+  vendor_banner_url?: string | null
   role: string | null
   created_at: string | null
   updated_at: string | null
@@ -118,6 +120,8 @@ function sanitiseProfile(profile: UserProfile): UserProfile {
     vendorContactEmail: profile.vendorContactEmail?.trim() || undefined,
     vendorPhone: profile.vendorPhone?.trim() || undefined,
     vendorWebsite: profile.vendorWebsite?.trim() || undefined,
+    vendorLogoUrl: profile.vendorLogoUrl || undefined,
+    vendorBannerUrl: profile.vendorBannerUrl || undefined,
     role: normaliseRole(profile.role),
   }
 }
@@ -373,6 +377,8 @@ function mapProfileRow(row: ProfileRow, fallback: AuthUser): UserProfile {
     vendorContactEmail: row.vendor_contact_email ?? undefined,
     vendorPhone: row.vendor_phone ?? undefined,
     vendorWebsite: row.vendor_website ?? undefined,
+    vendorLogoUrl: row.vendor_logo_url ?? undefined,
+    vendorBannerUrl: row.vendor_banner_url ?? undefined,
     role: normaliseRole(row.role ?? fallback.role),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
@@ -452,6 +458,8 @@ function buildBootstrapProfile(
     vendorContactEmail: undefined,
     vendorPhone: undefined,
     vendorWebsite: undefined,
+    vendorLogoUrl: undefined,
+    vendorBannerUrl: undefined,
     role, // Set role based on vendor status
     createdAt: now,
     updatedAt: now,
@@ -481,6 +489,8 @@ function profileToRow(profile: UserProfile): Partial<ProfileRow> {
     vendor_contact_email: profile.vendorContactEmail ?? null,
     vendor_phone: profile.vendorPhone ?? null,
     vendor_website: profile.vendorWebsite ?? null,
+    vendor_logo_url: profile.vendorLogoUrl ?? null,
+    vendor_banner_url: profile.vendorBannerUrl ?? null,
     role: profile.role,
     created_at: profile.createdAt.toISOString(),
     updated_at: profile.updatedAt.toISOString(),

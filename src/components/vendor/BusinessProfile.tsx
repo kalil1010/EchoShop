@@ -29,6 +29,8 @@ export default function BusinessProfile() {
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
 
@@ -40,7 +42,9 @@ export default function BusinessProfile() {
     setPhone(userProfile.vendorPhone ?? '')
     setWebsite(userProfile.vendorWebsite ?? '')
     setAboutText(userProfile.vendorBusinessDescription ?? '')
-    // TODO: Load social handles and logo/banner from profile when fields are added
+    setLogoUrl(userProfile.vendorLogoUrl ?? null)
+    setBannerUrl(userProfile.vendorBannerUrl ?? null)
+    // TODO: Load social handles from profile when fields are added
   }, [userProfile])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -134,13 +138,45 @@ export default function BusinessProfile() {
       return
     }
 
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: 'Logo must be 5MB or smaller.',
+        variant: 'error',
+      })
+      return
+    }
+
     setUploadingLogo(true)
     try {
-      // TODO: Implement logo upload to storage
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'logo')
+
+      const response = await fetch('/api/vendor/branding/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to upload logo')
+      }
+
+      const data = await response.json()
+      setLogoUrl(data.url)
+      
+      // Refresh profile to get updated data
+      if (updateUserProfile) {
+        await updateUserProfile({ vendorLogoUrl: data.url })
+      }
+
       toast({
-        title: 'Logo upload',
-        description: 'Logo upload feature coming soon.',
-        variant: 'default',
+        title: 'Logo uploaded',
+        description: 'Your logo has been uploaded successfully.',
+        variant: 'success',
       })
     } catch (error) {
       toast({
@@ -169,13 +205,45 @@ export default function BusinessProfile() {
       return
     }
 
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: 'Banner must be 5MB or smaller.',
+        variant: 'error',
+      })
+      return
+    }
+
     setUploadingBanner(true)
     try {
-      // TODO: Implement banner upload to storage
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'banner')
+
+      const response = await fetch('/api/vendor/branding/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to upload banner')
+      }
+
+      const data = await response.json()
+      setBannerUrl(data.url)
+      
+      // Refresh profile to get updated data
+      if (updateUserProfile) {
+        await updateUserProfile({ vendorBannerUrl: data.url })
+      }
+
       toast({
-        title: 'Banner upload',
-        description: 'Banner upload feature coming soon.',
-        variant: 'default',
+        title: 'Banner uploaded',
+        description: 'Your banner has been uploaded successfully.',
+        variant: 'success',
       })
     } catch (error) {
       toast({
@@ -298,10 +366,19 @@ export default function BusinessProfile() {
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Logo</label>
+            {logoUrl && (
+              <div className="mb-2 rounded-lg border p-2">
+                <img
+                  src={logoUrl}
+                  alt="Vendor logo"
+                  className="h-20 w-20 rounded object-cover"
+                />
+              </div>
+            )}
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleLogoUpload}
               className="hidden"
             />
@@ -320,19 +397,28 @@ export default function BusinessProfile() {
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Upload Logo
+                  {logoUrl ? 'Replace Logo' : 'Upload Logo'}
                 </>
               )}
             </Button>
-            <p className="text-xs text-slate-500">Recommended: 200x200px, PNG or JPG</p>
+            <p className="text-xs text-slate-500">Recommended: 200x200px, PNG or JPG (max 5MB)</p>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Banner</label>
+            {bannerUrl && (
+              <div className="mb-2 rounded-lg border overflow-hidden">
+                <img
+                  src={bannerUrl}
+                  alt="Vendor banner"
+                  className="h-32 w-full object-cover"
+                />
+              </div>
+            )}
             <input
               ref={bannerInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleBannerUpload}
               className="hidden"
             />
@@ -351,11 +437,11 @@ export default function BusinessProfile() {
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Upload Banner
+                  {bannerUrl ? 'Replace Banner' : 'Upload Banner'}
                 </>
               )}
             </Button>
-            <p className="text-xs text-slate-500">Recommended: 1200x300px, PNG or JPG</p>
+            <p className="text-xs text-slate-500">Recommended: 1200x300px, PNG or JPG (max 5MB)</p>
           </div>
         </div>
       </CardContent>

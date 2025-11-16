@@ -29,6 +29,8 @@ interface VendorStorefrontProps {
   vendorWebsite?: string
   vendorContactEmail?: string
   vendorPhotoUrl?: string
+  vendorLogoUrl?: string
+  vendorBannerUrl?: string
   products: VendorProduct[]
 }
 
@@ -42,6 +44,8 @@ export default function VendorStorefront({
   vendorWebsite,
   vendorContactEmail,
   vendorPhotoUrl,
+  vendorLogoUrl,
+  vendorBannerUrl,
   products: initialProducts,
 }: VendorStorefrontProps) {
   const { toast } = useToast()
@@ -137,13 +141,23 @@ export default function VendorStorefront({
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* Vendor Header */}
-      <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white">
+      <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white overflow-hidden">
+        {/* Banner */}
+        {vendorBannerUrl && (
+          <div className="h-48 w-full relative">
+            <img
+              src={vendorBannerUrl}
+              alt={`${vendorName} banner`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
         <CardHeader>
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-            {vendorPhotoUrl && (
+            {(vendorLogoUrl || vendorPhotoUrl) && (
               <div className="flex-shrink-0">
                 <img
-                  src={vendorPhotoUrl}
+                  src={vendorLogoUrl || vendorPhotoUrl}
                   alt={vendorName}
                   className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-md"
                 />

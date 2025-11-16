@@ -27,6 +27,8 @@ export interface UserProfile {
   vendorContactEmail?: string
   vendorPhone?: string
   vendorWebsite?: string
+  vendorLogoUrl?: string
+  vendorBannerUrl?: string
   createdAt: Date
   updatedAt: Date
 }

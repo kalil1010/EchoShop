@@ -117,12 +117,16 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Status: Products imported as 'draft' by default (can be set in file)
 - ✅ Error reporting: Returns detailed errors for failed rows
 
-### 3. Logo/Banner Upload
-- UI is implemented
-- Upload handlers are placeholders
-- **TODO**: Implement file upload to Supabase storage
-- **TODO**: Add logo/banner fields to profiles table
-- **TODO**: Display uploaded images in profile
+### 3. Logo/Banner Upload ✅
+- ✅ Database schema updated (`docs/supabase/20250130_vendor_branding.sql`)
+- ✅ File upload to Supabase storage implemented (`/api/vendor/branding/upload`)
+- ✅ Logo and banner fields added to profiles table
+- ✅ Image preview in Business Profile component
+- ✅ Replace functionality (deletes old file when uploading new one)
+- ✅ File validation (type, size - max 5MB)
+- ✅ Storage path management (vendor-branding/{userId}/)
+- ✅ Profile type updated to include `vendorLogoUrl` and `vendorBannerUrl`
+- ✅ AuthContext updated to map logo/banner fields
 
 ### 4. Product Duplication
 - Basic duplication works (creates draft without images)
