@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { UploadCloud, BarChart3, Building2, MessageSquare } from 'lucide-react'
+import { UploadCloud, BarChart3, Building2, MessageSquare, DollarSign } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,9 +17,10 @@ import SecuritySettings from './SecuritySettings'
 import VendorOwnerMessages from './VendorOwnerMessages'
 import NotificationCenter from './NotificationCenter'
 import NotificationBell from './NotificationBell'
+import PayoutsFinancials from './PayoutsFinancials'
 import type { VendorAnalyticsSnapshot } from './types'
 
-type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security' | 'messages'
+type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'payouts' | 'messages' | 'security'
 
 const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -27,6 +28,7 @@ const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'analytics', label: 'Analytics' },
   { key: 'business', label: 'Business profile' },
   { key: 'orders', label: 'Orders' },
+  { key: 'payouts', label: 'Payouts & Financials' },
   { key: 'messages', label: 'Messages' },
   { key: 'security', label: 'Security' },
 ]
@@ -357,6 +359,8 @@ export default function VendorDashboardLayout() {
         return <BusinessProfile />
       case 'orders':
         return <EnhancedOrderManagement vendorId={userProfile?.uid ?? ''} />
+      case 'payouts':
+        return <PayoutsFinancials />
       case 'messages':
         return <VendorOwnerMessages />
       case 'security':

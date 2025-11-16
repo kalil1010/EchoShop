@@ -172,12 +172,21 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Database triggers for automatic moderation notifications
 - ✅ API routes for fetching, creating, and managing notifications
 
-### 2. Payouts & Financials
-- Payout schedule display
-- Pending/paid amounts tracking
-- Transaction history
-- Invoice/statement downloads
-- **Implementation needed**: Payouts table, financial calculations, PDF generation
+### 2. Payouts & Financials ✅
+- ✅ Database schema for payouts and transactions (`docs/supabase/20250131_vendor_payouts.sql`)
+- ✅ Payout schedule display (payout date, status tracking)
+- ✅ Pending/paid amounts tracking (summary cards with totals)
+- ✅ Transaction history (detailed transaction list per payout)
+- ✅ Invoice/statement downloads (PDF generation with `pdfkit`)
+- ✅ Payouts table with status tracking (pending, processing, paid, failed, cancelled)
+- ✅ Financial calculations (pending amount, total paid, counts)
+- ✅ PDF generation for payout statements (`src/lib/pdf/payoutStatement.ts`)
+- ✅ Payout number generation (PAY-YYYY-XXX format)
+- ✅ API routes for fetching payouts and generating statements
+- ✅ UI component with summary cards and payout history (`PayoutsFinancials.tsx`)
+- ✅ Status indicators with color coding and icons
+- ✅ Download statements as PDF
+- ✅ Integration with orders (transaction linking)
 
 ### 3. Team Management ✅
 - ✅ Vendor assistant invitations system
