@@ -101,7 +101,6 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       if (errorCode === 'refresh_token_not_found' ||
           errorMessage.includes('Refresh Token Not Found') ||
           errorMessage.includes('refresh_token_not_found')) {
-        refreshTokenError = true
         // Session is invalid - return null to allow client-side cleanup
         return null
       }
