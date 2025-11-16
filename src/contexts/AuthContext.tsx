@@ -1358,54 +1358,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof document === 'undefined') return
 
     const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
+    const visibilityTimeoutRef = { current: null as NodeJS.Timeout | null }
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        console.debug('[AuthContext] Page became visible, validating session...')
-
         // Prevent multiple simultaneous handlers
         if (isProcessingRef.current) {
           console.debug('[AuthContext] Visibility change already processing, skipping...')
           return
         }
-        isProcessingRef.current = true
 
-        // Small delay for browser restoration
-        await new Promise((r) => setTimeout(r, 200))
-
-        try {
-          if (!supabase || !user?.uid) {
-            isProcessingRef.current = false
-            return
-          }
-
-          // Only validate session - DON'T reload profile unnecessarily
-          const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-
-          if (!sessionError && sessionData?.session) {
-            const sessionUser = sessionData.session.user
-
-            // Only reload profile if user ID actually changed
-            if (userProfile?.uid !== sessionUser.id) {
-              console.debug('[AuthContext] User changed, reloading profile')
-              const mapped = mapAuthUser(sessionUser)
-              setUser(mapped)
-              await loadUserProfileWithTimeout(mapped)
-            } else {
-              // Same user - just reconnect subscriptions, don't reload profile
-              // This prevents unnecessary state changes that cause infinite loading
-              console.debug('[AuthContext] Same user, reconnecting subscriptions only')
-              realtimeSubscriptionManager.reconnectAll()
-            }
-          }
-        } catch (error) {
-          console.warn('[AuthContext] Error on visibility restore:', error)
-          // Don't clear state on error - session might still be valid
-        } finally {
-          isProcessingRef.current = false
+        // Debounce visibility changes - only process after 500ms of being visible
+        // This prevents rapid fire events when switching tabs quickly
+        if (visibilityTimeoutRef.current) {
+          clearTimeout(visibilityTimeoutRef.current)
         }
+
+        visibilityTimeoutRef.current = setTimeout(async () => {
+          if (document.visibilityState !== 'visible') {
+            return // Page became hidden again before timeout
+          }
+
+          isProcessingRef.current = true
+          console.debug('[AuthContext] Page became visible, validating session...')
+
+          try {
+            if (!supabase || !user?.uid) {
+              isProcessingRef.current = false
+              return
+            }
+
+            // Only validate session - DON'T reload profile unnecessarily
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+            if (!sessionError && sessionData?.session) {
+              const sessionUser = sessionData.session.user
+
+              // Only reload profile if user ID actually changed AND we have a current userProfile to compare
+              // If userProfile is null, it means it's still loading, so don't reload
+              if (userProfile && userProfile.uid !== sessionUser.id) {
+                console.debug('[AuthContext] User changed, reloading profile')
+                const mapped = mapAuthUser(sessionUser)
+                setUser(mapped)
+                await loadUserProfileWithTimeout(mapped)
+              } else if (userProfile && userProfile.uid === sessionUser.id) {
+                // Same user - just reconnect subscriptions, don't reload profile
+                // This prevents unnecessary state changes that cause infinite loading
+                realtimeSubscriptionManager.reconnectAll()
+              }
+              // If userProfile is null, do nothing - profile is still loading
+            }
+          } catch (error) {
+            console.warn('[AuthContext] Error on visibility restore:', error)
+            // Don't clear state on error - session might still be valid
+          } finally {
+            isProcessingRef.current = false
+          }
+        }, 500) // Wait 500ms before processing visibility change
       } else {
         console.debug('[AuthContext] Page became hidden')
+        // Clear any pending visibility timeout
+        if (visibilityTimeoutRef.current) {
+          clearTimeout(visibilityTimeoutRef.current)
+          visibilityTimeoutRef.current = null
+        }
         // Don't clear session when page is hidden - it should persist
       }
     }
@@ -1438,6 +1454,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
+      if (visibilityTimeoutRef.current) {
+        clearTimeout(visibilityTimeoutRef.current)
+      }
     }
   }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout])
 
@@ -1512,80 +1531,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // CRITICAL: Check 2FA requirement BEFORE loading profile
       // This ensures 2FA is checked for all logins, not just owner logins
       // Use API route instead of direct server function calls (client component limitation)
-      const userRole = normaliseRole(authUser.role ?? DEFAULT_ROLE)
-      
-      // Check if 2FA is required for this role (pure function, no server code)
-      const is2FARequiredForRole = (role: UserRole): boolean => {
-        if (!role) return false
-        // Owner/Admin: 2FA required for all logins
-        if (role === 'owner' || role === 'admin') return true
-        // Vendor/User: 2FA not required for login
-        return false
-      }
-      
-      if (is2FARequiredForRole(userRole)) {
-        console.debug('[AuthContext] 2FA required for login', { userId: authUser.uid, role: userRole })
-        
-        try {
-          // Use API route to check 2FA requirement and create session
-          const twoFAResponse = await fetch('/api/auth/2fa/require', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              purpose: 'login',
-              userId: authUser.uid,
-            }),
-          })
+      // The API route will check the actual role from the database profile
+      try {
+        // Use API route to check 2FA requirement and create session
+        // The API will fetch the profile and check the actual role
+        const twoFAResponse = await fetch('/api/auth/2fa/require', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            purpose: 'login',
+            userId: authUser.uid,
+          }),
+        })
 
-          if (twoFAResponse.ok) {
-            const twoFAData = await twoFAResponse.json()
+        if (twoFAResponse.ok) {
+          const twoFAData = await twoFAResponse.json()
+          
+          if (twoFAData.required && twoFAData.enabled && twoFAData.sessionToken) {
+            console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
             
-            if (twoFAData.required && twoFAData.enabled && twoFAData.sessionToken) {
-              console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
-              
-              // Sign out immediately to prevent session from being used until 2FA is verified
-              try {
-                await supabase.auth.signOut({ scope: 'local' })
-                setSession(null)
-                setUser(null)
-                void syncServerSession('SIGNED_OUT', null)
-              } catch (signOutError) {
-                console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
-              }
-              
-              // Return early with 2FA requirement flag
-              // The login form will catch this and show 2FA modal
-              return {
-                user: authUser,
-                profile: buildBootstrapProfile(authUser),
-                session: null, // Session cleared until 2FA verified
-                profileStatus: 'loading',
-                profileIssueMessage: 'Two-factor authentication required',
-                profileError: null,
-                isProfileFallback: false,
-                requires2FA: true,
-                twoFASessionToken: twoFAData.sessionToken,
-              }
-            } else if (twoFAData.required && !twoFAData.enabled) {
-              // 2FA is required but not enabled - sign out and throw error
-              console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid, role: userRole })
-              
-              try {
-                await supabase.auth.signOut({ scope: 'local' })
-                setSession(null)
-                setUser(null)
-                void syncServerSession('SIGNED_OUT', null)
-              } catch (signOutError) {
-                console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
-              }
-              
-              throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
+            // Sign out immediately to prevent session from being used until 2FA is verified
+            try {
+              await supabase.auth.signOut({ scope: 'local' })
+              setSession(null)
+              setUser(null)
+              void syncServerSession('SIGNED_OUT', null)
+            } catch (signOutError) {
+              console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
             }
-          } else if (twoFAResponse.status === 403) {
-            // 2FA required but not enabled
-            const errorData = await twoFAResponse.json().catch(() => ({}))
-            console.warn('[AuthContext] 2FA required but not enabled', errorData)
+            
+            // Return early with 2FA requirement flag
+            // The login form will catch this and show 2FA modal
+            return {
+              user: authUser,
+              profile: buildBootstrapProfile(authUser),
+              session: null, // Session cleared until 2FA verified
+              profileStatus: 'loading',
+              profileIssueMessage: 'Two-factor authentication required',
+              profileError: null,
+              isProfileFallback: false,
+              requires2FA: true,
+              twoFASessionToken: twoFAData.sessionToken,
+            }
+          } else if (twoFAData.required && !twoFAData.enabled) {
+            // 2FA is required but not enabled - sign out and throw error
+            console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid })
             
             try {
               await supabase.auth.signOut({ scope: 'local' })
@@ -1596,18 +1587,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
             }
             
-            throw new Error(errorData.message || '2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
-          } else {
-            // API error - log but continue (fallback behavior)
-            console.warn('[AuthContext] Failed to check 2FA requirement:', twoFAResponse.status)
-            // Continue with normal flow as fallback
+            throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
           }
-        } catch (twoFAError) {
-          // If 2FA check fails, log error but continue with normal flow
-          // This prevents login from being blocked if 2FA service is temporarily unavailable
-          console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
+          // If 2FA is not required, continue with normal flow
+        } else if (twoFAResponse.status === 403) {
+          // 2FA required but not enabled
+          const errorData = await twoFAResponse.json().catch(() => ({}))
+          console.warn('[AuthContext] 2FA required but not enabled', errorData)
+          
+          try {
+            await supabase.auth.signOut({ scope: 'local' })
+            setSession(null)
+            setUser(null)
+            void syncServerSession('SIGNED_OUT', null)
+          } catch (signOutError) {
+            console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
+          }
+          
+          throw new Error(errorData.message || '2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
+        } else {
+          // API error - log but continue (fallback behavior)
+          // Only log if it's not a 200 (which means 2FA not required)
+          if (twoFAResponse.status !== 200) {
+            console.warn('[AuthContext] Failed to check 2FA requirement:', twoFAResponse.status)
+          }
           // Continue with normal flow as fallback
         }
+      } catch (twoFAError) {
+        // If 2FA check fails, check if it's an error we should throw
+        if (twoFAError instanceof Error && twoFAError.message.includes('2FA is required')) {
+          throw twoFAError
+        }
+        // Otherwise, log error but continue with normal flow
+        // This prevents login from being blocked if 2FA service is temporarily unavailable
+        console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
+        // Continue with normal flow as fallback
       }
 
       // Continue with normal flow for users who don't require 2FA or have completed 2FA
