@@ -128,7 +128,7 @@ export function OwnerLoginForm() {
           credentials: 'include',
           body: JSON.stringify({ 
             purpose: 'login',
-            userId: profile.id // Pass user ID from profile since session might not be established yet
+            userId: profile.uid // Pass user ID from profile since session might not be established yet
           }),
         })
 
