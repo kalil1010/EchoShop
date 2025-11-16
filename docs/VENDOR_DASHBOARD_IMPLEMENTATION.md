@@ -96,12 +96,15 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 
 ## 🔄 Partially Implemented / Placeholders
 
-### 1. Order Management Backend
-- UI is fully implemented
-- Backend API routes are placeholders
-- **TODO**: Create orders table schema
-- **TODO**: Implement order creation from checkout
-- **TODO**: Connect order status updates to database
+### 1. Order Management Backend ✅
+- ✅ Orders table schema created (`docs/supabase/20250128_orders_schema.sql`)
+- ✅ Order items table with product snapshots
+- ✅ Order creation from checkout implemented (`/api/checkout/create-order`)
+- ✅ Order status updates connected to database (`/api/vendor/orders/[id]`)
+- ✅ Vendor order listing with filtering (`/api/vendor/orders`)
+- ✅ RLS policies for customer, vendor, and admin access
+- ✅ Order number generation function
+- ✅ Support for multi-vendor orders (one order per vendor)
 
 ### 2. Bulk Import
 - UI is implemented
