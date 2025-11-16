@@ -1124,12 +1124,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
           
+          // CRITICAL: Check localStorage for cached role before loading profile
+          // This ensures we preserve owner role even if profile load times out
+          const cachedRole = getRoleFromLocalStorage()
+          const preservedRole = cachedRole && cachedRole.uid === mapped.uid && cachedRole.role !== 'user' 
+            ? cachedRole.role 
+            : undefined
+          
+          if (preservedRole) {
+            console.debug('[AuthContext] Using preserved role from localStorage:', preservedRole)
+          }
+          
           // Load profile with timeout - this will use fallback if it times out
           const profileResult = await loadUserProfileWithTimeout(mapped)
           
           // Sync role from auth metadata to profile (for OAuth flows and existing sessions)
           // Use a timeout to prevent hanging
           let finalProfile = profileResult.profile
+          
+          // CRITICAL: If profile load failed/timed out and we have a preserved role, use it
+          if (profileResult.fallback && preservedRole && finalProfile) {
+            // Only override if the fallback role is 'user' (default)
+            if (finalProfile.role === 'user' || !finalProfile.role) {
+              console.debug('[AuthContext] Profile load failed, preserving role from cache:', preservedRole)
+              finalProfile.role = preservedRole
+              // Update the profile state with preserved role immediately
+              applyProfileToState(finalProfile, mapped)
+            }
+          }
           if (finalProfile) {
             try {
               // Add timeout for role reconciliation to prevent hanging
@@ -1433,12 +1455,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return
             }
 
-            // CRITICAL FIX: If we already have a valid profile with owner role, don't reload
-            // This prevents role downgrade on timeout
-            if (userProfile && userProfile.role === 'owner' && userProfile.uid === user.uid) {
-              console.debug('[AuthContext] Owner profile already loaded, just reconnecting subscriptions')
+            // CRITICAL FIX: If we already have a valid profile with owner/admin role, don't reload
+            // This prevents role downgrade on timeout and infinite reload loops
+            if (userProfile && (userProfile.role === 'owner' || userProfile.role === 'admin') && userProfile.uid === user.uid) {
+              console.debug('[AuthContext] Owner/Admin profile already loaded, just reconnecting subscriptions')
               realtimeSubscriptionManager.reconnectAll()
               lastProcessedUserIdRef.current = user.uid
+              isProcessingRef.current = false
+              return
+            }
+            
+            // CRITICAL: If profile is still loading (status is 'loading'), don't reload
+            // This prevents interrupting the initial profile load
+            if (loading && !userProfile) {
+              console.debug('[AuthContext] Profile still loading, skipping visibility handler')
               isProcessingRef.current = false
               return
             }
