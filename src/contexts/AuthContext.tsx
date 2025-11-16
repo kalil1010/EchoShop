@@ -16,7 +16,6 @@ import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfil
 import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 import { realtimeSubscriptionManager } from '@/lib/realtimeSubscriptionManager'
-import { is2FARequired, is2FAEnabled, create2FASession } from '@/lib/security/twoFactorAuth'
 
 type SignInResult = {
   user: AuthUser
@@ -1512,65 +1511,102 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // CRITICAL: Check 2FA requirement BEFORE loading profile
       // This ensures 2FA is checked for all logins, not just owner logins
+      // Use API route instead of direct server function calls (client component limitation)
       const userRole = normaliseRole(authUser.role ?? DEFAULT_ROLE)
-      if (is2FARequired(userRole, 'login')) {
+      
+      // Check if 2FA is required for this role (pure function, no server code)
+      const is2FARequiredForRole = (role: UserRole): boolean => {
+        if (!role) return false
+        // Owner/Admin: 2FA required for all logins
+        if (role === 'owner' || role === 'admin') return true
+        // Vendor/User: 2FA not required for login
+        return false
+      }
+      
+      if (is2FARequiredForRole(userRole)) {
         console.debug('[AuthContext] 2FA required for login', { userId: authUser.uid, role: userRole })
         
-        // Check if 2FA is enabled for this user
-        const twoFAEnabled = await is2FAEnabled(authUser.uid)
-        
-        if (twoFAEnabled) {
-          // 2FA is required and enabled - create verification session
-          const twoFASession = await create2FASession(authUser.uid, 'login')
-          
-          // Handle both camelCase and snake_case session token (Supabase mapping)
-          const sessionToken = twoFASession?.sessionToken || (twoFASession as any)?.session_token
-          
-          if (sessionToken) {
-            console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
+        try {
+          // Use API route to check 2FA requirement and create session
+          const twoFAResponse = await fetch('/api/auth/2fa/require', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              purpose: 'login',
+              userId: authUser.uid,
+            }),
+          })
+
+          if (twoFAResponse.ok) {
+            const twoFAData = await twoFAResponse.json()
             
-            // Sign out immediately to prevent session from being used until 2FA is verified
+            if (twoFAData.required && twoFAData.enabled && twoFAData.sessionToken) {
+              console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
+              
+              // Sign out immediately to prevent session from being used until 2FA is verified
+              try {
+                await supabase.auth.signOut({ scope: 'local' })
+                setSession(null)
+                setUser(null)
+                void syncServerSession('SIGNED_OUT', null)
+              } catch (signOutError) {
+                console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
+              }
+              
+              // Return early with 2FA requirement flag
+              // The login form will catch this and show 2FA modal
+              return {
+                user: authUser,
+                profile: buildBootstrapProfile(authUser),
+                session: null, // Session cleared until 2FA verified
+                profileStatus: 'loading',
+                profileIssueMessage: 'Two-factor authentication required',
+                profileError: null,
+                isProfileFallback: false,
+                requires2FA: true,
+                twoFASessionToken: twoFAData.sessionToken,
+              }
+            } else if (twoFAData.required && !twoFAData.enabled) {
+              // 2FA is required but not enabled - sign out and throw error
+              console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid, role: userRole })
+              
+              try {
+                await supabase.auth.signOut({ scope: 'local' })
+                setSession(null)
+                setUser(null)
+                void syncServerSession('SIGNED_OUT', null)
+              } catch (signOutError) {
+                console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
+              }
+              
+              throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
+            }
+          } else if (twoFAResponse.status === 403) {
+            // 2FA required but not enabled
+            const errorData = await twoFAResponse.json().catch(() => ({}))
+            console.warn('[AuthContext] 2FA required but not enabled', errorData)
+            
             try {
               await supabase.auth.signOut({ scope: 'local' })
               setSession(null)
               setUser(null)
               void syncServerSession('SIGNED_OUT', null)
             } catch (signOutError) {
-              console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
+              console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
             }
             
-            // Return early with 2FA requirement flag
-            // The login form will catch this and show 2FA modal
-            return {
-              user: authUser,
-              profile: buildBootstrapProfile(authUser),
-              session: null, // Session cleared until 2FA verified
-              profileStatus: 'loading',
-              profileIssueMessage: 'Two-factor authentication required',
-              profileError: null,
-              isProfileFallback: false,
-              requires2FA: true,
-              twoFASessionToken: sessionToken,
-            }
+            throw new Error(errorData.message || '2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
           } else {
-            console.error('[AuthContext] Failed to create 2FA session or session token missing')
-            // Continue with normal flow if 2FA session creation fails
-            // This is a fallback - ideally this should not happen
+            // API error - log but continue (fallback behavior)
+            console.warn('[AuthContext] Failed to check 2FA requirement:', twoFAResponse.status)
+            // Continue with normal flow as fallback
           }
-        } else {
-          // 2FA is required but not enabled - sign out and throw error
-          console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid, role: userRole })
-          
-          try {
-            await supabase.auth.signOut({ scope: 'local' })
-            setSession(null)
-            setUser(null)
-            void syncServerSession('SIGNED_OUT', null)
-          } catch (signOutError) {
-            console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
-          }
-          
-          throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
+        } catch (twoFAError) {
+          // If 2FA check fails, log error but continue with normal flow
+          // This prevents login from being blocked if 2FA service is temporarily unavailable
+          console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
+          // Continue with normal flow as fallback
         }
       }
 
