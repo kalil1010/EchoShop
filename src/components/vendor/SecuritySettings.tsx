@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Shield, Key, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { Shield, Key, Activity, AlertCircle, CheckCircle2, Loader2, Users } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/contexts/AuthContext'
 import TwoFactorAuthSetup from './TwoFactorAuthSetup'
 import AuditLogViewer from './AuditLogViewer'
+import VendorAssistants from './VendorAssistants'
 
 export default function SecuritySettings() {
   const { userProfile } = useAuth()
@@ -133,6 +134,22 @@ export default function SecuritySettings() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Team Management */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-purple-600" />
+            <CardTitle>Team Management</CardTitle>
+          </div>
+          <CardDescription>
+            Invite assistants to help manage your store. Assign different roles to control what they can access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {userProfile?.uid && <VendorAssistants vendorId={userProfile.uid} />}
         </CardContent>
       </Card>
 

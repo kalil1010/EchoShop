@@ -145,7 +145,20 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - Invoice/statement downloads
 - **Implementation needed**: Payouts table, financial calculations, PDF generation
 
-### 3. Security Features ✅
+### 3. Team Management ✅
+- ✅ Vendor assistant invitations system
+- ✅ Three role levels: Viewer, Editor, Manager
+- ✅ Invitation management (send, revoke, track status)
+- ✅ Assistant management (add, remove, update roles)
+- ✅ Database schema for assistants and invitations (`docs/supabase/20250129_vendor_assistants.sql`)
+- ✅ API routes for team management (`/api/vendor/assistants/*`)
+- ✅ UI component in Security Settings tab (`VendorAssistants.tsx`)
+- **Role Permissions**:
+  - **Viewer**: Can view products, orders, and analytics. Cannot make changes.
+  - **Editor**: Can edit products, update orders, and manage inventory. Cannot delete or change settings.
+  - **Manager**: Full access to all vendor features except security settings and team management.
+
+### 4. Security Features ✅
 - **Two-factor authentication (2FA)** with QR code setup and verification
 - **Activity audit logs** with detailed event tracking
 - **Enhanced error boundaries** for vendor dashboard
@@ -282,6 +295,11 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - `src/app/api/vendor/security/2fa/status/route.ts` (2FA status)
 - `src/app/api/vendor/security/2fa/disable/route.ts` (2FA disable)
 - `src/app/api/vendor/security/audit-logs/route.ts` (Audit logs)
+- `src/components/vendor/VendorAssistants.tsx` (Team management UI)
+- `src/app/api/vendor/assistants/route.ts` (List assistants)
+- `src/app/api/vendor/assistants/invitations/route.ts` (Manage invitations)
+- `src/app/api/vendor/assistants/invitations/[id]/revoke/route.ts` (Revoke invitation)
+- `src/app/api/vendor/assistants/[id]/route.ts` (Update/remove assistant)
 
 ### Modified API Routes
 - `src/app/api/vendor/products/route.ts` (added duplication support)
