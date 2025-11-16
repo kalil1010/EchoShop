@@ -16,6 +16,7 @@ import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfil
 import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 import { realtimeSubscriptionManager } from '@/lib/realtimeSubscriptionManager'
+import { is2FARequired, is2FAEnabled, create2FASession } from '@/lib/security/twoFactorAuth'
 
 type SignInResult = {
   user: AuthUser
@@ -25,6 +26,8 @@ type SignInResult = {
   profileIssueMessage: string | null
   profileError: Error | null
   isProfileFallback: boolean
+  requires2FA?: boolean
+  twoFASessionToken?: string
 }
 
 type ProfileLoadState = 'idle' | 'loading' | 'ready' | 'degraded' | 'error'
@@ -1359,7 +1362,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        // Page became visible - only restore session if it was lost, don't reload profile
         console.debug('[AuthContext] Page became visible, validating session...')
 
         // Prevent multiple simultaneous handlers
@@ -1369,60 +1371,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         isProcessingRef.current = true
 
-        // Small delay to ensure browser has fully restored the tab
-        setTimeout(async () => {
-          try {
-            if (!supabase) {
-              isProcessingRef.current = false
-              return
-            }
-            if (!user) {
-              isProcessingRef.current = false
-              return // No user logged in, nothing to restore
-            }
+        // Small delay for browser restoration
+        await new Promise((r) => setTimeout(r, 200))
 
-            // Just validate the session is still valid - don't reload profile unnecessarily
-            const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-            
-            if (sessionError) {
-              console.warn('[AuthContext] Session validation failed after visibility change:', sessionError)
-              isProcessingRef.current = false
-              return
-            }
-
-            // Only update if session token changed (means new session)
-            if (sessionData?.session?.access_token !== session?.access_token) {
-              console.debug('[AuthContext] Session token changed, updating...')
-              if (sessionData.session) {
-                setSession(sessionData.session)
-                
-                // Only reload profile if session actually changed AND user changed
-                if (sessionData.session.user?.id !== user.uid) {
-                  // Different user - need to reload profile
-                  const mapped = mapAuthUser(sessionData.session.user)
-                  setUser(mapped)
-                  await loadUserProfileWithTimeout(mapped)
-                } else {
-                  // Same user, just reconnect websockets
-                  if (user?.uid) {
-                    realtimeSubscriptionManager.reconnectAll()
-                  }
-                }
-              }
-            } else {
-              // Session unchanged - just reconnect subscriptions silently
-              // Don't log to avoid console spam when tab regains focus
-              if (user?.uid) {
-                realtimeSubscriptionManager.reconnectAll()
-              }
-            }
-          } catch (error) {
-            console.warn('[AuthContext] Error validating session after visibility change:', error)
-            // Don't clear state on validation error - session might still be valid
-          } finally {
+        try {
+          if (!supabase || !user?.uid) {
             isProcessingRef.current = false
+            return
           }
-        }, 300)
+
+          // Only validate session - DON'T reload profile unnecessarily
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+          if (!sessionError && sessionData?.session) {
+            const sessionUser = sessionData.session.user
+
+            // Only reload profile if user ID actually changed
+            if (userProfile?.uid !== sessionUser.id) {
+              console.debug('[AuthContext] User changed, reloading profile')
+              const mapped = mapAuthUser(sessionUser)
+              setUser(mapped)
+              await loadUserProfileWithTimeout(mapped)
+            } else {
+              // Same user - just reconnect subscriptions, don't reload profile
+              // This prevents unnecessary state changes that cause infinite loading
+              console.debug('[AuthContext] Same user, reconnecting subscriptions only')
+              realtimeSubscriptionManager.reconnectAll()
+            }
+          }
+        } catch (error) {
+          console.warn('[AuthContext] Error on visibility restore:', error)
+          // Don't clear state on error - session might still be valid
+        } finally {
+          isProcessingRef.current = false
+        }
       } else {
         console.debug('[AuthContext] Page became hidden')
         // Don't clear session when page is hidden - it should persist
@@ -1430,11 +1412,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Also handle window focus/blur with same logic
-    // Use the same isProcessing flag to prevent duplicate work
     const handleFocus = async () => {
       if (document.visibilityState !== 'visible') return
       if (isProcessingRef.current) return // Already processing visibility change
-      
+
       // Focus events are less critical - just reconnect subscriptions if needed
       // Don't reload profile or session unless absolutely necessary
       setTimeout(async () => {
@@ -1459,7 +1440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [supabase, user?.uid, session?.access_token])
+  }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout])
 
   const signIn = useCallback(
     async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
@@ -1528,6 +1509,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void syncServerSession('SIGNED_IN', session, null) // Profile not loaded yet
       }
       setUser(authUser)
+
+      // CRITICAL: Check 2FA requirement BEFORE loading profile
+      // This ensures 2FA is checked for all logins, not just owner logins
+      const userRole = normaliseRole(authUser.role ?? DEFAULT_ROLE)
+      if (is2FARequired(userRole, 'login')) {
+        console.debug('[AuthContext] 2FA required for login', { userId: authUser.uid, role: userRole })
+        
+        // Check if 2FA is enabled for this user
+        const twoFAEnabled = await is2FAEnabled(authUser.uid)
+        
+        if (twoFAEnabled) {
+          // 2FA is required and enabled - create verification session
+          const twoFASession = await create2FASession(authUser.uid, 'login')
+          
+          // Handle both camelCase and snake_case session token (Supabase mapping)
+          const sessionToken = twoFASession?.sessionToken || (twoFASession as any)?.session_token
+          
+          if (sessionToken) {
+            console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
+            
+            // Sign out immediately to prevent session from being used until 2FA is verified
+            try {
+              await supabase.auth.signOut({ scope: 'local' })
+              setSession(null)
+              setUser(null)
+              void syncServerSession('SIGNED_OUT', null)
+            } catch (signOutError) {
+              console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
+            }
+            
+            // Return early with 2FA requirement flag
+            // The login form will catch this and show 2FA modal
+            return {
+              user: authUser,
+              profile: buildBootstrapProfile(authUser),
+              session: null, // Session cleared until 2FA verified
+              profileStatus: 'loading',
+              profileIssueMessage: 'Two-factor authentication required',
+              profileError: null,
+              isProfileFallback: false,
+              requires2FA: true,
+              twoFASessionToken: sessionToken,
+            }
+          } else {
+            console.error('[AuthContext] Failed to create 2FA session or session token missing')
+            // Continue with normal flow if 2FA session creation fails
+            // This is a fallback - ideally this should not happen
+          }
+        } else {
+          // 2FA is required but not enabled - sign out and throw error
+          console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid, role: userRole })
+          
+          try {
+            await supabase.auth.signOut({ scope: 'local' })
+            setSession(null)
+            setUser(null)
+            void syncServerSession('SIGNED_OUT', null)
+          } catch (signOutError) {
+            console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
+          }
+          
+          throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
+        }
+      }
+
+      // Continue with normal flow for users who don't require 2FA or have completed 2FA
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
       // Task C1: Re-sync with profile after it's loaded
       if (profileOutcome.profile && session) {
@@ -1563,6 +1610,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profileIssueMessage: finalMessage,
         profileError: finalError,
         isProfileFallback: finalFallback,
+        requires2FA: false,
       }
     },
     [

@@ -72,6 +72,18 @@ export function OwnerLoginForm() {
 
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
+      
+      // Check if 2FA is required (now handled in AuthContext)
+      if (result.requires2FA && result.twoFASessionToken) {
+        console.debug('[owner-login] 2FA required from AuthContext, showing verification modal')
+        setTwoFASessionToken(result.twoFASessionToken)
+        setPendingProfile(result.profile)
+        setPendingCredentials({ email: trimmedEmail, password: trimmedPassword })
+        setShow2FA(true)
+        setLoading(false)
+        return
+      }
+      
       const { profile, profileStatus: status, isProfileFallback: fallback, profileIssueMessage: issueMessage } = result
       const access = getPortalAccess(profile.role, 'owner')
 
@@ -120,130 +132,8 @@ export function OwnerLoginForm() {
         return
       }
 
-      // CRITICAL: Check 2FA requirement BEFORE allowing login to complete
-      // If 2FA is required, sign out immediately and show verification modal
-      // This prevents the session from being used until 2FA is verified
-      try {
-        // Use the user ID from the signIn result - this is the authenticated user's ID
-        const userId = result.user?.uid || profile.uid
-        if (!userId) {
-          console.error('[owner-login] No user ID available for 2FA check')
-          await logout().catch(() => undefined)
-          setError('Unable to verify security settings. Please try again.')
-          setLoading(false)
-          return
-        }
-
-        const twoFAResponse = await fetch('/api/auth/2fa/require', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ 
-            purpose: 'login',
-            userId: userId // Use authenticated user ID
-          }),
-        })
-
-        if (twoFAResponse.ok) {
-          const twoFAData = await twoFAResponse.json()
-          console.debug('[owner-login] 2FA check response:', twoFAData)
-          
-          // For owners, 2FA should ALWAYS be required
-          // If the API says it's not required, that's an error - block login for security
-          if (!twoFAData.required) {
-            console.error('[owner-login] 2FA not required for owner - this should never happen!', {
-              userId: profile.uid,
-              role: profile.role,
-              response: twoFAData
-            })
-            // Sign out immediately since session was created
-            await logout().catch(() => undefined)
-            setError('Security configuration error: 2FA is required for owner accounts but was not detected. Please contact support.')
-            toast({
-              variant: 'error',
-              title: 'Security Error',
-              description: '2FA is required for owner accounts. Please contact support.',
-            })
-            setLoading(false)
-            return
-          }
-          
-          if (twoFAData.required && twoFAData.enabled) {
-            // 2FA is required and enabled - sign out immediately and show verification modal
-            // This ensures the session is not usable until 2FA is verified
-            console.debug('[owner-login] 2FA required and enabled, signing out and showing verification modal')
-            await logout().catch(() => undefined)
-            
-            // Store credentials and profile for re-authentication after 2FA verification
-            setPendingProfile(profile)
-            setPendingCredentials({ email: trimmedEmail, password: trimmedPassword })
-            setTwoFASessionToken(twoFAData.sessionToken)
-            setShow2FA(true)
-            setLoading(false) // Stop loading since we're showing 2FA modal
-            return
-          } else if (twoFAData.required && !twoFAData.enabled) {
-            // 2FA is required but not enabled - sign out and BLOCK LOGIN
-            console.debug('[owner-login] 2FA required but not enabled, signing out')
-            await logout().catch(() => undefined)
-            setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
-            toast({
-              variant: 'error',
-              title: '2FA Required',
-              description: 'Please enable 2FA in your security settings before logging in.',
-            })
-            setLoading(false)
-            return
-          }
-        } else {
-          // If 2FA check fails, check if it's a 403 (2FA required but not enabled)
-          if (twoFAResponse.status === 403) {
-            const errorData = await twoFAResponse.json().catch(() => ({}))
-            if (errorData.message?.includes('2FA is required')) {
-              // Sign out since 2FA is required but not enabled
-              await logout().catch(() => undefined)
-              setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
-              toast({
-                variant: 'error',
-                title: '2FA Required',
-                description: 'Please enable 2FA in your security settings before logging in.',
-              })
-              setLoading(false)
-              return
-            }
-          }
-          // For other errors, sign out to be safe and show error
-          console.warn('Failed to check 2FA requirement:', twoFAResponse.status)
-          await logout().catch(() => undefined)
-          setError('Unable to verify 2FA status. Please try again or contact support.')
-          toast({
-            variant: 'error',
-            title: 'Verification Error',
-            description: 'Failed to check 2FA status. Please try again.',
-          })
-          setLoading(false)
-          return
-        }
-      } catch (twoFAError) {
-        console.error('Failed to check 2FA requirement:', twoFAError)
-        // If 2FA check fails completely, sign out to be safe
-        await logout().catch(() => undefined)
-        setError('Unable to verify 2FA status. Please try again or contact support.')
-        toast({
-          variant: 'error',
-          title: 'Verification Error',
-          description: 'Failed to check 2FA status. Please try again.',
-        })
-        setLoading(false)
-        return
-      }
-
-      // If we reach here, 2FA is not required (should never happen for owners)
-      // But if it does, sign out to be safe
-      console.error('[owner-login] Reached login completion without 2FA check - this should never happen!')
-      await logout().catch(() => undefined)
-      setError('Security error: Login flow incomplete. Please try again.')
-      setLoading(false)
-      return
+      // 2FA check is now handled in AuthContext.signIn() - no need to check here
+      // If we reach here, 2FA has been verified or is not required
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
