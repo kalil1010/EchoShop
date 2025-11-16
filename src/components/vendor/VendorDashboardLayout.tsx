@@ -14,13 +14,13 @@ import EnhancedOrderManagement from './EnhancedOrderManagement'
 import TrendingAlerts from './TrendingAlerts'
 import VendorOnboardingWizard from './VendorOnboardingWizard'
 import SecuritySettings from './SecuritySettings'
-import VendorOwnerMessages from './VendorOwnerMessages'
+import VendorSupportTickets from './VendorSupportTickets'
 import NotificationCenter from './NotificationCenter'
 import NotificationBell from './NotificationBell'
 import PayoutsFinancials from './PayoutsFinancials'
 import type { VendorAnalyticsSnapshot } from './types'
 
-type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'payouts' | 'messages' | 'security'
+type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'payouts' | 'support' | 'security'
 
 const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -29,7 +29,7 @@ const TABS: Array<{ key: VendorTab; label: string }> = [
   { key: 'business', label: 'Business profile' },
   { key: 'orders', label: 'Orders' },
   { key: 'payouts', label: 'Payouts & Financials' },
-  { key: 'messages', label: 'Messages' },
+  { key: 'support', label: 'Support' },
   { key: 'security', label: 'Security' },
 ]
 
@@ -361,8 +361,8 @@ export default function VendorDashboardLayout() {
         return <EnhancedOrderManagement vendorId={userProfile?.uid ?? ''} />
       case 'payouts':
         return <PayoutsFinancials />
-      case 'messages':
-        return <VendorOwnerMessages />
+      case 'support':
+        return <VendorSupportTickets />
       case 'security':
         return <SecuritySettings />
       default:

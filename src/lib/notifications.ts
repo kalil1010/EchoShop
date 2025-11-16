@@ -140,7 +140,28 @@ export async function notifyPayoutReminder(
 }
 
 /**
- * Create a message notification
+ * Create a support ticket notification
+ */
+export async function notifyNewSupportTicket(
+  userId: string,
+  ticketSubject: string,
+  ticketPriority: string,
+): Promise<void> {
+  await createVendorNotification({
+    userId,
+    type: 'message',
+    title: 'New Support Ticket',
+    message: `Your ticket "${ticketSubject}" has been created with ${ticketPriority} priority.`,
+    link: '/atlas?tab=support',
+    metadata: {
+      ticket_subject: ticketSubject,
+      ticket_priority: ticketPriority,
+    },
+  })
+}
+
+/**
+ * Create a message notification (for ticket replies)
  */
 export async function notifyNewMessage(
   userId: string,
@@ -152,7 +173,7 @@ export async function notifyNewMessage(
     type: 'message',
     title: 'New Message',
     message: `${senderName}: ${messagePreview.substring(0, 100)}${messagePreview.length > 100 ? '...' : ''}`,
-    link: '/atlas/messages',
+    link: '/atlas?tab=support',
     metadata: {
       sender_name: senderName,
     },

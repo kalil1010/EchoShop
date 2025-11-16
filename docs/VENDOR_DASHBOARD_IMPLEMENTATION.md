@@ -137,20 +137,25 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Graceful error handling (continues if image copy fails)
 - ✅ Preserves image quality and metadata during copy
 
-### 5. Vendor-Owner Messaging System ✅
-- ✅ Database schema for vendor-owner messages (`docs/supabase/20250131_vendor_owner_messages.sql`)
+### 5. Vendor Support Tickets System ✅
+- ✅ Database schema for support tickets (`docs/supabase/20250131_vendor_owner_messages.sql` + `20250131_vendor_support_tickets.sql`)
+- ✅ Ticket system with status tracking (open, in_progress, resolved, closed)
+- ✅ Priority levels (low, normal, high, urgent)
+- ✅ Ticket categories (product, order, payment, technical, other)
 - ✅ Conversation threading (messages grouped by conversation_id)
-- ✅ Send/receive messages between vendors and owners
+- ✅ Create new support tickets with subject, category, and priority
+- ✅ Send/receive messages between vendors and owner/admin
 - ✅ Message read/unread status tracking
 - ✅ Unread message count badges
 - ✅ Real-time message display
-- ✅ Message subject support (optional)
 - ✅ Character limits (2000 chars for message, 200 for subject)
-- ✅ UI component in vendor dashboard (`VendorOwnerMessages.tsx`)
-- ✅ API routes for sending/receiving messages (`/api/vendor/messages`)
+- ✅ UI component in vendor dashboard (`VendorSupportTickets.tsx`)
+- ✅ API routes for creating and managing tickets (`/api/vendor/support/tickets`)
 - ✅ Mark messages as read functionality
 - ✅ Auto-scroll to latest message
-- ✅ Conversation list with unread indicators
+- ✅ Ticket list with status and priority indicators
+- ✅ Color-coded status and priority badges
+- ✅ "New Ticket" button for creating support requests
 
 ## 📋 Remaining Features (Not Yet Implemented)
 
