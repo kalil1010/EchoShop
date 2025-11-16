@@ -21,11 +21,20 @@ const getSupabaseAdmin = () => {
 
 const getAuthenticatedUser = async (req: NextRequest) => {
   // Check if auth cookies exist first
+  // Supabase SSR uses various cookie name patterns
   const authCookies = req.cookies.getAll().filter(
-    (cookie) =>
-      cookie.name.startsWith('sb-') ||
-      cookie.name.startsWith('sb:') ||
-      cookie.name.startsWith('__Secure-sb-')
+    (cookie) => {
+      const name = cookie.name.toLowerCase()
+      return (
+        name.startsWith('sb-') ||
+        name.startsWith('sb:') ||
+        name.startsWith('__secure-sb-') ||
+        name.includes('supabase') ||
+        name.includes('auth-token') ||
+        name.includes('access-token') ||
+        name.includes('refresh-token')
+      )
+    }
   )
   
   const hasAuthCookies = authCookies.length > 0
@@ -88,6 +97,7 @@ const getAuthenticatedUser = async (req: NextRequest) => {
 
       // If getSession() fails but cookies exist, the session might be restoring
       // Return null to allow stale cookie handling below
+      // This allows client-side session restoration to proceed
       return null
     } catch (sessionError: unknown) {
       // Supabase's internal session management (token refresh, session cleanup)
@@ -98,25 +108,30 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       const errorCode = (sessionError as { code?: string })?.code || ''
       
       // Suppress refresh token errors - these indicate invalid/expired sessions
+      // But if cookies exist, still allow through for client-side cleanup
       if (errorCode === 'refresh_token_not_found' ||
           errorMessage.includes('Refresh Token Not Found') ||
           errorMessage.includes('refresh_token_not_found')) {
-        // Session is invalid - return null to allow client-side cleanup
+        // Session is invalid - return null to allow stale cookie handling
+        // Client-side will detect and clean up
         return null
       }
       
       // Suppress cookie modification errors - these are expected in middleware
+      // These happen when Supabase tries to refresh tokens but can't modify cookies
       if (errorMessage.includes('cookie') || 
           errorMessage.includes('Cookie') ||
           errorMessage.includes('Server Action') ||
           errorMessage.includes('Route Handler')) {
         // This is expected - Supabase tried to modify cookies but we prevented it
-        // Return null and let the page/API route handle authentication
+        // Return null to allow stale cookie handling - client will restore from localStorage
         return null
       }
       
-      // Re-throw unexpected errors
-      throw sessionError
+      // For other errors, log but still allow through if cookies exist
+      // The client-side will handle validation
+      console.warn('[middleware] Unexpected session error (allowing through):', errorMessage)
+      return null
     }
   } catch (error: unknown) {
     // Catch any other errors and suppress cookie-related ones
@@ -212,11 +227,20 @@ export async function middleware(req: NextRequest) {
   const portal = resolvePortalFromPath(pathname)
   
   // Track if we detected stale cookies (for cookie cleanup)
+  // Check for any Supabase auth-related cookies
   const authCookies = req.cookies.getAll().filter(
-    (cookie) =>
-      cookie.name.startsWith('sb-') ||
-      cookie.name.startsWith('sb:') ||
-      cookie.name.startsWith('__Secure-sb-')
+    (cookie) => {
+      const name = cookie.name.toLowerCase()
+      return (
+        name.startsWith('sb-') ||
+        name.startsWith('sb:') ||
+        name.startsWith('__secure-sb-') ||
+        name.includes('supabase') ||
+        name.includes('auth-token') ||
+        name.includes('access-token') ||
+        name.includes('refresh-token')
+      )
+    }
   )
   const hasStaleCookies = authCookies.length > 0 && !user
   
@@ -255,10 +279,15 @@ export async function middleware(req: NextRequest) {
         
         if (access.denial?.requiresLogout) {
           for (const cookie of req.cookies.getAll()) {
+            const name = cookie.name.toLowerCase()
             if (
-              cookie.name.startsWith('sb-') ||
-              cookie.name.startsWith('sb:') ||
-              cookie.name.startsWith('__Secure-sb-')
+              name.startsWith('sb-') ||
+              name.startsWith('sb:') ||
+              name.startsWith('__secure-sb-') ||
+              name.includes('supabase') ||
+              name.includes('auth-token') ||
+              name.includes('access-token') ||
+              name.includes('refresh-token')
             ) {
               response.cookies.set(cookie.name, '', { path: '/', maxAge: 0 })
             }
@@ -325,11 +354,22 @@ export async function middleware(req: NextRequest) {
       return new NextResponse(null, { status: 404 })
     }
     
-    // Only log legitimate routes that need authentication
+    // For page routes (not API), be lenient and allow through
+    // The client-side will handle authentication and redirect if needed
+    // This prevents blocking users who have sessions in localStorage but no cookies yet
+    // API routes are handled separately above and will return 401 if truly unauthenticated
+    if (!pathname.startsWith('/api/')) {
+      // Allow page routes through - client-side will handle auth
+      // This is safe because:
+      // 1. Client-side AuthContext validates sessions
+      // 2. Protected pages use useRequireAuth hook
+      // 3. API routes still require proper authentication
+      return NextResponse.next()
+    }
+    
+    // Only log API routes that are truly unauthenticated
     // Skip logging for static assets, favicon, and image requests
-    // Don't log if we have stale cookies (session might be restoring)
     const shouldLog = 
-      !hasStaleCookies && // Don't log if cookies exist (session might be restoring)
       !pathname.includes('favicon.ico') && 
       !pathname.includes('.ico') &&
       !pathname.includes('.png') &&
@@ -341,17 +381,14 @@ export async function middleware(req: NextRequest) {
       !pathname.includes('.css') &&
       !pathname.includes('.js') &&
       !pathname.includes('.woff') &&
-      !pathname.includes('.woff2') &&
-      !pathname.match(/^\/vendor\/hub$/) // Vendor hub might be accessed before auth completes
+      !pathname.includes('.woff2')
     
     if (shouldLog) {
-      console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
+      console.info('[middleware] unauthenticated API access blocked', { pathname })
     }
     
-    // Redirect to /auth with return URL
-    const redirectUrl = new URL('/auth', req.url)
-    redirectUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(redirectUrl)
+    // For API routes, return 401 instead of redirecting
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // Enforce HTTPS in production
