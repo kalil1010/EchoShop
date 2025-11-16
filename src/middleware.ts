@@ -59,36 +59,35 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       }
     )
 
-    // Try to get the user
-    // This may trigger internal session management that tries to modify cookies
-    // We catch and suppress those errors since we can't modify cookies in middleware
-    let refreshTokenError = false
+    // Try to get the session (more reliable than getUser() for middleware)
+    // getSession() reads directly from cookies and doesn't require token validation
     try {
       const {
-        data: { user: getUserResult },
-        error: getUserError,
-      } = await supabase.auth.getUser()
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      // If we have a valid session with a user, return the user
+      if (session?.user && !sessionError) {
+        return session.user
+      }
 
       // Check if the error is a refresh token error
-      if (getUserError) {
-        const errorCode = (getUserError as { code?: string })?.code
-        const errorMessage = getUserError.message || String(getUserError)
+      if (sessionError) {
+        const errorCode = (sessionError as { code?: string })?.code
+        const errorMessage = sessionError.message || String(sessionError)
         
         // Refresh token errors indicate the session is invalid/expired
         if (errorCode === 'refresh_token_not_found' || 
             errorMessage.includes('Refresh Token Not Found') ||
             errorMessage.includes('refresh_token_not_found')) {
-          refreshTokenError = true
           // Session is invalid - cookies are stale
           return null
         }
       }
 
-      if (getUserResult && !getUserError) {
-        return getUserResult
-      }
-
-      // If getUser() fails, the session is likely invalid or expired
+      // If getSession() fails but cookies exist, the session might be restoring
+      // Return null to allow stale cookie handling below
       return null
     } catch (sessionError: unknown) {
       // Supabase's internal session management (token refresh, session cleanup)
@@ -309,10 +308,14 @@ export async function middleware(req: NextRequest) {
     // This happens when:
     // 1. Refresh token is invalid/expired (cookies exist but session is invalid)
     // 2. Session restoration from localStorage hasn't completed yet (timing issue)
+    // 3. Session is being restored after login (cookies set but not yet validated)
     if (hasStaleCookies) {
-      // For page routes, allow through once for client-side session restoration
-      // Client-side will detect invalid tokens and clear cookies via /api/auth/callback
-      // If cookies are truly stale, the client will clear them and redirect to login
+      // For page routes, always allow through for client-side session restoration
+      // The client-side AuthContext will:
+      // - Restore session from localStorage if available
+      // - Validate the session server-side
+      // - Clear stale cookies and redirect to login if truly invalid
+      // This prevents blocking legitimate users during session restoration
       return NextResponse.next()
     }
     
@@ -325,7 +328,9 @@ export async function middleware(req: NextRequest) {
     
     // Only log legitimate routes that need authentication
     // Skip logging for static assets, favicon, and image requests
+    // Don't log if we have stale cookies (session might be restoring)
     const shouldLog = 
+      !hasStaleCookies && // Don't log if cookies exist (session might be restoring)
       !pathname.includes('favicon.ico') && 
       !pathname.includes('.ico') &&
       !pathname.includes('.png') &&
