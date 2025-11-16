@@ -14,13 +14,38 @@ export const runtime = 'nodejs'
  */
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await resolveAuthenticatedUser(request)
-    const supabase = createServiceClient()
-
     const payload = await request.json().catch(() => ({}))
     const purpose = (payload.purpose as 'login' | 'critical_action') || 'login'
     const actionType = payload.actionType as CriticalActionType | undefined
     const actionContext = payload.actionContext as Record<string, unknown> | undefined
+
+    // For login, try to get userId from request body first (in case session isn't established yet)
+    // For critical actions, always require authentication
+    let userId: string | null = null
+    if (purpose === 'login' && payload.userId) {
+      userId = payload.userId as string
+    } else {
+      // Try to get authenticated user (for critical actions or if userId not provided)
+      try {
+        const resolved = await resolveAuthenticatedUser(request)
+        userId = resolved.userId
+      } catch (authError) {
+        // If authentication fails and this is a login request, return error
+        if (purpose === 'login') {
+          return NextResponse.json(
+            { error: 'Authentication required. Please provide userId in request body for login flow.' },
+            { status: 401 }
+          )
+        }
+        throw authError
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required.' }, { status: 400 })
+    }
+
+    const supabase = createServiceClient()
 
     // Get user role
     const { data: profile } = await supabase

@@ -221,6 +221,15 @@ export async function middleware(req: NextRequest) {
       cookie.name.startsWith('__Secure-sb-')
   )
   const hasStaleCookies = authCookies.length > 0 && !user
+  
+  // Skip middleware for static assets and Next.js internals
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/static') ||
+    pathname.match(/\.(ico|png|jpg|jpeg|svg|gif|webp|css|js|woff|woff2|ttf|eot)$/)
+  ) {
+    return NextResponse.next()
+  }
 
   if (user) {
     const profile = await fetchUserProfile(user.id)
@@ -315,12 +324,21 @@ export async function middleware(req: NextRequest) {
     }
     
     // Only log legitimate routes that need authentication
-    // Skip logging for favicon requests and other common non-attack patterns
-    const shouldLog = !pathname.includes('favicon.ico') && 
-                      !pathname.includes('.ico') &&
-                      !pathname.includes('.png') &&
-                      !pathname.includes('.jpg') &&
-                      !pathname.includes('.svg')
+    // Skip logging for static assets, favicon, and image requests
+    const shouldLog = 
+      !pathname.includes('favicon.ico') && 
+      !pathname.includes('.ico') &&
+      !pathname.includes('.png') &&
+      !pathname.includes('.jpg') &&
+      !pathname.includes('.jpeg') &&
+      !pathname.includes('.svg') &&
+      !pathname.includes('.gif') &&
+      !pathname.includes('.webp') &&
+      !pathname.includes('.css') &&
+      !pathname.includes('.js') &&
+      !pathname.includes('.woff') &&
+      !pathname.includes('.woff2') &&
+      !pathname.match(/^\/vendor\/hub$/) // Vendor hub might be accessed before auth completes
     
     if (shouldLog) {
       console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })

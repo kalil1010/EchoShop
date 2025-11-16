@@ -120,12 +120,16 @@ export function OwnerLoginForm() {
       }
 
       // Check if 2FA is required for owner login
+      // Pass userId in request body since session might not be fully established yet
       try {
         const twoFAResponse = await fetch('/api/auth/2fa/require', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ purpose: 'login' }),
+          body: JSON.stringify({ 
+            purpose: 'login',
+            userId: profile.id // Pass user ID from profile since session might not be established yet
+          }),
         })
 
         if (twoFAResponse.ok) {
@@ -135,20 +139,49 @@ export function OwnerLoginForm() {
             setPendingProfile(profile)
             setTwoFASessionToken(twoFAData.sessionToken)
             setShow2FA(true)
+            setLoading(false) // Stop loading since we're showing 2FA modal
             return
           } else if (twoFAData.required && !twoFAData.enabled) {
-            // 2FA is required but not enabled
+            // 2FA is required but not enabled - BLOCK LOGIN
+            setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
             toast({
-              variant: 'warning',
+              variant: 'error',
               title: '2FA Required',
               description: 'Please enable 2FA in your security settings before logging in.',
             })
+            setLoading(false)
             return
           }
+        } else {
+          // If 2FA check fails, check if it's a 403 (2FA required but not enabled)
+          if (twoFAResponse.status === 403) {
+            const errorData = await twoFAResponse.json().catch(() => ({}))
+            if (errorData.message?.includes('2FA is required')) {
+              setError('2FA is required for owner accounts. Please enable 2FA in your security settings.')
+              toast({
+                variant: 'error',
+                title: '2FA Required',
+                description: 'Please enable 2FA in your security settings before logging in.',
+              })
+              setLoading(false)
+              return
+            }
+          }
+          // For other errors, log but don't block (might be temporary server issue)
+          console.warn('Failed to check 2FA requirement:', twoFAResponse.status)
         }
       } catch (twoFAError) {
-        console.warn('Failed to check 2FA requirement:', twoFAError)
-        // Continue with login if 2FA check fails
+        console.error('Failed to check 2FA requirement:', twoFAError)
+        // If 2FA check fails completely, we should still block login for owners
+        // to be safe, unless it's clearly a network/server error
+        setError('Unable to verify 2FA status. Please try again or contact support.')
+        toast({
+          variant: 'error',
+          title: 'Verification Error',
+          description: 'Failed to check 2FA status. Please try again.',
+        })
+        setLoading(false)
+        return
       }
 
       const roleMeta = getRoleMeta(profile.role)
@@ -285,3 +318,4 @@ export function OwnerLoginForm() {
     </Card>
   )
 }
+
