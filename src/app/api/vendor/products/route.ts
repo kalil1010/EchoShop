@@ -103,6 +103,10 @@ export async function POST(request: NextRequest) {
     let imageFiles: File[] = []
     let duplicateFrom: string | null = null
 
+    // Declare gallery arrays early so they can be used in duplication logic
+    const galleryPaths: string[] = []
+    const galleryUrls: string[] = []
+
     if (contentType.includes('application/json')) {
       // JSON request for duplication
       const payload = await request.json().catch(() => ({}))
@@ -174,8 +178,7 @@ export async function POST(request: NextRequest) {
     let aiDescription: string | undefined
     let aiColors: Array<{ name: string; hex: string }> | undefined
 
-    const galleryPaths: string[] = []
-    const galleryUrls: string[] = []
+    // galleryPaths and galleryUrls are already declared above
 
     for (let index = 0; index < imageFiles.length; index += 1) {
       const file = imageFiles[index]
