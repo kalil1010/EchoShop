@@ -965,7 +965,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : 'We encountered an unexpected issue while loading your profile. A limited profile is available; please retry when you are ready.'
         setProfileIssueMessage(issueMessage)
         setIsProfileFallback(true)
+        
+        // CRITICAL FIX: Preserve existing role instead of defaulting to 'user'
+        // Check localStorage for last known good role, or use current userProfile role
+        let preservedRole: UserRole | undefined = undefined
+        const lastKnownRole = getRoleFromLocalStorage()
+        if (lastKnownRole && lastKnownRole.uid === authUser.uid && lastKnownRole.role !== 'user') {
+          preservedRole = lastKnownRole.role
+        } else if (userProfile && userProfile.uid === authUser.uid && userProfile.role !== 'user') {
+          // Preserve current profile role if it exists and is better than default
+          preservedRole = userProfile.role
+        }
+        
         const fallback = buildBootstrapProfile(authUser, null)
+        // Override role if we have a preserved role
+        if (preservedRole) {
+          fallback.role = preservedRole
+          console.debug('[AuthContext] Preserving role on timeout:', preservedRole)
+        }
         const profile = applyProfileToState(fallback, authUser)
         if (timeoutIssue) {
           // Silently retry in background without logging errors
@@ -986,7 +1003,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [loadUserProfile, applyProfileToState],
+    [loadUserProfile, applyProfileToState, getRoleFromLocalStorage, userProfile],
   )
 
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -1360,29 +1377,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
     const visibilityTimeoutRef = { current: null as NodeJS.Timeout | null }
     const lastProcessedUserIdRef = { current: user?.uid || null }
+    const lastVisibilityStateRef = { current: document.visibilityState }
 
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
+      const currentVisibility = document.visibilityState
+      
+      // CRITICAL FIX: Always clear any existing timeout first to prevent race conditions
+      if (visibilityTimeoutRef.current) {
+        clearTimeout(visibilityTimeoutRef.current)
+        visibilityTimeoutRef.current = null
+      }
+
+      if (currentVisibility === 'visible') {
         // Prevent multiple simultaneous handlers
         if (isProcessingRef.current) {
           console.debug('[AuthContext] Visibility change already processing, skipping...')
           return
         }
 
-        // Debounce visibility changes - only process after 1000ms of being visible
-        // This prevents rapid fire events when switching tabs quickly
-        if (visibilityTimeoutRef.current) {
-          clearTimeout(visibilityTimeoutRef.current)
+        // CRITICAL: Check if visibility actually changed (not just a duplicate event)
+        if (lastVisibilityStateRef.current === 'visible') {
+          console.debug('[AuthContext] Already visible, ignoring duplicate event')
+          return
         }
+        lastVisibilityStateRef.current = 'visible'
 
+        // Debounce visibility changes - only process after 1500ms of being visible
+        // Increased delay to prevent rapid fire events when switching tabs quickly
         visibilityTimeoutRef.current = setTimeout(async () => {
+          // Double-check visibility state hasn't changed during timeout
           if (document.visibilityState !== 'visible') {
+            isProcessingRef.current = false
             return // Page became hidden again before timeout
           }
 
           // If we're still loading, don't do anything - wait for initial load to complete
           if (loading) {
             console.debug('[AuthContext] Still loading, skipping visibility change handler')
+            isProcessingRef.current = false
+            return
+          }
+
+          // CRITICAL: Additional guard - check if we're already processing
+          if (isProcessingRef.current) {
+            console.debug('[AuthContext] Already processing, skipping duplicate handler')
             return
           }
 
@@ -1391,6 +1429,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           try {
             if (!supabase || !user?.uid) {
+              isProcessingRef.current = false
+              return
+            }
+
+            // CRITICAL FIX: If we already have a valid profile with owner role, don't reload
+            // This prevents role downgrade on timeout
+            if (userProfile && userProfile.role === 'owner' && userProfile.uid === user.uid) {
+              console.debug('[AuthContext] Owner profile already loaded, just reconnecting subscriptions')
+              realtimeSubscriptionManager.reconnectAll()
+              lastProcessedUserIdRef.current = user.uid
               isProcessingRef.current = false
               return
             }
@@ -1431,9 +1479,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } finally {
             isProcessingRef.current = false
           }
-        }, 1000) // Wait 1000ms before processing visibility change
+        }, 1500) // Wait 1500ms before processing visibility change
       } else {
         console.debug('[AuthContext] Page became hidden')
+        lastVisibilityStateRef.current = currentVisibility
         // Clear any pending visibility timeout
         if (visibilityTimeoutRef.current) {
           clearTimeout(visibilityTimeoutRef.current)

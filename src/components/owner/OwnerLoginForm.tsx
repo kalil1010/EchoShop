@@ -73,13 +73,31 @@ export function OwnerLoginForm() {
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
       
-      // Check if 2FA is required (now handled in AuthContext)
+      // CRITICAL: Check if 2FA is required (now handled in AuthContext)
+      // This MUST be checked before any other processing to prevent navigation
       if (result.requires2FA && result.twoFASessionToken) {
-        console.debug('[owner-login] 2FA required from AuthContext, showing verification modal')
+        console.debug('[owner-login] 2FA required from AuthContext, showing verification modal', {
+          hasToken: !!result.twoFASessionToken,
+          requires2FA: result.requires2FA
+        })
         setTwoFASessionToken(result.twoFASessionToken)
         setPendingProfile(result.profile)
         setPendingCredentials({ email: trimmedEmail, password: trimmedPassword })
         setShow2FA(true)
+        setLoading(false)
+        // CRITICAL: Return early to prevent any navigation or further processing
+        return
+      }
+      
+      // If 2FA was required but we don't have a token, something went wrong
+      if (result.requires2FA && !result.twoFASessionToken) {
+        console.error('[owner-login] 2FA required but no session token provided')
+        setError('2FA verification is required but the session could not be created. Please try again.')
+        toast({
+          variant: 'error',
+          title: '2FA Error',
+          description: 'Failed to create 2FA verification session. Please try again.',
+        })
         setLoading(false)
         return
       }
