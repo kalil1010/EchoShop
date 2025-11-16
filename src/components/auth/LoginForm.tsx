@@ -99,7 +99,40 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
     try {
       const result = await signIn(trimmedEmail, trimmedPassword, captchaToken || undefined)
-      const { profile, profileStatus, profileIssueMessage, isProfileFallback } = result
+      
+      // CRITICAL: Check for 2FA requirement FIRST before processing profile
+      const { 
+        profile, 
+        profileStatus, 
+        profileIssueMessage, 
+        isProfileFallback,
+        requires2FA,           // ADD THIS
+        twoFASessionToken      // ADD THIS
+      } = result
+      
+      // ADD THIS ENTIRE BLOCK - Check for 2FA requirement FIRST
+      if (requires2FA && twoFASessionToken) {
+        console.debug('[LoginForm] 2FA required, showing verification modal')
+        
+        toast({
+          variant: 'info',
+          title: '2FA Verification Required',
+          description: 'Please enter the 6-digit code from your authenticator app to complete sign-in.',
+        })
+        
+        // Store 2FA session data in sessionStorage (will persist across page refreshes within same session)
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('2fa_session_token', twoFASessionToken)
+          sessionStorage.setItem('2fa_email', trimmedEmail)
+          sessionStorage.setItem('2fa_password', trimmedPassword) // Store password to complete login after 2FA
+          sessionStorage.setItem('2fa_purpose', 'login')
+        }
+        
+        // Redirect to 2FA verification page
+        setTimeout(() => router.replace('/auth/verify-2fa'), 800)
+        return  // CRITICAL: Exit early, do NOT continue to profile processing
+      }
+      
       const roleMeta = getRoleMeta(profile.role)
       const destination = getDefaultRouteForRole(profile.role)
 

@@ -1430,19 +1430,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Double-check visibility state hasn't changed during timeout
           if (document.visibilityState !== 'visible') {
             isProcessingRef.current = false
+            if (visibilityTimeoutRef.current) {
+              clearTimeout(visibilityTimeoutRef.current)
+              visibilityTimeoutRef.current = null
+            }
             return // Page became hidden again before timeout
+          }
+
+          // Additional guard: prevent re-triggering if already processing
+          if (isProcessingRef.current) {
+            console.debug('[AuthContext] Already processing visibility change, skipping duplicate')
+            if (visibilityTimeoutRef.current) {
+              clearTimeout(visibilityTimeoutRef.current)
+              visibilityTimeoutRef.current = null
+            }
+            return
           }
 
           // If we're still loading, don't do anything - wait for initial load to complete
           if (loading) {
             console.debug('[AuthContext] Still loading, skipping visibility change handler')
             isProcessingRef.current = false
-            return
-          }
-
-          // CRITICAL: Additional guard - check if we're already processing
-          if (isProcessingRef.current) {
-            console.debug('[AuthContext] Already processing, skipping duplicate handler')
+            if (visibilityTimeoutRef.current) {
+              clearTimeout(visibilityTimeoutRef.current)
+              visibilityTimeoutRef.current = null
+            }
             return
           }
 
@@ -1508,6 +1520,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Don't clear state on error - session might still be valid
           } finally {
             isProcessingRef.current = false
+            // CRITICAL: Ensure timeout is cleared after processing completes
+            if (visibilityTimeoutRef.current) {
+              clearTimeout(visibilityTimeoutRef.current)
+              visibilityTimeoutRef.current = null
+            }
           }
         }, 1500) // Wait 1500ms before processing visibility change
       } else {
