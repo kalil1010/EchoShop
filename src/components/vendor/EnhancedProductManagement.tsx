@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo, useRef } from 'react'
 import { 
   Edit2, Copy, Trash2, Archive, CheckCircle2, XCircle, AlertCircle, 
   Upload, Download, Filter, Search, MoreVertical, Eye, EyeOff,
-  FileSpreadsheet, Loader2
+  FileSpreadsheet, Loader2, FileDown
 } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -271,6 +271,33 @@ export default function EnhancedProductManagement({
     [toast, onProductUpdated],
   )
 
+  const downloadCSVTemplate = useCallback(() => {
+    // Create CSV template with example data
+    const csvContent = `title,description,price,currency,status,image
+"Example Product 1","This is a sample product description. You can add detailed information about your product here.",99.99,EGP,draft,https://example.com/image1.jpg
+"Example Product 2","Another example product with a longer description that shows how you can include more details about the product features, materials, and specifications.",149.99,USD,active,https://example.com/image2.jpg
+"Example Product 3","A third example product. Note that image URLs are optional.",79.99,EGP,pending_review,
+"Example Product 4","Product without image URL. Status can be: draft, pending_review, or active.",199.99,EGP,draft,`
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'product-import-template.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast({
+      variant: 'success',
+      title: 'Template downloaded',
+      description: 'CSV template downloaded. Fill it with your product data and upload it.',
+    })
+  }, [toast])
+
   const handleBulkImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -300,11 +327,26 @@ export default function EnhancedProductManagement({
       }
 
       const payload = await response.json()
-      toast({
-        variant: 'success',
-        title: 'Import successful',
-        description: `${payload.imported ?? 0} products imported successfully.`,
-      })
+      
+      if (payload.imported > 0) {
+        toast({
+          variant: 'success',
+          title: 'Import completed',
+          description: `${payload.imported} product${payload.imported !== 1 ? 's' : ''} imported${payload.failed > 0 ? `, ${payload.failed} failed` : ''}${payload.skipped > 0 ? `, ${payload.skipped} skipped` : ''}.`,
+        })
+      } else {
+        toast({
+          variant: 'warning',
+          title: 'Import completed',
+          description: payload.message || `No products imported. ${payload.failed > 0 ? `${payload.failed} failed.` : ''}`,
+        })
+      }
+
+      // Show detailed errors if any
+      if (payload.errors && payload.errors.length > 0) {
+        console.warn('Bulk import errors:', payload.errors)
+        // Optionally show a detailed error modal or expandable error list
+      }
 
       onProductUpdated?.()
     } catch (error) {
@@ -383,6 +425,14 @@ export default function EnhancedProductManagement({
             className="hidden"
             id="bulk-import-input"
           />
+          <Button 
+            variant="outline" 
+            onClick={downloadCSVTemplate}
+            title="Download CSV template with example format"
+          >
+            <FileDown className="mr-2 h-4 w-4" />
+            Download CSV Template
+          </Button>
           <Button 
             variant="outline" 
             disabled={bulkImporting}

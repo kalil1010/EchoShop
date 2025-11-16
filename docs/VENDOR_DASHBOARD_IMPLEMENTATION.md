@@ -106,12 +106,16 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Order number generation function
 - ✅ Support for multi-vendor orders (one order per vendor)
 
-### 2. Bulk Import
-- UI is implemented
-- Backend endpoint exists but needs CSV/Excel parsing
-- **TODO**: Implement CSV/Excel file parsing
-- **TODO**: Validate and import product data
-- **TODO**: Handle errors and provide detailed feedback
+### 2. Bulk Import ✅
+- ✅ CSV file parsing implemented (`src/lib/bulkImport.ts`)
+- ✅ Excel file parsing implemented (using `xlsx` library)
+- ✅ Product data validation (title, price, description, status, etc.)
+- ✅ Error handling with detailed feedback (row numbers, specific errors)
+- ✅ Duplicate detection (skips products with existing titles)
+- ✅ Import limits (max 100 products per import)
+- ✅ Support for flexible column names (title/name, price/cost, etc.)
+- ✅ Status: Products imported as 'draft' by default (can be set in file)
+- ✅ Error reporting: Returns detailed errors for failed rows
 
 ### 3. Logo/Banner Upload
 - UI is implemented
