@@ -1377,18 +1377,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Only update if session token changed (means new session)
             if (sessionData?.session?.access_token !== session?.access_token) {
               console.debug('[AuthContext] Session token changed, updating...')
-              setSession(sessionData.session)
-              
-              // Only reload profile if session actually changed AND user changed
-              if (sessionData.session?.user?.id !== user.uid) {
-                // Different user - need to reload profile
-                const mapped = mapAuthUser(sessionData.session.user)
-                setUser(mapped)
-                await loadUserProfileWithTimeout(mapped)
-              } else {
-                // Same user, just reconnect websockets
-                if (user?.uid) {
-                  realtimeSubscriptionManager.reconnectAll()
+              if (sessionData.session) {
+                setSession(sessionData.session)
+                
+                // Only reload profile if session actually changed AND user changed
+                if (sessionData.session.user?.id !== user.uid) {
+                  // Different user - need to reload profile
+                  const mapped = mapAuthUser(sessionData.session.user)
+                  setUser(mapped)
+                  await loadUserProfileWithTimeout(mapped)
+                } else {
+                  // Same user, just reconnect websockets
+                  if (user?.uid) {
+                    realtimeSubscriptionManager.reconnectAll()
+                  }
                 }
               }
             } else {
@@ -1422,19 +1424,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (sessionData?.session && sessionData.session.access_token !== session?.access_token) {
             console.debug('[AuthContext] Session changed, updating...')
-            setSession(sessionData.session)
+            const newSession = sessionData.session
+            setSession(newSession)
             
             // Only reload profile if user actually changed
-            if (sessionData.session.user?.id !== user.uid) {
-              const mapped = mapAuthUser(sessionData.session.user)
+            if (newSession.user?.id !== user.uid) {
+              const mapped = mapAuthUser(newSession.user)
               setUser(mapped)
               await loadUserProfileWithTimeout(mapped)
+            } else {
+              // Same user, just reconnect subscriptions
+              if (user?.uid) {
+                realtimeSubscriptionManager.reconnectAll()
+              }
             }
-          }
-
-          // Just reconnect, don't reload profile
-          if (user?.uid) {
-            realtimeSubscriptionManager.reconnectAll()
+          } else {
+            // Session unchanged - just reconnect subscriptions
+            if (user?.uid) {
+              realtimeSubscriptionManager.reconnectAll()
+            }
           }
         } catch (error) {
           console.warn('[AuthContext] Error validating session after focus:', error)
