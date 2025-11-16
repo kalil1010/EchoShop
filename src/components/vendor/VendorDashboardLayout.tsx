@@ -15,6 +15,7 @@ import TrendingAlerts from './TrendingAlerts'
 import VendorOnboardingWizard from './VendorOnboardingWizard'
 import SecuritySettings from './SecuritySettings'
 import VendorOwnerMessages from './VendorOwnerMessages'
+import NotificationCenter from './NotificationCenter'
 import type { VendorAnalyticsSnapshot } from './types'
 
 type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security' | 'messages'
@@ -297,6 +298,9 @@ export default function VendorDashboardLayout() {
             {overviewMetrics.archived}
           </CardContent>
         </Card>
+        <div className="md:col-span-2 xl:col-span-3">
+          <NotificationCenter />
+        </div>
       </div>
     )
   }
@@ -403,12 +407,15 @@ export default function VendorDashboardLayout() {
         </CardContent>
       </Card>
 
-      <header className="space-y-1">
-        <h1 className="text-3xl font-bold text-slate-900">Atlas vendor console</h1>
-        <p className="text-sm text-slate-600">
-          Manage {vendorName}&apos;s marketplace presence, track performance, and keep your business
-          details current.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1 flex-1">
+          <h1 className="text-3xl font-bold text-slate-900">Atlas vendor console</h1>
+          <p className="text-sm text-slate-600">
+            Manage {vendorName}&apos;s marketplace presence, track performance, and keep your business
+            details current.
+          </p>
+        </div>
+        <NotificationBell />
       </header>
 
       {/* Onboarding Wizard */}

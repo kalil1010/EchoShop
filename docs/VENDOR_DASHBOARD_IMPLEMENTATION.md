@@ -154,12 +154,23 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 
 ## 📋 Remaining Features (Not Yet Implemented)
 
-### 1. Notifications System
-- In-app notifications for moderation status
-- Order update notifications
-- Payout date reminders
-- Message notifications (basic messaging implemented, notifications pending)
-- **Implementation needed**: Notification table, real-time updates, notification center UI
+### 1. Notifications System ✅
+- ✅ Database schema for notifications (`docs/supabase/20250131_vendor_notifications.sql`)
+- ✅ Notification table with types: moderation, order, payout, message, system
+- ✅ In-app notifications for moderation status (automatic trigger on product status change)
+- ✅ Order update notifications (utility function ready)
+- ✅ Payout date reminders (utility function ready)
+- ✅ Message notifications (utility function ready)
+- ✅ Notification center UI component (`NotificationCenter.tsx`)
+- ✅ Real-time updates (polling every 30 seconds)
+- ✅ Unread notification count badges
+- ✅ Mark as read / mark all as read functionality
+- ✅ Notification types with icons and color coding
+- ✅ Click notifications to navigate to related pages
+- ✅ Automatic expiration for time-sensitive notifications
+- ✅ Notification utility functions (`src/lib/notifications.ts`)
+- ✅ Database triggers for automatic moderation notifications
+- ✅ API routes for fetching, creating, and managing notifications
 
 ### 2. Payouts & Financials
 - Payout schedule display
