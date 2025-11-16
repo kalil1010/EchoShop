@@ -69,7 +69,8 @@ export async function GET(
     })
 
     // Return PDF as download
-    return new NextResponse(pdfBuffer, {
+    // NextResponse accepts Buffer directly in Node.js runtime
+    return new NextResponse(pdfBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="payout-${payout.payout_number}.pdf"`,
