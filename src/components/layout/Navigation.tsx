@@ -47,12 +47,26 @@ export function Navigation() {
     return items;
   }, []);
 
-  const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
+  // CRITICAL: Only use userProfile role if it's loaded, otherwise wait
+  // This prevents showing wrong navigation when profile is still loading
+  const normalisedRole = useMemo(() => {
+    // If profile is loading, don't show navigation yet (or show minimal)
+    if (loading && !userProfile) {
+      return null // Return null to indicate still loading
+    }
+    // Prefer userProfile role (from database) over user.role (from auth metadata)
+    // userProfile role is more reliable as it comes from the database
+    return normaliseRole(userProfile?.role ?? user?.role ?? 'user')
+  }, [userProfile?.role, user?.role, loading])
   
   // Filter nav items based on role
   // Vendors should only see: Home, Marketplace, Profile (no regular user services)
   // Owners don't see navigation (they use the owner dashboard instead)
   const visibleNavItems = useMemo(() => {
+    // If role is still loading, show minimal navigation
+    if (normalisedRole === null) {
+      return navItems.filter((item) => item.href === '/' || item.href === '/analyzer')
+    }
     // Owners don't see navigation - return empty array to maintain component structure
     if (normalisedRole === 'owner') {
       return []
@@ -81,7 +95,7 @@ export function Navigation() {
   // Never conditionally return different structures - always render the nav element
   // For owners, hide it with CSS but keep the structure consistent
   // This ensures hooks are always called in the same order, preventing React error #300
-  const isOwner = normalisedRole === 'owner'
+  const isOwner = normalisedRole === 'owner' || normalisedRole === 'admin'
 
   return (
     <nav 

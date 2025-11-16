@@ -1359,6 +1359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
     const visibilityTimeoutRef = { current: null as NodeJS.Timeout | null }
+    const lastProcessedUserIdRef = { current: user?.uid || null }
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
@@ -1368,7 +1369,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // Debounce visibility changes - only process after 500ms of being visible
+        // Debounce visibility changes - only process after 1000ms of being visible
         // This prevents rapid fire events when switching tabs quickly
         if (visibilityTimeoutRef.current) {
           clearTimeout(visibilityTimeoutRef.current)
@@ -1377,6 +1378,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         visibilityTimeoutRef.current = setTimeout(async () => {
           if (document.visibilityState !== 'visible') {
             return // Page became hidden again before timeout
+          }
+
+          // If we're still loading, don't do anything - wait for initial load to complete
+          if (loading) {
+            console.debug('[AuthContext] Still loading, skipping visibility change handler')
+            return
           }
 
           isProcessingRef.current = true
@@ -1394,19 +1401,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!sessionError && sessionData?.session) {
               const sessionUser = sessionData.session.user
 
-              // Only reload profile if user ID actually changed AND we have a current userProfile to compare
-              // If userProfile is null, it means it's still loading, so don't reload
-              if (userProfile && userProfile.uid !== sessionUser.id) {
+              // CRITICAL: Only reload if:
+              // 1. User ID actually changed (different user logged in)
+              // 2. AND we have a profile to compare (not still loading)
+              // 3. AND we haven't already processed this user ID
+              const userIdChanged = userProfile && userProfile.uid !== sessionUser.id
+              const isNewUser = lastProcessedUserIdRef.current !== sessionUser.id
+
+              if (userIdChanged && isNewUser) {
                 console.debug('[AuthContext] User changed, reloading profile')
                 const mapped = mapAuthUser(sessionUser)
                 setUser(mapped)
+                lastProcessedUserIdRef.current = sessionUser.id
                 await loadUserProfileWithTimeout(mapped)
               } else if (userProfile && userProfile.uid === sessionUser.id) {
                 // Same user - just reconnect subscriptions, don't reload profile
                 // This prevents unnecessary state changes that cause infinite loading
+                if (lastProcessedUserIdRef.current !== sessionUser.id) {
+                  lastProcessedUserIdRef.current = sessionUser.id
+                }
                 realtimeSubscriptionManager.reconnectAll()
               }
-              // If userProfile is null, do nothing - profile is still loading
+              // If userProfile is null and we're not loading, it means profile failed to load
+              // Don't reload here - let the normal flow handle it
             }
           } catch (error) {
             console.warn('[AuthContext] Error on visibility restore:', error)
@@ -1414,7 +1431,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } finally {
             isProcessingRef.current = false
           }
-        }, 500) // Wait 500ms before processing visibility change
+        }, 1000) // Wait 1000ms before processing visibility change
       } else {
         console.debug('[AuthContext] Page became hidden')
         // Clear any pending visibility timeout
@@ -1458,7 +1475,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearTimeout(visibilityTimeoutRef.current)
       }
     }
-  }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout])
+  }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout, loading])
 
   const signIn = useCallback(
     async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
@@ -1533,6 +1550,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Use API route instead of direct server function calls (client component limitation)
       // The API route will check the actual role from the database profile
       try {
+        console.debug('[AuthContext] Checking 2FA requirement for user', { userId: authUser.uid })
         // Use API route to check 2FA requirement and create session
         // The API will fetch the profile and check the actual role
         const twoFAResponse = await fetch('/api/auth/2fa/require', {
@@ -1544,6 +1562,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             userId: authUser.uid,
           }),
         })
+        
+        console.debug('[AuthContext] 2FA check response status:', twoFAResponse.status)
 
         if (twoFAResponse.ok) {
           const twoFAData = await twoFAResponse.json()
