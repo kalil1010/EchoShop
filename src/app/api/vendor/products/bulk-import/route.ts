@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
         if (statusKey) {
           const status = String(row[statusKey] || 'draft').trim().toLowerCase()
           if (['draft', 'pending_review', 'active'].includes(status)) {
-            product.status = status as VendorProductStatus
+            // Type assertion is safe here because we've already validated the status
+            product.status = status as 'draft' | 'pending_review' | 'active'
           }
         }
         if (imageKey) product.imageUrl = String(row[imageKey] || '').trim()
