@@ -1357,46 +1357,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        // Page became visible - restore session and reconnect WebSocket subscriptions
-        console.debug('[AuthContext] Page became visible, restoring session and reconnecting subscriptions...')
-        
-        // Small delay to ensure browser has fully restored the tab and localStorage is accessible
+        // Page became visible - only restore session if it was lost, don't reload profile
+        console.debug('[AuthContext] Page became visible, validating session...')
+
+        // Small delay to ensure browser has fully restored the tab
         setTimeout(async () => {
           if (!supabase) return
-          
-          // First, restore/validate session from localStorage
-          // This ensures session state is current after tab was hidden
+          if (!user) return // No user logged in, nothing to restore
+
           try {
+            // Just validate the session is still valid - don't reload profile unnecessarily
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-            if (!sessionError && sessionData?.session) {
-              // Session exists - update state if needed
-              const currentSession = sessionData.session
-              if (currentSession.access_token !== session?.access_token) {
-                console.debug('[AuthContext] Session restored from storage after visibility change')
-                setSession(currentSession)
-                const sessionUser = currentSession.user
-                if (sessionUser) {
-                  const mapped = mapAuthUser(sessionUser)
-                  setUser(mapped)
-                  // Only reload profile if we don't have one or user changed
-                  if (!userProfile || userProfile.uid !== mapped.uid) {
-                    await loadUserProfileWithTimeout(mapped)
-                  }
+            
+            if (sessionError) {
+              console.warn('[AuthContext] Session validation failed after visibility change:', sessionError)
+              return
+            }
+
+            // Only update if session token changed (means new session)
+            if (sessionData?.session?.access_token !== session?.access_token) {
+              console.debug('[AuthContext] Session token changed, updating...')
+              setSession(sessionData.session)
+              
+              // Only reload profile if session actually changed AND user changed
+              if (sessionData.session?.user?.id !== user.uid) {
+                // Different user - need to reload profile
+                const mapped = mapAuthUser(sessionData.session.user)
+                setUser(mapped)
+                await loadUserProfileWithTimeout(mapped)
+              } else {
+                // Same user, just reconnect websockets
+                if (user?.uid) {
+                  realtimeSubscriptionManager.reconnectAll()
                 }
               }
-            } else if (!sessionData?.session && user) {
-              // Session was lost - try to restore from cookies/storage
-              console.debug('[AuthContext] Session not found after visibility change, attempting restoration')
-              // Don't clear user immediately - let the normal auth flow handle it
+            } else {
+              // Session unchanged - just reconnect subscriptions
+              if (user?.uid) {
+                console.debug('[AuthContext] Session valid, reconnecting subscriptions...')
+                realtimeSubscriptionManager.reconnectAll()
+              }
             }
           } catch (error) {
-            console.warn('[AuthContext] Error restoring session after visibility change:', error)
-            // Don't clear state on error - session might still be valid
-          }
-          
-          // Reconnect WebSocket subscriptions if user exists
-          if (user?.uid) {
-            realtimeSubscriptionManager.reconnectAll()
+            console.warn('[AuthContext] Error validating session after visibility change:', error)
+            // Don't clear state on validation error - session might still be valid
           }
         }, 300)
       } else {
@@ -1405,33 +1409,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Also handle window focus/blur as fallback
+    // Also handle window focus/blur with same logic
     const handleFocus = async () => {
-      console.debug('[AuthContext] Window gained focus, checking session and subscriptions...')
+      if (document.visibilityState !== 'visible') return
+      
+      console.debug('[AuthContext] Window gained focus, validating session...')
       setTimeout(async () => {
-        if (!supabase || document.visibilityState !== 'visible') return
-        
-        // Restore session on focus as well
+        if (!supabase || !user) return
+
         try {
           const { data: sessionData } = await supabase.auth.getSession()
+          
           if (sessionData?.session && sessionData.session.access_token !== session?.access_token) {
-            console.debug('[AuthContext] Session restored from storage after focus')
+            console.debug('[AuthContext] Session changed, updating...')
             setSession(sessionData.session)
-            const sessionUser = sessionData.session.user
-            if (sessionUser) {
-              const mapped = mapAuthUser(sessionUser)
+            
+            // Only reload profile if user actually changed
+            if (sessionData.session.user?.id !== user.uid) {
+              const mapped = mapAuthUser(sessionData.session.user)
               setUser(mapped)
-              if (!userProfile || userProfile.uid !== mapped.uid) {
-                await loadUserProfileWithTimeout(mapped)
-              }
+              await loadUserProfileWithTimeout(mapped)
             }
           }
+
+          // Just reconnect, don't reload profile
+          if (user?.uid) {
+            realtimeSubscriptionManager.reconnectAll()
+          }
         } catch (error) {
-          console.warn('[AuthContext] Error restoring session after focus:', error)
-        }
-        
-        if (user?.uid) {
-          realtimeSubscriptionManager.reconnectAll()
+          console.warn('[AuthContext] Error validating session after focus:', error)
         }
       }, 300)
     }
@@ -1443,7 +1449,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [supabase, user?.uid, session?.access_token, userProfile?.uid, loadUserProfileWithTimeout])
+  }, [supabase, user?.uid, session?.access_token])
 
   const signIn = useCallback(
     async (email: string, password: string, captchaToken?: string): Promise<SignInResult> => {
