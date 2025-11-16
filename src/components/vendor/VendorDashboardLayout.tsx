@@ -16,6 +16,7 @@ import VendorOnboardingWizard from './VendorOnboardingWizard'
 import SecuritySettings from './SecuritySettings'
 import VendorOwnerMessages from './VendorOwnerMessages'
 import NotificationCenter from './NotificationCenter'
+import NotificationBell from './NotificationBell'
 import type { VendorAnalyticsSnapshot } from './types'
 
 type VendorTab = 'overview' | 'products' | 'analytics' | 'business' | 'orders' | 'security' | 'messages'
