@@ -128,10 +128,14 @@ This document summarizes the comprehensive enhancements made to the vendor dashb
 - ✅ Profile type updated to include `vendorLogoUrl` and `vendorBannerUrl`
 - ✅ AuthContext updated to map logo/banner fields
 
-### 4. Product Duplication
-- Basic duplication works (creates draft without images)
-- **TODO**: Optionally copy images from original product
-- **TODO**: Handle image file copying in storage
+### 4. Product Duplication ✅
+- ✅ Product duplication with image copying implemented
+- ✅ Copies primary image and all gallery images from original product
+- ✅ Creates new storage paths for duplicated images
+- ✅ Handles image file copying in Supabase storage (`src/lib/storage/copyImage.ts`)
+- ✅ Duplicate products created as 'draft' status
+- ✅ Graceful error handling (continues if image copy fails)
+- ✅ Preserves image quality and metadata during copy
 
 ## 📋 Remaining Features (Not Yet Implemented)
 

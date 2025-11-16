@@ -6,6 +6,7 @@ import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { requireVendorUser } from '@/lib/server/vendor'
 import { createServiceClient } from '@/lib/supabaseServer'
 import { buildStoragePath } from '@/lib/storage'
+import { copyProductImages } from '@/lib/storage/copyImage'
 import { PermissionError, mapSupabaseError, sanitizeText } from '@/lib/security'
 import { mapVendorProductRow } from '@/lib/vendorProducts'
 import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       currency = parseCurrency(payload.currency)
       duplicateFrom = typeof payload.duplicateFrom === 'string' ? payload.duplicateFrom : null
 
-      // If duplicating, fetch the original product's images
+      // If duplicating, fetch the original product's images and copy them
       if (duplicateFrom) {
         const { data: originalProduct, error: fetchError } = await supabase
           .from('vendor_products')
@@ -121,9 +122,23 @@ export async function POST(request: NextRequest) {
           .maybeSingle()
 
         if (!fetchError && originalProduct) {
-          // Note: We can't directly copy files, so we'll create the product with the same URLs
-          // In a production system, you'd want to copy the actual files
-          // For now, we'll create a draft without images and let the vendor add new ones
+          try {
+            // Copy images from original product
+            const copiedImages = await copyProductImages(userId, {
+              primaryImagePath: originalProduct.primary_image_path,
+              galleryPaths: originalProduct.gallery_paths,
+            })
+
+            // Use copied images for the duplicate
+            // copyProductImages already adds primary to gallery arrays, so we can use them directly
+            if (copiedImages.galleryPaths.length > 0) {
+              galleryPaths.push(...copiedImages.galleryPaths)
+              galleryUrls.push(...copiedImages.galleryUrls)
+            }
+          } catch (copyError) {
+            console.warn('Failed to copy product images:', copyError)
+            // Continue without images - vendor can add them later
+          }
         }
       }
     } else {
@@ -228,8 +243,18 @@ export async function POST(request: NextRequest) {
       galleryUrls.push(publicUrlData?.publicUrl ?? '')
     }
 
-    const primaryImagePath = galleryPaths[0]
-    const primaryImageUrl = galleryUrls[0] ?? ''
+    // For duplicates, use the copied primary image if available
+    // Otherwise, use the first gallery image
+    const primaryImagePath = duplicateFrom && galleryPaths.length > 0 
+      ? galleryPaths[0] 
+      : galleryPaths.length > 0 
+        ? galleryPaths[0] 
+        : null
+    const primaryImageUrl = duplicateFrom && galleryUrls.length > 0
+      ? galleryUrls[0] ?? ''
+      : galleryUrls.length > 0
+        ? galleryUrls[0] ?? ''
+        : null
 
     // For duplicates, always create as draft
     const status = duplicateFrom ? 'draft' : moderationStatus === 'ok' ? 'active' : 'pending_review'
