@@ -1085,15 +1085,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data?.session ?? null
         setSession(nextSession)
         if (nextSession) {
-          // Immediately sync session to server to ensure cookies are set
+          // Sync session to server asynchronously (don't block initialization)
           // This is critical for OAuth flows and page refreshes
           // Note: Profile not loaded yet, so pass null for userProfile
-          try {
-            await syncServerSession('SIGNED_IN', nextSession, null)
-            console.debug('[AuthContext] Initial session synced to server')
-          } catch (error) {
-            console.warn('[AuthContext] Failed to sync initial session to server:', error)
-          }
+          // We don't await this to prevent blocking the initialization flow
+          syncServerSession('SIGNED_IN', nextSession, null)
+            .then(() => {
+              console.debug('[AuthContext] Initial session synced to server')
+            })
+            .catch((error) => {
+              console.warn('[AuthContext] Failed to sync initial session to server:', error)
+            })
         } else {
           void syncServerSession('SIGNED_OUT', null)
         }
@@ -1102,20 +1104,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
+          
+          // Load profile with timeout - this will use fallback if it times out
           const profileResult = await loadUserProfileWithTimeout(mapped)
           
           // Sync role from auth metadata to profile (for OAuth flows and existing sessions)
+          // Use a timeout to prevent hanging
           let finalProfile = profileResult.profile
           if (finalProfile) {
             try {
-              finalProfile = await reconcileProfileAfterAuth(mapped, finalProfile)
+              // Add timeout for role reconciliation to prevent hanging
+              // If it times out, we'll use the original profile
+              const syncPromise = reconcileProfileAfterAuth(mapped, finalProfile)
+              const timeoutPromise = new Promise<UserProfile>((_, reject) => {
+                setTimeout(() => reject(new Error('ROLE_SYNC_TIMEOUT')), 5000)
+              })
+              
+              finalProfile = await Promise.race([syncPromise, timeoutPromise])
             } catch (syncError) {
-              // If sync fails, use original profile
-              console.warn('[AuthContext] Role sync failed during session initialization:', syncError)
+              // If sync fails or times out, use original profile
+              const isTimeout = syncError instanceof Error && syncError.message === 'ROLE_SYNC_TIMEOUT'
+              if (isTimeout) {
+                console.debug('[AuthContext] Role sync timed out, using original profile')
+              } else {
+                console.warn('[AuthContext] Role sync failed during session initialization:', syncError)
+              }
+              // Keep original profile if sync fails - finalProfile already has the original value
             }
           }
           
-          // Task C1: Re-sync with profile data after it's loaded
+          // Task C1: Re-sync with profile data after it's loaded (async, don't block)
           if (finalProfile && nextSession) {
             void syncServerSession('SIGNED_IN', nextSession, finalProfile)
           }
@@ -1135,10 +1153,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } finally {
         if (isMounted) {
+          // Always set loading to false, even if there were errors
+          // This ensures the UI doesn't get stuck in loading state
           setLoading(false)
           console.log('[AuthContext] Session initialization complete', {
             hasUser: Boolean(user),
             hasSession: Boolean(session),
+            hasProfile: Boolean(userProfile),
           })
         }
       }
