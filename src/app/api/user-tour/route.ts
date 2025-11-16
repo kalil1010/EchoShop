@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
 
     const userId = await getAuthenticatedUserId()
     if (!userId) {
+      // Silently fail for unauthenticated requests - this can happen during session restoration
+      // The client will retry once authentication is restored
+      console.debug('[user-tour] POST request without authentication, skipping update')
       return NextResponseBase.json({ ok: false, error: 'Not authenticated' }, { status: 401 })
     }
 

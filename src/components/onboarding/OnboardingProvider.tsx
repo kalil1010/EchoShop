@@ -12,7 +12,7 @@ interface OnboardingProviderProps {
 }
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
-  const { role, roleMeta } = useAuth()
+  const { role, roleMeta, user } = useAuth()
   const [initialStatus, setInitialStatus] = useState<'not_started' | 'in_progress' | 'completed'>('not_started')
   const [isReady, setIsReady] = useState(false)
 
@@ -142,11 +142,23 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       window.localStorage.setItem(tourConfig.storageKey, 'completed')
     }
     try {
+      // Only update tour state if user is authenticated
+      // This prevents 401 errors during session restoration
+      if (!user) {
+        console.debug('[OnboardingProvider] Skipping tour state update - user not authenticated')
+        return
+      }
       await updateTourState(tourConfig.slug, status)
     } catch (error) {
-      console.warn('Failed to update onboarding status:', error)
+      // Silently handle errors - they're expected during session restoration
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('Not authenticated') || errorMessage.includes('401')) {
+        console.debug('[OnboardingProvider] Tour state update skipped - not authenticated')
+      } else {
+        console.warn('Failed to update onboarding status:', error)
+      }
     }
-  }, [tourConfig])
+  }, [tourConfig, user])
 
   if (!isReady) {
     return <>{children}</>

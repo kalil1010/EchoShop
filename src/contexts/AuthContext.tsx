@@ -1355,22 +1355,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof document === 'undefined') return
 
+    const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
+
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         // Page became visible - only restore session if it was lost, don't reload profile
         console.debug('[AuthContext] Page became visible, validating session...')
 
+        // Prevent multiple simultaneous handlers
+        if (isProcessingRef.current) {
+          console.debug('[AuthContext] Visibility change already processing, skipping...')
+          return
+        }
+        isProcessingRef.current = true
+
         // Small delay to ensure browser has fully restored the tab
         setTimeout(async () => {
-          if (!supabase) return
-          if (!user) return // No user logged in, nothing to restore
-
           try {
+            if (!supabase) {
+              isProcessingRef.current = false
+              return
+            }
+            if (!user) {
+              isProcessingRef.current = false
+              return // No user logged in, nothing to restore
+            }
+
             // Just validate the session is still valid - don't reload profile unnecessarily
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
             
             if (sessionError) {
               console.warn('[AuthContext] Session validation failed after visibility change:', sessionError)
+              isProcessingRef.current = false
               return
             }
 
@@ -1394,15 +1410,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
               }
             } else {
-              // Session unchanged - just reconnect subscriptions
+              // Session unchanged - just reconnect subscriptions silently
+              // Don't log to avoid console spam when tab regains focus
               if (user?.uid) {
-                console.debug('[AuthContext] Session valid, reconnecting subscriptions...')
                 realtimeSubscriptionManager.reconnectAll()
               }
             }
           } catch (error) {
             console.warn('[AuthContext] Error validating session after visibility change:', error)
             // Don't clear state on validation error - session might still be valid
+          } finally {
+            isProcessingRef.current = false
           }
         }, 300)
       } else {
@@ -1412,42 +1430,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Also handle window focus/blur with same logic
+    // Use the same isProcessing flag to prevent duplicate work
     const handleFocus = async () => {
       if (document.visibilityState !== 'visible') return
+      if (isProcessingRef.current) return // Already processing visibility change
       
-      console.debug('[AuthContext] Window gained focus, validating session...')
+      // Focus events are less critical - just reconnect subscriptions if needed
+      // Don't reload profile or session unless absolutely necessary
       setTimeout(async () => {
         if (!supabase || !user) return
 
         try {
-          const { data: sessionData } = await supabase.auth.getSession()
-          
-          if (sessionData?.session && sessionData.session.access_token !== session?.access_token) {
-            console.debug('[AuthContext] Session changed, updating...')
-            const newSession = sessionData.session
-            setSession(newSession)
-            
-            // Only reload profile if user actually changed
-            if (newSession.user?.id !== user.uid) {
-              const mapped = mapAuthUser(newSession.user)
-              setUser(mapped)
-              await loadUserProfileWithTimeout(mapped)
-            } else {
-              // Same user, just reconnect subscriptions
-              if (user?.uid) {
-                realtimeSubscriptionManager.reconnectAll()
-              }
-            }
-          } else {
-            // Session unchanged - just reconnect subscriptions
-            if (user?.uid) {
-              realtimeSubscriptionManager.reconnectAll()
-            }
+          // Just reconnect subscriptions - don't reload session/profile
+          // This prevents unnecessary state changes that trigger re-renders
+          if (user?.uid) {
+            realtimeSubscriptionManager.reconnectAll()
           }
         } catch (error) {
-          console.warn('[AuthContext] Error validating session after focus:', error)
+          console.warn('[AuthContext] Error reconnecting subscriptions after focus:', error)
         }
-      }, 300)
+      }, 100) // Shorter delay for focus events
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)

@@ -124,13 +124,23 @@ export function OwnerLoginForm() {
       // If 2FA is required, sign out immediately and show verification modal
       // This prevents the session from being used until 2FA is verified
       try {
+        // Use the user ID from the signIn result - this is the authenticated user's ID
+        const userId = result.user?.uid || profile.uid
+        if (!userId) {
+          console.error('[owner-login] No user ID available for 2FA check')
+          await logout().catch(() => undefined)
+          setError('Unable to verify security settings. Please try again.')
+          setLoading(false)
+          return
+        }
+
         const twoFAResponse = await fetch('/api/auth/2fa/require', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ 
             purpose: 'login',
-            userId: profile.uid // Pass user ID from profile since session might not be established yet
+            userId: userId // Use authenticated user ID
           }),
         })
 

@@ -92,9 +92,11 @@ export default function OwnerDashboardPage() {
     }
 
     // If we already have access and user/profile haven't changed, don't re-check
-    // This prevents unnecessary reloads when tab regains focus
-    if (hasAccess && lastCheckedUserIdRef.current === user.uid && userProfile) {
+    // This prevents unnecessary reloads when tab regains focus or visibility changes
+    // Also check that we're not in a loading state to prevent infinite loops
+    if (hasAccess && lastCheckedUserIdRef.current === user.uid && userProfile && !isLoading) {
       // Already verified access for this user - skip re-check
+      // This is critical to prevent infinite loading when tab regains focus
       return
     }
 
