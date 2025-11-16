@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
@@ -1033,6 +1034,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return outcome.profile
   }, [supabase, user, loadUserProfileWithTimeout, resetProfileState, reconcileProfileAfterAuth])
 
+  // Use ref to track if initialization has been started to prevent multiple runs
+  const initializationStartedRef = useRef(false)
+
   useEffect(() => {
     if (!supabase) {
       setUser(null)
@@ -1040,12 +1044,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null)
       resetProfileState()
       setLoading(false)
+      initializationStartedRef.current = false
+      return
+    }
+
+    // CRITICAL: Prevent effect from running multiple times
+    if (initializationStartedRef.current) {
+      console.debug('[AuthContext] Initialization already started, skipping effect re-run')
       return
     }
 
     let isMounted = true
+    let isInitializing = false // Guard to prevent multiple simultaneous initializations
 
     const primeSession = async () => {
+      // CRITICAL: Prevent multiple simultaneous initializations
+      if (isInitializing) {
+        console.debug('[AuthContext] Session initialization already in progress, skipping...')
+        return
+      }
+      
+      isInitializing = true
+      initializationStartedRef.current = true
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
       try {
@@ -1197,6 +1217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Always set loading to false, even if there were errors
           // This ensures the UI doesn't get stuck in loading state
           setLoading(false)
+          isInitializing = false // Reset guard
           console.log('[AuthContext] Session initialization complete', {
             hasUser: Boolean(user),
             hasSession: Boolean(session),
@@ -1210,6 +1231,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
+      
+      // CRITICAL: Ignore INITIAL_SESSION events during initialization to prevent loops
+      // INITIAL_SESSION is fired when Supabase detects an existing session, but we're already handling that in primeSession
+      if (event === 'INITIAL_SESSION' && isInitializing) {
+        console.debug('[AuthContext] Ignoring INITIAL_SESSION during initialization')
+        return
+      }
+      
       console.log('[AuthContext] Auth state changed:', event)
       
       // Handle token refresh failures gracefully
@@ -1295,9 +1324,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false
+      initializationStartedRef.current = false // Reset on cleanup
       listener.subscription.unsubscribe()
     }
-  }, [supabase, loadUserProfileWithTimeout, resetProfileState, reconcileProfileAfterAuth])
+  }, [supabase]) // CRITICAL: Only depend on supabase to prevent re-runs
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return
