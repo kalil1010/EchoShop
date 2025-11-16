@@ -168,6 +168,46 @@ const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => 
   return profile as UserProfile
 }
 
+// Common vulnerability scanning patterns - return 404 instead of redirecting
+const isAttackPattern = (pathname: string): boolean => {
+  const attackPatterns = [
+    /\.env/i,                    // Environment files
+    /\.env\.(bak|old|save|backup|orig|swp|tmp|~)/i,
+    /phpinfo/i,                  // PHP info files
+    /php_info/i,
+    /php\.php/i,
+    /info\.php/i,
+    /test\.php/i,
+    /debug\.php/i,
+    /server\.php/i,
+    /check\.php/i,
+    /diagnostic\.php/i,
+    /\.git/i,                    // Git files
+    /\.git\/config/i,
+    /wp-admin/i,                 // WordPress
+    /wp-login/i,
+    /wp-content/i,
+    /administrator/i,            // Common CMS paths
+    /admin\.php/i,
+    /\.sql/i,                    // Database files
+    /\.bak/i,
+    /\.old/i,
+    /\.save/i,
+    /\.backup/i,
+    /\.orig/i,
+    /\.swp/i,
+    /\.tmp/i,
+    /\.~$/i,
+    /\/_profiler\//i,            // Symfony profiler
+    /\/storage\/\.env/i,
+    /\/vendor\/\.env/i,
+    /\/themes\/\.env/i,
+    /\/plugins\/\.env/i,
+  ]
+  
+  return attackPatterns.some(pattern => pattern.test(pathname))
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const user = await getAuthenticatedUser(req)
@@ -267,7 +307,24 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next()
     }
     
-    console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
+    // Check if this is an obvious attack pattern (vulnerability scanning)
+    if (isAttackPattern(pathname)) {
+      // Return 404 for attack patterns instead of redirecting
+      // This reduces log noise and doesn't give attackers information
+      return new NextResponse(null, { status: 404 })
+    }
+    
+    // Only log legitimate routes that need authentication
+    // Skip logging for favicon requests and other common non-attack patterns
+    const shouldLog = !pathname.includes('favicon.ico') && 
+                      !pathname.includes('.ico') &&
+                      !pathname.includes('.png') &&
+                      !pathname.includes('.jpg') &&
+                      !pathname.includes('.svg')
+    
+    if (shouldLog) {
+      console.info('[middleware] unauthenticated access blocked, redirecting to /auth', { pathname })
+    }
     
     // Redirect to /auth with return URL
     const redirectUrl = new URL('/auth', req.url)
