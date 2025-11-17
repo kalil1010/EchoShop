@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const vendorId = searchParams.get('vendor_id')
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // Check if alerts table exists - return empty array if it doesn't
     let query = supabase
       .from('alerts')
       .select('*')
@@ -42,7 +43,15 @@ export async function GET(request: NextRequest) {
 
     const { data: alerts, error } = await query
 
-    if (error) throw error
+    // If table doesn't exist (PGRST205), return empty array
+    if (error) {
+      const errorCode = (error as any)?.code
+      if (errorCode === 'PGRST205' || errorCode === '42P01') {
+        // Table doesn't exist - return empty array
+        return NextResponse.json({ alerts: [] })
+      }
+      throw error
+    }
 
     return NextResponse.json({ alerts: alerts || [] })
   } catch (error) {
