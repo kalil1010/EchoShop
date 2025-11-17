@@ -208,12 +208,12 @@ function isTimeoutError(error: unknown): boolean {
   )
 }
 
-const DEFAULT_PROFILE_TIMEOUT_MS = 10000 // Reduced from 45s to 10s for better UX
+const DEFAULT_PROFILE_TIMEOUT_MS = 20000 // 20 seconds - balance between UX and reliability
 
 const PERMISSION_ISSUE_MESSAGE =
   'Profile loading failed due to database permission issues. Please contact support or retry later.'
 const TIMEOUT_ISSUE_MESSAGE =
-  'Loading your profile is taking longer than expected. This may be due to a database timeout. Please retry shortly or contact support.'
+  'Profile loading is taking longer than expected. This could be due to network latency or high server load. Your session is active, and we\'re retrying in the background. You can continue using the app with basic features.'
 const PROFILE_SYNC_SUPPORT_MESSAGE =
   'We could not sync your profile after sign-in. Retry profile sync or contact support if this continues.'
 
@@ -889,6 +889,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
+        const startTime = Date.now()
         const { data } = await withRetry(async () => {
           const response = await supabase
             .from('profiles')
@@ -897,8 +898,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle<ProfileRow>()
 
           if (response.error && response.error.code !== 'PGRST116') {
+            const duration = Date.now() - startTime
             console.error(
-              `[AuthContext] Profile fetch error for ${authUser.uid}:`,
+              `[AuthContext] Profile fetch error for ${authUser.uid} (took ${duration}ms):`,
               response.error,
             )
             throw response.error
@@ -908,6 +910,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.debug(
               `[AuthContext] Profile fetch returned no data for ${authUser.uid}.`,
             )
+          } else {
+            const duration = Date.now() - startTime
+            console.debug(`[AuthContext] Profile fetched in ${duration}ms`)
           }
 
           return response
@@ -1067,10 +1072,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const profile = applyProfileToState(fallback, authUser)
         if (timeoutIssue) {
-          // Silently retry in background without logging errors
-          loadUserProfile(authUser).catch(() => {
-            // Silently fail - we already have a fallback profile
-          })
+          // Aggressively retry in background with increasing delays
+          // This gives the database multiple chances to respond
+          const retryWithDelay = (delay: number, attempt: number) => {
+            if (attempt > 3) return // Max 3 retries
+            setTimeout(() => {
+              console.debug(`[AuthContext] Background retry attempt ${attempt} after ${delay}ms`)
+              loadUserProfile(authUser)
+                .then((result) => {
+                  if (result.status === 'ready' && !result.fallback) {
+                    console.log('[AuthContext] Background retry succeeded, profile loaded')
+                  } else {
+                    // Retry with exponential backoff: 2s, 4s, 8s
+                    retryWithDelay(delay * 2, attempt + 1)
+                  }
+                })
+                .catch(() => {
+                  // Retry with exponential backoff: 2s, 4s, 8s
+                  retryWithDelay(delay * 2, attempt + 1)
+                })
+            }, delay)
+          }
+          retryWithDelay(2000, 1) // Start with 2 second delay
         }
         return {
           profile,
@@ -1181,7 +1204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // CRITICAL FIX: Add timeout to prevent hanging on getSession()
         // If Supabase hangs, we need to fall back to cache or fail gracefully
-        const SESSION_TIMEOUT_MS = 5000 // 5 second timeout
+        const SESSION_TIMEOUT_MS = 15000 // 15 second timeout - increased for reliability
         let timeoutId: NodeJS.Timeout | null = null
         
         const sessionPromise = supabase.auth.getSession()
@@ -1199,7 +1222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (timeoutError) {
           if (timeoutId) clearTimeout(timeoutId)
           if (timeoutError instanceof Error && timeoutError.message === 'SESSION_TIMEOUT') {
-            console.warn('[AuthContext] getSession() timed out after 5s')
+            console.warn('[AuthContext] getSession() timed out after 15s')
             // If we have cache, use it; otherwise, fail gracefully
             if (hasCachedData && cachedData) {
               console.debug('[AuthContext] Using cache after session timeout')
@@ -1209,8 +1232,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
               return
             }
-            // No cache - fail gracefully by clearing state
-            throw timeoutError
+            // No cache - try to recover gracefully without throwing
+            // Set loading to false and allow user to interact with app
+            console.warn('[AuthContext] No cache available after timeout, setting loading to false')
+            if (isMounted) {
+              setLoading(false)
+              setUser(null)
+              setUserProfile(null)
+              setSession(null)
+              resetProfileState()
+            }
+            return // Don't throw - gracefully degrade instead
           }
           throw timeoutError
         }
