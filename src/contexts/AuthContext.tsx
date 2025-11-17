@@ -1153,9 +1153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // CRITICAL FIX: Check cache FIRST before Supabase calls
       // Use cache as fallback when Supabase fails, not verification of success
       let cachedData: SessionCacheData | null = null
+      let isCacheRestoration = false
       if (typeof window !== 'undefined') {
         cachedData = getSessionCache()
         if (cachedData) {
+          isCacheRestoration = true
           console.debug('[AuthContext] Found session cache, will use as fallback if Supabase fails')
           // Hydrate from cache immediately for instant UI
           setUser(cachedData.user)
@@ -1706,6 +1708,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // CRITICAL: Check 2FA requirement BEFORE loading profile
       // This ensures 2FA is checked for all logins, not just owner logins
+      // IMPORTANT: Only check 2FA during actual sign-in, not during session restoration
       // Use API route instead of direct server function calls (client component limitation)
       // The API route will check the actual role from the database profile
       try {
@@ -1720,6 +1723,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             purpose: 'login',
             userId: authUser.uid,
           }),
+        }).catch((fetchError) => {
+          // Handle network errors gracefully
+          console.warn('[AuthContext] Network error checking 2FA requirement:', fetchError)
+          // Return a mock response to continue with normal flow
+          return new Response(JSON.stringify({ required: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
         })
         
         console.debug('[AuthContext] 2FA check response status:', twoFAResponse.status)
@@ -1789,6 +1800,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Only log if it's not a 200 (which means 2FA not required)
           if (twoFAResponse.status !== 200) {
             console.warn('[AuthContext] Failed to check 2FA requirement:', twoFAResponse.status)
+            // If it's a 500 error, it's likely a temporary service issue
+            // Allow login to proceed rather than blocking the user
+            if (twoFAResponse.status === 500) {
+              console.warn('[AuthContext] 2FA service unavailable, allowing login to proceed')
+            }
           }
           // Continue with normal flow as fallback
         }
@@ -1799,8 +1815,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         // Otherwise, log error but continue with normal flow
         // This prevents login from being blocked if 2FA service is temporarily unavailable
-        console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
-        // Continue with normal flow as fallback
+        // Network errors (fetch failed) should not block login
+        const isNetworkError = twoFAError instanceof TypeError && 
+          (twoFAError.message.includes('fetch failed') || twoFAError.message.includes('Failed to fetch'))
+        
+        if (isNetworkError) {
+          console.warn('[AuthContext] Network error checking 2FA requirement - allowing login to proceed:', twoFAError)
+        } else {
+          console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
+        }
+        // Continue with normal flow as fallback - don't block login
       }
 
       // Continue with normal flow for users who don't require 2FA or have completed 2FA

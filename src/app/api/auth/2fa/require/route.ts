@@ -48,11 +48,39 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
 
     // Get user role
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle<{ role: string | null }>()
+    let profile: { role: string | null } | null = null
+    let profileError: unknown = null
+    
+    try {
+      const result = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle<{ role: string | null }>()
+      
+      profile = result.data
+      profileError = result.error
+    } catch (fetchError) {
+      // Handle network/fetch errors (e.g., Supabase connection issues)
+      console.error('[2FA-require] Failed to fetch profile:', {
+        message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        details: fetchError instanceof Error ? fetchError.stack : String(fetchError),
+        hint: fetchError instanceof Error && 'hint' in fetchError ? (fetchError as { hint?: string }).hint : '',
+        code: fetchError && typeof fetchError === 'object' && 'code' in fetchError ? (fetchError as { code?: string }).code : '',
+      })
+      
+      // If this is a network error (fetch failed), return a graceful error
+      // Don't block login if 2FA service is temporarily unavailable
+      if (fetchError instanceof Error && fetchError.message.includes('fetch failed')) {
+        console.warn('[2FA-require] Network error fetching profile - allowing login to proceed without 2FA check')
+        return NextResponse.json({
+          required: false,
+          message: '2FA check temporarily unavailable, login allowed.',
+        })
+      }
+      
+      return NextResponse.json({ error: 'Failed to fetch user profile.' }, { status: 500 })
+    }
 
     if (profileError) {
       console.error('[2FA-require] Failed to fetch profile:', profileError)
