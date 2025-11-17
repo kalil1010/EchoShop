@@ -240,7 +240,7 @@ export default function OwnerDashboardPage() {
   // If roleMeta exists and shows owner, we can show dashboard even if hasAccess check is pending
   const isLoadingState = useMemo(() => {
     // If we have roleMeta showing owner role, trust it and don't wait for hasAccess
-    const hasOwnerRoleMeta = roleMeta?.role === 'owner'
+    const hasOwnerRoleMeta = roleMeta?.id === 'owner'
     
     // Only wait for hasAccess if:
     // 1. We don't have owner roleMeta yet, OR
