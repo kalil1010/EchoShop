@@ -41,12 +41,16 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('vendor_owner_messages')
       .select('*')
-      .eq('recipient_id', userId) // Messages sent to owner/admin
       .order('created_at', { ascending: false })
 
     // Filter by conversation if specified
     if (conversationId) {
+      // For specific conversation, get ALL messages (both directions)
       query = query.eq('conversation_id', conversationId)
+    } else {
+      // For conversation list, get conversations where owner is involved (as recipient OR sender)
+      // We'll group by conversation_id and show conversations where owner received at least one message
+      query = query.or(`recipient_id.eq.${userId},sender_id.eq.${userId}`)
     }
 
     // Filter by ticket status
@@ -95,7 +99,9 @@ export async function GET(request: NextRequest) {
 
         // Track conversation metadata
         if (!conversationMetadata.has(convId)) {
-          const vendorId = message.sender_id
+          // Find vendor ID: if owner is sender, vendor is recipient; if owner is recipient, vendor is sender
+          const vendorId = message.sender_id === userId ? message.recipient_id : message.sender_id
+          
           const { data: vendorProfile } = await supabase
             .from('profiles')
             .select('display_name, vendor_business_name')
@@ -116,9 +122,12 @@ export async function GET(request: NextRequest) {
         const metadata = conversationMetadata.get(convId)!
         if (message.created_at > (metadata.lastMessage?.created_at || '')) {
           metadata.lastMessage = message
-          metadata.ticketStatus = message.ticket_status || metadata.ticketStatus
-          metadata.ticketPriority = message.ticket_priority || metadata.ticketPriority
-          metadata.ticketCategory = message.ticket_category || metadata.ticketCategory
+          // Update ticket status/priority from latest message (prefer messages from vendor)
+          if (message.sender_id !== userId || !metadata.ticketStatus || metadata.ticketStatus === 'open') {
+            metadata.ticketStatus = message.ticket_status || metadata.ticketStatus
+            metadata.ticketPriority = message.ticket_priority || metadata.ticketPriority
+            metadata.ticketCategory = message.ticket_category || metadata.ticketCategory
+          }
         }
         if (!message.is_read && message.recipient_id === userId) {
           metadata.unreadCount++
@@ -174,12 +183,16 @@ export async function POST(request: NextRequest) {
 
     const payload = await request.json().catch(() => ({}))
     const conversationId = typeof payload.conversationId === 'string' ? payload.conversationId : null
+    const vendorId = typeof payload.vendorId === 'string' ? payload.vendorId : null
+    const subject = typeof payload.subject === 'string' ? payload.subject.trim() : null
     const message = typeof payload.message === 'string' ? payload.message.trim() : null
     const ticketStatus = typeof payload.ticketStatus === 'string' ? payload.ticketStatus : null
     const ticketPriority = typeof payload.ticketPriority === 'string' ? payload.ticketPriority : null
+    const ticketCategory = typeof payload.category === 'string' ? payload.category : null
 
-    if (!conversationId) {
-      return NextResponse.json({ error: 'Conversation ID is required.' }, { status: 400 })
+    // Either conversationId (reply) or vendorId (new message) is required
+    if (!conversationId && !vendorId) {
+      return NextResponse.json({ error: 'Conversation ID or Vendor ID is required.' }, { status: 400 })
     }
 
     if (!message || message.length === 0) {
@@ -190,37 +203,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is too long (max 2000 characters).' }, { status: 400 })
     }
 
-    // Get the first message in the conversation to find the vendor
-    const { data: firstMessage, error: firstError } = await supabase
-      .from('vendor_owner_messages')
-      .select('sender_id, subject')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle()
+    let finalConversationId = conversationId || ''
+    let finalVendorId = ''
+    let finalSubject = subject
 
-    if (firstError || !firstMessage) {
-      return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
+    // If new message (vendorId provided), create conversation
+    if (vendorId && !conversationId) {
+      if (!subject || subject.length === 0) {
+        return NextResponse.json({ error: 'Subject is required for new messages.' }, { status: 400 })
+      }
+
+      // Verify vendor exists
+      const { data: vendorProfile, error: vendorError } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('id', vendorId)
+        .eq('role', 'vendor')
+        .maybeSingle()
+
+      if (vendorError || !vendorProfile) {
+        return NextResponse.json({ error: 'Vendor not found.' }, { status: 404 })
+      }
+
+      // Create new conversation ID
+      finalConversationId = crypto.randomUUID()
+      finalVendorId = vendorId
+      finalSubject = subject || 'Message from Admin'
+    } else if (conversationId) {
+      // Reply to existing conversation
+      const { data: firstMessage, error: firstError } = await supabase
+        .from('vendor_owner_messages')
+        .select('sender_id, recipient_id, subject')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (firstError || !firstMessage) {
+        return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
+      }
+
+      // Determine vendor: if owner was recipient in first message, vendor is sender; otherwise vendor is recipient
+      finalVendorId = firstMessage.sender_id === userId ? firstMessage.recipient_id : firstMessage.sender_id
+      finalSubject = firstMessage.subject || 'Re: Support Request'
     }
 
-    const vendorId = firstMessage.sender_id
-    const subject = firstMessage.subject || 'Re: Support Request'
-
     const sanitizedMessage = sanitizeText(message, { maxLength: 2000, allowNewlines: true })
+    const sanitizedSubject = finalSubject ? sanitizeText(finalSubject, { maxLength: 200 }) : null
 
-    // Insert reply message
-    const { data: replyMessage, error: insertError } = await supabase
+    // Insert message
+    const insertData: Record<string, unknown> = {
+      conversation_id: finalConversationId,
+      sender_id: userId,
+      recipient_id: finalVendorId,
+      subject: sanitizedSubject,
+      message: sanitizedMessage,
+      is_read: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    // For new messages, set ticket fields
+    if (vendorId && !conversationId) {
+      insertData.ticket_status = 'open'
+      insertData.ticket_priority = ticketPriority || 'normal'
+      insertData.ticket_category = ticketCategory || 'other'
+    }
+
+    const { data: newMessage, error: insertError } = await supabase
       .from('vendor_owner_messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_id: userId,
-        recipient_id: vendorId,
-        subject,
-        message: sanitizedMessage,
-        is_read: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select('*')
       .single()
 
@@ -228,8 +280,8 @@ export async function POST(request: NextRequest) {
       throw insertError
     }
 
-    // Update ticket status/priority if provided
-    if (ticketStatus || ticketPriority) {
+    // Update ticket status/priority if provided (for replies)
+    if (conversationId && (ticketStatus || ticketPriority)) {
       const updateData: Record<string, unknown> = {}
       if (ticketStatus && ['open', 'in_progress', 'resolved', 'closed'].includes(ticketStatus)) {
         updateData.ticket_status = ticketStatus
@@ -247,14 +299,15 @@ export async function POST(request: NextRequest) {
         await supabase
           .from('vendor_owner_messages')
           .update(updateData)
-          .eq('conversation_id', conversationId)
+          .eq('conversation_id', finalConversationId)
       }
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: replyMessage,
+        message: newMessage,
+        conversation: { id: finalConversationId },
       },
       { status: 201 },
     )

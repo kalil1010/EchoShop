@@ -11,6 +11,7 @@ import {
   XCircle,
   Filter,
   Search,
+  Plus,
 } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,6 +70,13 @@ const STATUS_ICONS = {
   closed: XCircle,
 }
 
+interface Vendor {
+  id: string
+  name: string
+  email: string | null
+  businessName: string | null
+}
+
 export default function OwnerSupportTickets() {
   const { userProfile } = useAuth()
   const { toast } = useToast()
@@ -81,10 +89,17 @@ export default function OwnerSupportTickets() {
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [showNewMessage, setShowNewMessage] = useState(false)
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [selectedVendorId, setSelectedVendorId] = useState<string>('')
+  const [newMessageSubject, setNewMessageSubject] = useState('')
+  const [newMessageText, setNewMessageText] = useState('')
+  const [newMessagePriority, setNewMessagePriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadConversations()
+    loadVendors()
   }, [statusFilter, priorityFilter])
 
   useEffect(() => {
@@ -99,6 +114,21 @@ export default function OwnerSupportTickets() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const loadVendors = async () => {
+    try {
+      const response = await fetch('/api/admin/vendors', {
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setVendors(data.vendors || [])
+      }
+    } catch (error) {
+      console.error('Failed to load vendors:', error)
+    }
   }
 
   const loadConversations = async () => {
@@ -240,6 +270,70 @@ export default function OwnerSupportTickets() {
     }
   }
 
+  const handleSendNewMessage = async () => {
+    if (!selectedVendorId || !newMessageSubject.trim() || !newMessageText.trim()) {
+      toast({
+        title: 'Required fields',
+        description: 'Please select a vendor, provide a subject, and message.',
+        variant: 'error',
+      })
+      return
+    }
+
+    setSending(true)
+    try {
+      const response = await fetch('/api/admin/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          vendorId: selectedVendorId,
+          subject: newMessageSubject.trim(),
+          message: newMessageText.trim(),
+          priority: newMessagePriority,
+          category: 'other',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to send message')
+      }
+
+      const data = await response.json()
+      setNewMessageSubject('')
+      setNewMessageText('')
+      setNewMessagePriority('normal')
+      setSelectedVendorId('')
+      setShowNewMessage(false)
+
+      // Reload conversations to show new message
+      await loadConversations()
+      if (data.conversation?.id) {
+        await loadConversationMessages(data.conversation.id)
+        // Find and select the new conversation
+        const newConv = conversations.find((c) => c.id === data.conversation.id)
+        if (newConv) {
+          setSelectedConversation(newConv)
+        }
+      }
+
+      toast({
+        title: 'Message sent',
+        description: 'Your message has been sent to the vendor.',
+        variant: 'success',
+      })
+    } catch (error) {
+      toast({
+        title: 'Failed to send message',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'error',
+      })
+    } finally {
+      setSending(false)
+    }
+  }
+
   const handleUpdateStatus = async (newStatus: 'open' | 'in_progress' | 'resolved' | 'closed') => {
     if (!selectedConversation || updatingStatus) return
 
@@ -324,8 +418,22 @@ export default function OwnerSupportTickets() {
       {/* Tickets List */}
       <Card className="md:col-span-1">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-slate-800">Support Tickets</CardTitle>
-          <CardDescription>Vendor support requests</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold text-slate-800">Support Tickets</CardTitle>
+              <CardDescription>Vendor support requests</CardDescription>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                setShowNewMessage(true)
+                setSelectedConversation(null)
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Message
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {/* Search */}
@@ -475,7 +583,92 @@ export default function OwnerSupportTickets() {
           </div>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0">
-          {selectedConversation ? (
+          {showNewMessage ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Select Vendor *</label>
+                <select
+                  value={selectedVendorId}
+                  onChange={(e) => setSelectedVendorId(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Choose a vendor...</option>
+                  {vendors.map((vendor) => (
+                    <option key={vendor.id} value={vendor.id}>
+                      {vendor.name} {vendor.email ? `(${vendor.email})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Subject *</label>
+                <Input
+                  placeholder="Message subject (e.g., Account Warning, Policy Update)"
+                  value={newMessageSubject}
+                  onChange={(e) => setNewMessageSubject(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Priority</label>
+                <select
+                  value={newMessagePriority}
+                  onChange={(e) => setNewMessagePriority(e.target.value as typeof newMessagePriority)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Message *</label>
+                <Textarea
+                  placeholder="Type your message to the vendor..."
+                  value={newMessageText}
+                  onChange={(e) => setNewMessageText(e.target.value)}
+                  rows={8}
+                  maxLength={2000}
+                />
+                <p className="text-xs text-slate-500 text-right">{newMessageText.length}/2000</p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSendNewMessage}
+                  disabled={sending || !selectedVendorId || !newMessageSubject.trim() || !newMessageText.trim()}
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Message
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewMessage(false)
+                    setSelectedVendorId('')
+                    setNewMessageSubject('')
+                    setNewMessageText('')
+                    setNewMessagePriority('normal')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : selectedConversation ? (
             <>
               {/* Ticket Info */}
               <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
