@@ -199,7 +199,17 @@ export default function EnhancedProductUpload({ onProductCreated, onCancel }: En
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
-        throw new Error(payload?.error ?? 'Failed to create product')
+        const errorMessage = payload?.error ?? 'Failed to create product'
+        
+        // If image was blocked by moderation, show specific message
+        if (payload?.category && payload?.reasons) {
+          const reasons = Array.isArray(payload.reasons) ? payload.reasons.join(', ') : ''
+          throw new Error(
+            `${errorMessage}${reasons ? `\n\nReason: ${reasons}` : ''}\n\nPlease upload appropriate product images only.`,
+          )
+        }
+        
+        throw new Error(errorMessage)
       }
 
       const payload = await response.json()

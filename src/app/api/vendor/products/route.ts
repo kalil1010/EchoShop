@@ -187,13 +187,42 @@ export async function POST(request: NextRequest) {
       const contentType = file.type || 'image/jpeg'
       const filename = file.name || `product-${Date.now()}.jpg`
 
+      // Moderate image with SIGHTENGINE before upload
       const moderationOutcome = await moderateImageBuffer(buffer, {
         filename,
         contentType,
       })
 
       if (!moderationOutcome.ok) {
-        return NextResponse.json({ error: moderationOutcome.message }, { status: 400 })
+        // If image is blocked (NSFW/inappropriate content), reject immediately
+        if (moderationOutcome.type === 'blocked') {
+          console.warn('[vendor/products] Image blocked by SIGHTENGINE', {
+            filename,
+            category: moderationOutcome.category,
+            reasons: moderationOutcome.reasons,
+          })
+          return NextResponse.json(
+            {
+              error: moderationOutcome.message || 'Image blocked for inappropriate content. Please choose another image.',
+              category: moderationOutcome.category,
+              reasons: moderationOutcome.reasons,
+            },
+            { status: 400 },
+          )
+        }
+
+        // If moderation service error, mark product for manual review instead of blocking
+        if (moderationOutcome.type === 'error') {
+          console.warn('[vendor/products] SIGHTENGINE service error, marking for review', {
+            filename,
+            message: moderationOutcome.message,
+          })
+          moderationStatus = 'review'
+          moderationMessage = `Image moderation unavailable: ${moderationOutcome.message}. Product requires manual review.`
+          moderationCategory = 'sightengine-error'
+          moderationReasons = ['moderation_service_error']
+          // Continue with upload but mark for review
+        }
       }
 
       if (index === 0) {
