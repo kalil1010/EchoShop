@@ -257,10 +257,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             </label>
             <Input
               id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
+              autoComplete="email"
               required
             />
           </div>
@@ -271,10 +273,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             </label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
+              autoComplete="current-password"
               required
             />
           </div>

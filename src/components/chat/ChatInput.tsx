@@ -24,6 +24,8 @@ export function ChatInput({ onSendMessage, disabled }: ChatInputProps) {
   return (
     <form onSubmit={handleSubmit} className="flex space-x-2">
       <Input
+        id="chat-message"
+        name="message"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Ask me about fashion, styling tips, or outfit ideas..."

@@ -605,9 +605,11 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
               </label>
               <Input
                 id="displayName"
+                name="displayName"
                 value={formData.displayName ?? ''}
                 onChange={(event) => handleInputChange('displayName', event.target.value)}
                 placeholder="Your name"
+                autoComplete="name"
               />
             </div>
             <div className="space-y-2">
@@ -616,6 +618,7 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
               </label>
               <select
                 id="gender"
+                name="gender"
                 value={formData.gender ?? ''}
                 onChange={(event) => handleInputChange('gender', event.target.value)}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -632,6 +635,8 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
               </label>
               <Input
                 id="age"
+                name="age"
+                type="number"
                 inputMode="numeric"
                 value={formData.age ?? ''}
                 onChange={(event) => handleInputChange('age', event.target.value)}
@@ -644,6 +649,8 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
               </label>
               <Input
                 id="height"
+                name="height"
+                type="number"
                 inputMode="numeric"
                 value={formData.height ?? ''}
                 onChange={(event) => handleInputChange('height', event.target.value)}
@@ -658,6 +665,8 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
             </label>
             <Input
               id="weight"
+              name="weight"
+              type="number"
               inputMode="numeric"
               value={formData.weight ?? ''}
               onChange={(event) => handleInputChange('weight', event.target.value)}
@@ -683,6 +692,7 @@ const buildUpdatePayload = (): Partial<UserProfile> => ({
             </label>
             <select
               id="foot-size"
+              name="footSize"
               value={formData.footSize ?? ''}
               onChange={(event) => handleInputChange('footSize', event.target.value || undefined)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"

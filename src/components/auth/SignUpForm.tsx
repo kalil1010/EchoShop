@@ -279,9 +279,11 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </label>
             <Input
               id="displayName"
+              name="displayName"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
+              autoComplete="name"
               disabled={loading || googleLoading}
             />
           </div>
@@ -292,10 +294,12 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </label>
             <Input
               id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
+              autoComplete="email"
               required
               disabled={loading || googleLoading}
             />
@@ -307,10 +311,12 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a password"
+              autoComplete="new-password"
               required
               disabled={loading || googleLoading}
             />
