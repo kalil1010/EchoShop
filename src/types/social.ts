@@ -41,7 +41,11 @@ export interface CommentRow {
     id: string
     display_name: string | null
     photo_url: string | null
-  } | null
+  } | {
+    id: string
+    display_name: string | null
+    photo_url: string | null
+  }[] | null
 }
 
 export interface FollowStatus {

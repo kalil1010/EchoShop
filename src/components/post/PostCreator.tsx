@@ -351,6 +351,7 @@ export function PostCreator({
         </div>
       </div>
     </div>
+    </div>
   )
 }
 

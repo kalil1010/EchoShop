@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveAuthenticatedUser } from '@/lib/server/auth'
 import { createServiceClient } from '@/lib/supabaseServer'
-import { getSupabaseStorageConfig, buildStoragePath } from '@/lib/storage'
+import { getSupabaseStorageConfig } from '@/lib/supabaseClient'
+import { buildStoragePath } from '@/lib/storage'
 import { PermissionError, mapSupabaseError } from '@/lib/security'
 
 export async function POST(request: NextRequest) {

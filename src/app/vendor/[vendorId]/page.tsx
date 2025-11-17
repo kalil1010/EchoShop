@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { MapPin, Store, Mail, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { PostCard } from '@/components/post/PostCard'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/toast'
@@ -225,18 +226,25 @@ export default function VendorBrandPage({ params }: { params: Promise<{ vendorId
               </div>
             </div>
             <div className="flex gap-2">
-              {user && user.id !== vendor.id && (
+              {user && user.uid !== vendor.id && (
                 <Button onClick={handleFollow} disabled={following}>
                   {isFollowing ? 'Unfollow' : 'Follow'}
                 </Button>
               )}
               {vendor.website && (
-                <Button variant="outline" asChild>
-                  <a href={vendor.website} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Visit Website
-                  </a>
-                </Button>
+                <a
+                  href={vendor.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                    "h-10 px-4 py-2"
+                  )}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Visit Website
+                </a>
               )}
             </div>
           </div>
@@ -274,9 +282,16 @@ export default function VendorBrandPage({ params }: { params: Promise<{ vendorId
           </div>
           {products.length > 8 && (
             <div className="mt-4 text-center">
-              <Button variant="outline" asChild>
-                <a href={`/marketplace?vendor=${vendorId}`}>View All Products</a>
-              </Button>
+              <a
+                href={`/marketplace?vendor=${vendorId}`}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                  "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                  "h-10 px-4 py-2"
+                )}
+              >
+                View All Products
+              </a>
             </div>
           )}
         </div>

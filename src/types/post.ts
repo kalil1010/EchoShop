@@ -65,7 +65,8 @@ export interface PostRow {
 
 export interface CreatePostInput {
   caption?: string
-  images: File[]
+  images: string[]
+  imagePaths?: string[]
   outfitData?: OutfitData
   privacyLevel?: PostPrivacyLevel
   vendorProductIds?: string[]
