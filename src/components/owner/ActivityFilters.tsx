@@ -3,6 +3,7 @@
 import React from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { VendorSelector } from './VendorSelector'
 
 interface ActivityFiltersProps {
   filters: {
@@ -33,10 +34,10 @@ export function ActivityFilters({ filters, onFiltersChange }: ActivityFiltersPro
   return (
     <div className="space-y-3 rounded-md border border-slate-200 p-4">
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-        <Input
-          placeholder="Vendor ID"
+        <VendorSelector
           value={filters.vendorId}
-          onChange={(e) => updateFilter('vendorId', e.target.value)}
+          onChange={(value) => updateFilter('vendorId', value)}
+          placeholder="Filter by vendor..."
           className="text-sm"
         />
         <select

@@ -3,9 +3,9 @@
 import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { VendorHealthDetails } from './VendorHealthDetails'
+import { VendorSelector } from './VendorSelector'
 import { RefreshCw, Search } from 'lucide-react'
 
 export function VendorHealthScoring() {
@@ -68,23 +68,23 @@ export function VendorHealthScoring() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
-            <Input
-              placeholder="Enter vendor ID to view health score"
+            <VendorSelector
               value={searchVendorId}
-              onChange={(e) => setSearchVendorId(e.target.value)}
+              onChange={setSearchVendorId}
+              placeholder="Select vendor to view health score"
               className="flex-1"
             />
-            <Button onClick={() => setSearchVendorId(searchVendorId)}>
+            <Button onClick={() => setSearchVendorId(searchVendorId)} disabled={!searchVendorId}>
               <Search className="h-4 w-4 mr-2" />
               View
             </Button>
           </div>
 
           <div className="flex gap-2 pt-4 border-t">
-            <Input
-              placeholder="Enter vendor ID to recalculate"
+            <VendorSelector
               value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
+              onChange={setVendorId}
+              placeholder="Select vendor to recalculate health score"
               className="flex-1"
             />
             <Button

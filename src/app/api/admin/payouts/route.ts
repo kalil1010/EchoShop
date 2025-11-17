@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const held = searchParams.get('held')
+    const vendorId = searchParams.get('vendor_id')
 
     // Build query - fetch payouts first, then join profiles manually
     let query = supabase
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest) {
 
     if (held !== null) {
       query = query.eq('is_held', held === 'true')
+    }
+    if (vendorId) {
+      query = query.eq('vendor_id', vendorId)
     }
 
     const { data: payouts, error } = await query

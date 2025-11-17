@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { Badge } from '@/components/ui/badge'
 import { PayoutHoldDialog } from './PayoutHoldDialog'
+import { VendorSelector } from './VendorSelector'
 import { 
   DollarSign, 
   Clock, 
@@ -58,6 +59,7 @@ export function PayoutManagement() {
   const [showHoldDialog, setShowHoldDialog] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [heldFilter, setHeldFilter] = useState<boolean | null>(null)
+  const [vendorFilter, setVendorFilter] = useState<string>('')
 
   const fetchPayouts = useCallback(async () => {
     setLoading(true)
@@ -69,6 +71,9 @@ export function PayoutManagement() {
       }
       if (heldFilter !== null) {
         params.set('held', heldFilter.toString())
+      }
+      if (vendorFilter) {
+        params.set('vendor_id', vendorFilter)
       }
       
       const response = await fetch(`/api/admin/payouts?${params.toString()}`, {
@@ -236,6 +241,12 @@ export function PayoutManagement() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2 flex-wrap">
+            <VendorSelector
+              value={vendorFilter}
+              onChange={setVendorFilter}
+              placeholder="Filter by vendor..."
+              className="min-w-[200px]"
+            />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
