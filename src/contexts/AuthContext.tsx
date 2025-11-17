@@ -1433,247 +1433,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, user?.uid, refreshProfile])
 
   // Handle page visibility changes (browser minimized/restored)
+  // SIMPLIFIED: Non-blocking, instant restoration for smooth UX
   useEffect(() => {
     if (typeof document === 'undefined') return
 
-    const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
-    const visibilityTimeoutRef = { current: null as NodeJS.Timeout | null }
-    const processingSafetyTimeoutRef = { current: null as NodeJS.Timeout | null }
-    const lastProcessedUserIdRef = { current: user?.uid || null }
     const lastVisibilityStateRef = { current: document.visibilityState }
 
-    const handleVisibilityChange = async () => {
+    const handleVisibilityChange = () => {
       const currentVisibility = document.visibilityState
-      
-      // CRITICAL FIX: Always clear any existing timeout first to prevent race conditions
-      if (visibilityTimeoutRef.current) {
-        clearTimeout(visibilityTimeoutRef.current)
-        visibilityTimeoutRef.current = null
-      }
 
-      if (currentVisibility === 'visible') {
-        // CRITICAL: Check if visibility actually changed (not just a duplicate event)
-        if (lastVisibilityStateRef.current === 'visible') {
-          console.debug('[AuthContext] Already visible, ignoring duplicate event')
-          return
-        }
+      // Only process if visibility actually changed
+      if (currentVisibility === 'visible' && lastVisibilityStateRef.current !== 'visible') {
         lastVisibilityStateRef.current = 'visible'
-
-        // IMMEDIATE STATE VALIDATION: Ensure we have valid state before delay
-        // This prevents blank screens during quick tab switches
-        if (supabase && user?.uid) {
-          // If we have a valid user but no profile, try to restore immediately
-          if (!userProfile && !loading) {
-            console.debug('[AuthContext] Page visible: restoring missing profile state')
+        
+        // INSTANT, NON-BLOCKING: Reconnect subscriptions immediately
+        // This never blocks rendering - all work happens in background
+        if (supabase && user?.uid && userProfile?.uid === user.uid) {
+          // We have valid state - just reconnect subscriptions
+          // Do this asynchronously so it never blocks rendering
+          void (async () => {
+            try {
+              realtimeSubscriptionManager.reconnectAll()
+            } catch (error) {
+              // Fail silently - don't break UI if reconnection fails
+              console.debug('[AuthContext] Subscription reconnection failed (non-critical):', error)
+            }
+          })()
+        } else if (supabase && user?.uid && !userProfile && !loading) {
+          // Missing profile but not loading - try to restore in background
+          // This is non-blocking and won't prevent rendering
+          void (async () => {
             try {
               const { data: sessionData } = await supabase.auth.getSession()
               if (sessionData?.session?.user) {
                 const mapped = mapAuthUser(sessionData.session.user)
-                // Only reload if user matches but profile is missing
                 if (mapped.uid === user.uid) {
+                  // Load profile in background - doesn't block rendering
                   await loadUserProfileWithTimeout(mapped)
                 }
               }
             } catch (error) {
-              console.warn('[AuthContext] Immediate state restore failed:', error)
+              // Fail gracefully - don't break UI
+              console.debug('[AuthContext] Background profile restore failed (non-critical):', error)
             }
-          }
-          // If we have both user and profile, just reconnect subscriptions immediately
-          else if (userProfile && userProfile.uid === user.uid) {
-            console.debug('[AuthContext] Page visible: reconnecting subscriptions')
-            realtimeSubscriptionManager.reconnectAll()
-          }
+          })()
         }
-
-        // Prevent multiple simultaneous handlers
-        if (isProcessingRef.current) {
-          console.debug('[AuthContext] Visibility change already processing, skipping...')
-          return
-        }
-
-        // Debounce visibility changes - reduced delay for faster restoration
-        // Reduced from 1500ms to 300ms to prevent blank screens
-        visibilityTimeoutRef.current = setTimeout(async () => {
-          // Double-check visibility state hasn't changed during timeout
-          if (document.visibilityState !== 'visible') {
-            isProcessingRef.current = false
-            if (visibilityTimeoutRef.current) {
-              clearTimeout(visibilityTimeoutRef.current)
-              visibilityTimeoutRef.current = null
-            }
-            if (processingSafetyTimeoutRef.current) {
-              clearTimeout(processingSafetyTimeoutRef.current)
-              processingSafetyTimeoutRef.current = null
-            }
-            return // Page became hidden again before timeout
-          }
-
-          // Additional guard: prevent re-triggering if already processing
-          if (isProcessingRef.current) {
-            console.debug('[AuthContext] Already processing visibility change, skipping duplicate')
-            if (visibilityTimeoutRef.current) {
-              clearTimeout(visibilityTimeoutRef.current)
-              visibilityTimeoutRef.current = null
-            }
-            if (processingSafetyTimeoutRef.current) {
-              clearTimeout(processingSafetyTimeoutRef.current)
-              processingSafetyTimeoutRef.current = null
-            }
-            return
-          }
-
-          isProcessingRef.current = true
-          console.debug('[AuthContext] Page became visible, validating session...')
-
-          // SAFETY TIMEOUT: Ensure processing flag is always reset, even if something goes wrong
-          // This prevents the flag from getting stuck and blocking future visibility changes
-          if (processingSafetyTimeoutRef.current) {
-            clearTimeout(processingSafetyTimeoutRef.current)
-          }
-          processingSafetyTimeoutRef.current = setTimeout(() => {
-            if (isProcessingRef.current) {
-              console.warn('[AuthContext] Processing timeout reached, resetting flag')
-              isProcessingRef.current = false
-            }
-            processingSafetyTimeoutRef.current = null
-          }, 10000) // 10 second safety timeout
-
-          try {
-            if (!supabase || !user?.uid) {
-              // Even if no user, ensure processing flag is reset
-              isProcessingRef.current = false
-              if (processingSafetyTimeoutRef.current) {
-                clearTimeout(processingSafetyTimeoutRef.current)
-                processingSafetyTimeoutRef.current = null
-              }
-              return
-            }
-
-            // CRITICAL FIX: If we already have a valid profile with owner/admin role, don't reload
-            // This prevents role downgrade on timeout and infinite reload loops
-            if (userProfile && (userProfile.role === 'owner' || userProfile.role === 'admin') && userProfile.uid === user.uid) {
-              console.debug('[AuthContext] Owner/Admin profile already loaded, just reconnecting subscriptions')
-              realtimeSubscriptionManager.reconnectAll()
-              lastProcessedUserIdRef.current = user.uid
-              isProcessingRef.current = false
-              if (processingSafetyTimeoutRef.current) {
-                clearTimeout(processingSafetyTimeoutRef.current)
-                processingSafetyTimeoutRef.current = null
-              }
-              return
-            }
-            
-            // Only validate session - DON'T reload profile unnecessarily
-            const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-
-            if (!sessionError && sessionData?.session) {
-              const sessionUser = sessionData.session.user
-
-              // CRITICAL: Only reload if:
-              // 1. User ID actually changed (different user logged in)
-              // 2. AND we have a profile to compare (not still loading)
-              // 3. AND we haven't already processed this user ID
-              const userIdChanged = userProfile && userProfile.uid !== sessionUser.id
-              const isNewUser = lastProcessedUserIdRef.current !== sessionUser.id
-
-              if (userIdChanged && isNewUser) {
-                console.debug('[AuthContext] User changed, reloading profile')
-                const mapped = mapAuthUser(sessionUser)
-                setUser(mapped)
-                lastProcessedUserIdRef.current = sessionUser.id
-                await loadUserProfileWithTimeout(mapped)
-              } else if (userProfile && userProfile.uid === sessionUser.id) {
-                // Same user - just reconnect subscriptions, don't reload profile
-                // This prevents unnecessary state changes that cause infinite loading
-                if (lastProcessedUserIdRef.current !== sessionUser.id) {
-                  lastProcessedUserIdRef.current = sessionUser.id
-                }
-                realtimeSubscriptionManager.reconnectAll()
-              } else if (!userProfile && !loading) {
-                // No profile but not loading - try to restore it
-                console.debug('[AuthContext] Profile missing, attempting restore')
-                const mapped = mapAuthUser(sessionUser)
-                if (mapped.uid === user.uid) {
-                  await loadUserProfileWithTimeout(mapped)
-                }
-              }
-              // If userProfile is null and we're loading, let the normal flow handle it
-            } else if (!loading) {
-              // Session invalid or missing, but we're not loading
-              // This might indicate a stale state - try to restore
-              console.debug('[AuthContext] Session validation failed, checking for recovery')
-              if (user?.uid) {
-                // Try to get fresh session
-                try {
-                  const { data: freshSession } = await supabase.auth.getSession()
-                  if (freshSession?.session?.user) {
-                    const mapped = mapAuthUser(freshSession.session.user)
-                    if (mapped.uid === user.uid && !userProfile) {
-                      await loadUserProfileWithTimeout(mapped)
-                    }
-                  }
-                } catch (recoveryError) {
-                  console.warn('[AuthContext] Session recovery failed:', recoveryError)
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('[AuthContext] Error on visibility restore:', error)
-            // Don't clear state on error - session might still be valid
-          } finally {
-            // GUARANTEED CLEANUP: Always reset processing flag, even on errors
-            isProcessingRef.current = false
-            // CRITICAL: Ensure timeout is cleared after processing completes
-            if (visibilityTimeoutRef.current) {
-              clearTimeout(visibilityTimeoutRef.current)
-              visibilityTimeoutRef.current = null
-            }
-            // Clear safety timeout
-            if (processingSafetyTimeoutRef.current) {
-              clearTimeout(processingSafetyTimeoutRef.current)
-              processingSafetyTimeoutRef.current = null
-            }
-          }
-        }, 300) // Reduced from 1500ms to 300ms for faster state restoration
-      } else {
-        console.debug('[AuthContext] Page became hidden')
-        lastVisibilityStateRef.current = currentVisibility
-        // Clear any pending visibility timeout
-        if (visibilityTimeoutRef.current) {
-          clearTimeout(visibilityTimeoutRef.current)
-          visibilityTimeoutRef.current = null
-        }
-        // Clear safety timeout when page becomes hidden
-        if (processingSafetyTimeoutRef.current) {
-          clearTimeout(processingSafetyTimeoutRef.current)
-          processingSafetyTimeoutRef.current = null
-        }
-        // Reset processing flag when page becomes hidden to allow fresh processing on return
-        isProcessingRef.current = false
-        // Don't clear session when page is hidden - it should persist
+      } else if (currentVisibility === 'hidden') {
+        lastVisibilityStateRef.current = 'hidden'
       }
     }
 
-    // Also handle window focus/blur with same logic
-    const handleFocus = async () => {
-      if (document.visibilityState !== 'visible') return
-      if (isProcessingRef.current) return // Already processing visibility change
-
-      // Focus events are less critical - just reconnect subscriptions if needed
-      // Don't reload profile or session unless absolutely necessary
-      setTimeout(async () => {
-        if (!supabase || !user) return
-
-        try {
-          // Just reconnect subscriptions - don't reload session/profile
-          // This prevents unnecessary state changes that trigger re-renders
-          if (user?.uid) {
+    // Also handle window focus - same simple, non-blocking approach
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible' && supabase && user?.uid) {
+        // Reconnect subscriptions in background - never blocks
+        void (async () => {
+          try {
             realtimeSubscriptionManager.reconnectAll()
+          } catch (error) {
+            console.debug('[AuthContext] Focus subscription reconnection failed (non-critical):', error)
           }
-        } catch (error) {
-          console.warn('[AuthContext] Error reconnecting subscriptions after focus:', error)
-        }
-      }, 100) // Shorter delay for focus events
+        })()
+      }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -1682,12 +1503,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
-      if (visibilityTimeoutRef.current) {
-        clearTimeout(visibilityTimeoutRef.current)
-      }
-      if (processingSafetyTimeoutRef.current) {
-        clearTimeout(processingSafetyTimeoutRef.current)
-      }
     }
   }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout, loading])
 
