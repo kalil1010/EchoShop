@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -21,6 +21,10 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   const pathname = usePathname()
   const redirected = useRef(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const cacheCheckedRef = useRef(false)
+  const [optimisticUser, setOptimisticUser] = useState<typeof user>(null)
+  const [optimisticLoading, setOptimisticLoading] = useState(true)
+  
   // Store latest auth state in refs for timeout callback
   const userRef = useRef(user)
   const sessionRef = useRef(session)
@@ -32,6 +36,55 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
     sessionRef.current = session
     loadingRef.current = loading
   }, [user, session, loading])
+  
+  // CRITICAL FIX: Check cache FIRST on mount to enable optimistic rendering
+  useEffect(() => {
+    if (cacheCheckedRef.current || typeof window === 'undefined') return
+    cacheCheckedRef.current = true
+    
+    try {
+      // Check session cache for user data
+      const cached = sessionStorage.getItem('echoshop_session_cache')
+      if (cached) {
+        const data = JSON.parse(cached)
+        if (data.user && data.timestamp && Date.now() - data.timestamp < 300000) {
+          // Cache shows user exists - enable optimistic rendering
+          console.debug('[useRequireAuth] Cache shows user, enabling optimistic rendering')
+          setOptimisticUser(data.user)
+          setOptimisticLoading(false)
+          return
+        }
+      }
+      
+      // Check localStorage for auth tokens
+      const hasAuthStorage = Object.keys(localStorage).some(key => 
+        key.includes('supabase.auth') || key.includes('sb-')
+      )
+      
+      if (hasAuthStorage) {
+        // Auth storage exists - user likely authenticated, just waiting for restoration
+        console.debug('[useRequireAuth] Auth storage found, waiting for restoration')
+        setOptimisticLoading(true)
+      } else {
+        // No auth storage - user likely not authenticated
+        setOptimisticLoading(false)
+      }
+    } catch {
+      // Ignore cache errors
+      setOptimisticLoading(loading)
+    }
+  }, [loading])
+  
+  // Update optimistic state when real auth state resolves
+  useEffect(() => {
+    if (!loading && user) {
+      setOptimisticUser(user)
+      setOptimisticLoading(false)
+    } else if (!loading && !user) {
+      setOptimisticUser(null)
+      setOptimisticLoading(false)
+    }
+  }, [loading, user])
 
   useEffect(() => {
     // Clear any pending timeout
@@ -40,17 +93,28 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
       timeoutRef.current = null
     }
 
+    // Use optimistic user if available, otherwise use real user
+    const currentUser = user || optimisticUser
+    const currentLoading = loading && optimisticLoading
+
     // Reset redirected flag if user becomes available
-    if (user || session) {
+    if (currentUser || session) {
       redirected.current = false
       return
     }
 
-    // If still loading, don't redirect yet
-    if (loading || redirected.current) {
+    // If still loading optimistically, don't redirect yet (give it time)
+    if (currentLoading && optimisticUser) {
+      // Have optimistic user but still loading - wait a bit more
       return
     }
 
+    // If still loading, don't redirect yet
+    if (currentLoading || redirected.current) {
+      return
+    }
+
+    // CRITICAL FIX: Add timeout to prevent infinite waiting
     // On mobile devices (especially iPad Safari), session initialization can take longer
     // Wait a bit before redirecting to allow session to initialize from cookies
     // This helps with slower cookie/session initialization on mobile browsers
@@ -69,7 +133,7 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
         console.warn('Failed to redirect unauthenticated user:', error)
         redirected.current = false
       }
-    }, 1000) // Wait 1 second for session to initialize on mobile devices
+    }, optimisticUser ? 2000 : 1000) // Wait longer if we have optimistic user
 
     return () => {
       if (timeoutRef.current) {
@@ -77,7 +141,16 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
         timeoutRef.current = null
       }
     }
-  }, [loading, options?.redirectTo, pathname, router, user, session])
+  }, [loading, optimisticLoading, optimisticUser, options?.redirectTo, pathname, router, user, session])
 
-  return { user, loading, isAuthenticated: !!user }
+  // CRITICAL FIX: Return optimistic state if real state is still loading
+  // This allows pages to render immediately on refresh if cache shows user exists
+  const effectiveUser = user || optimisticUser
+  const effectiveLoading = loading && optimisticLoading && !optimisticUser
+
+  return { 
+    user: effectiveUser, 
+    loading: effectiveLoading, 
+    isAuthenticated: !!effectiveUser 
+  }
 }

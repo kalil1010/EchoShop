@@ -346,10 +346,21 @@ export default function OwnerDashboardLayout({
     )
   }
 
+  // CRITICAL FIX: If we have user/profile with owner role, render even if roleMeta not set yet
+  // This prevents blocking on refresh when roleMeta is still loading
+  const hasOwnerRole = userProfile?.role === 'owner' || user?.role === 'owner'
+  
   // If we have roleMeta, we're ready - render dashboard
+  // OR if we have owner role from user/profile, render (roleMeta will catch up)
   // This prevents skeleton on tab return/refresh
-  if (!roleMeta) {
-    // No roleMeta and not loading means auth failed
+  if (!roleMeta && !hasOwnerRole) {
+    // No roleMeta and no owner role - might be loading or auth failed
+    // If auth is loading, show skeleton (handled above)
+    // If auth is not loading, return null (auth failed)
+    if (!authLoading) {
+      return null
+    }
+    // Still loading - skeleton already handled above
     return null
   }
 

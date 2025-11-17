@@ -13,7 +13,7 @@ export default function OwnerDashboardPage() {
   // ALL hooks must be called unconditionally before any returns (Rules of Hooks)
   const router = useRouter()
   const { toast } = useToast()
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { user, userProfile, loading: authLoading, roleMeta } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [hasAccess, setHasAccess] = useState(false)
@@ -22,6 +22,29 @@ export default function OwnerDashboardPage() {
   const sessionCheckAttemptsRef = useRef(0)
   const hasAccessRef = useRef(false) // Use ref to track access without causing re-renders
   const MAX_SESSION_CHECK_ATTEMPTS = 5 // Wait up to 2.5 seconds for session restoration
+  const accessCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // CRITICAL FIX: Check cache FIRST on mount to set access immediately
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    // Check session cache for owner role
+    try {
+      const cached = sessionStorage.getItem('echoshop_session_cache')
+      if (cached) {
+        const data = JSON.parse(cached)
+        if (data.role === 'owner' && data.timestamp && Date.now() - data.timestamp < 300000) {
+          // Cache shows owner role - grant access immediately
+          console.debug('[owner-dashboard] Cache shows owner role, granting immediate access')
+          setHasAccess(true)
+          hasAccessRef.current = true
+          setIsLoading(false)
+        }
+      }
+    } catch {
+      // Ignore cache errors
+    }
+  }, [])
 
   useEffect(() => {
     // Clear any existing timeout to prevent multiple simultaneous checks
@@ -112,15 +135,40 @@ export default function OwnerDashboardPage() {
     // Wait for profile to load OR use user.role if available
     const role = normaliseRole(userProfile?.role ?? user?.role)
     
-    // If we don't have a role yet and profile is still loading, wait
+    // CRITICAL FIX: If we already have access from cache, skip waiting
+    if (hasAccessRef.current) {
+      console.debug('[owner-dashboard] Access already granted from cache, skipping check')
+      return
+    }
+    
+    // If we don't have a role yet and profile is still loading, wait BUT with timeout
     // BUT: If we have user.role from auth metadata, use it (owner role is set in auth metadata)
     if (!role || (role === 'user' && !userProfile && !user?.role && authLoading)) {
+      // Set a timeout to prevent infinite loading
+      if (!accessCheckTimeoutRef.current) {
+        accessCheckTimeoutRef.current = setTimeout(() => {
+          console.warn('[owner-dashboard] Access check timeout - using available role data')
+          // Force check with whatever role we have
+          const fallbackRole = normaliseRole(user?.role ?? 'user')
+          if (fallbackRole === 'owner') {
+            setHasAccess(true)
+            hasAccessRef.current = true
+            setIsLoading(false)
+          }
+        }, 3000) // 3 second timeout
+      }
       console.debug('[owner-dashboard] Waiting for profile to load...', { 
         hasUserRole: !!user?.role,
         hasProfile: !!userProfile,
         currentRole: role 
       })
       return
+    }
+    
+    // Clear timeout if we have role now
+    if (accessCheckTimeoutRef.current) {
+      clearTimeout(accessCheckTimeoutRef.current)
+      accessCheckTimeoutRef.current = null
     }
 
     // Use a minimal delay only if profile is still loading
@@ -180,14 +228,27 @@ export default function OwnerDashboardPage() {
         clearTimeout(timeoutRef.current)
         timeoutRef.current = null
       }
+      if (accessCheckTimeoutRef.current) {
+        clearTimeout(accessCheckTimeoutRef.current)
+        accessCheckTimeoutRef.current = null
+      }
     }
   }, [user, userProfile, authLoading, router, toast])
 
   // Memoize the loading state to prevent unnecessary re-renders
-  // Include !hasAccess in loading state so dashboard doesn't show until access is confirmed
+  // CRITICAL FIX: Only include !hasAccess if we don't have roleMeta (which means auth is ready)
+  // If roleMeta exists and shows owner, we can show dashboard even if hasAccess check is pending
   const isLoadingState = useMemo(() => {
-    return isLoading || authLoading || isRedirecting || !hasAccess
-  }, [isLoading, authLoading, isRedirecting, hasAccess])
+    // If we have roleMeta showing owner role, trust it and don't wait for hasAccess
+    const hasOwnerRoleMeta = roleMeta?.role === 'owner'
+    
+    // Only wait for hasAccess if:
+    // 1. We don't have owner roleMeta yet, OR
+    // 2. Auth is still loading
+    const shouldWaitForAccess = !hasOwnerRoleMeta && !hasAccess
+    
+    return isLoading || (authLoading && !hasOwnerRoleMeta) || isRedirecting || shouldWaitForAccess
+  }, [isLoading, authLoading, isRedirecting, hasAccess, roleMeta])
 
   // CRITICAL: Always render the exact same component structure to prevent React error #300
   // React error #300 occurs when the component tree structure changes between renders,
