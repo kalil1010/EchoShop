@@ -1438,6 +1438,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isProcessingRef = { current: false } // Use ref-like object to persist across async operations
     const visibilityTimeoutRef = { current: null as NodeJS.Timeout | null }
+    const processingSafetyTimeoutRef = { current: null as NodeJS.Timeout | null }
     const lastProcessedUserIdRef = { current: user?.uid || null }
     const lastVisibilityStateRef = { current: document.visibilityState }
 
@@ -1451,12 +1452,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (currentVisibility === 'visible') {
-        // Prevent multiple simultaneous handlers
-        if (isProcessingRef.current) {
-          console.debug('[AuthContext] Visibility change already processing, skipping...')
-          return
-        }
-
         // CRITICAL: Check if visibility actually changed (not just a duplicate event)
         if (lastVisibilityStateRef.current === 'visible') {
           console.debug('[AuthContext] Already visible, ignoring duplicate event')
@@ -1464,8 +1459,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         lastVisibilityStateRef.current = 'visible'
 
-        // Debounce visibility changes - only process after 1500ms of being visible
-        // Increased delay to prevent rapid fire events when switching tabs quickly
+        // IMMEDIATE STATE VALIDATION: Ensure we have valid state before delay
+        // This prevents blank screens during quick tab switches
+        if (supabase && user?.uid) {
+          // If we have a valid user but no profile, try to restore immediately
+          if (!userProfile && !loading) {
+            console.debug('[AuthContext] Page visible: restoring missing profile state')
+            try {
+              const { data: sessionData } = await supabase.auth.getSession()
+              if (sessionData?.session?.user) {
+                const mapped = mapAuthUser(sessionData.session.user)
+                // Only reload if user matches but profile is missing
+                if (mapped.uid === user.uid) {
+                  await loadUserProfileWithTimeout(mapped)
+                }
+              }
+            } catch (error) {
+              console.warn('[AuthContext] Immediate state restore failed:', error)
+            }
+          }
+          // If we have both user and profile, just reconnect subscriptions immediately
+          else if (userProfile && userProfile.uid === user.uid) {
+            console.debug('[AuthContext] Page visible: reconnecting subscriptions')
+            realtimeSubscriptionManager.reconnectAll()
+          }
+        }
+
+        // Prevent multiple simultaneous handlers
+        if (isProcessingRef.current) {
+          console.debug('[AuthContext] Visibility change already processing, skipping...')
+          return
+        }
+
+        // Debounce visibility changes - reduced delay for faster restoration
+        // Reduced from 1500ms to 300ms to prevent blank screens
         visibilityTimeoutRef.current = setTimeout(async () => {
           // Double-check visibility state hasn't changed during timeout
           if (document.visibilityState !== 'visible') {
@@ -1473,6 +1500,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (visibilityTimeoutRef.current) {
               clearTimeout(visibilityTimeoutRef.current)
               visibilityTimeoutRef.current = null
+            }
+            if (processingSafetyTimeoutRef.current) {
+              clearTimeout(processingSafetyTimeoutRef.current)
+              processingSafetyTimeoutRef.current = null
             }
             return // Page became hidden again before timeout
           }
@@ -1484,16 +1515,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               clearTimeout(visibilityTimeoutRef.current)
               visibilityTimeoutRef.current = null
             }
-            return
-          }
-
-          // If we're still loading, don't do anything - wait for initial load to complete
-          if (loading) {
-            console.debug('[AuthContext] Still loading, skipping visibility change handler')
-            isProcessingRef.current = false
-            if (visibilityTimeoutRef.current) {
-              clearTimeout(visibilityTimeoutRef.current)
-              visibilityTimeoutRef.current = null
+            if (processingSafetyTimeoutRef.current) {
+              clearTimeout(processingSafetyTimeoutRef.current)
+              processingSafetyTimeoutRef.current = null
             }
             return
           }
@@ -1501,9 +1525,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isProcessingRef.current = true
           console.debug('[AuthContext] Page became visible, validating session...')
 
+          // SAFETY TIMEOUT: Ensure processing flag is always reset, even if something goes wrong
+          // This prevents the flag from getting stuck and blocking future visibility changes
+          if (processingSafetyTimeoutRef.current) {
+            clearTimeout(processingSafetyTimeoutRef.current)
+          }
+          processingSafetyTimeoutRef.current = setTimeout(() => {
+            if (isProcessingRef.current) {
+              console.warn('[AuthContext] Processing timeout reached, resetting flag')
+              isProcessingRef.current = false
+            }
+            processingSafetyTimeoutRef.current = null
+          }, 10000) // 10 second safety timeout
+
           try {
             if (!supabase || !user?.uid) {
+              // Even if no user, ensure processing flag is reset
               isProcessingRef.current = false
+              if (processingSafetyTimeoutRef.current) {
+                clearTimeout(processingSafetyTimeoutRef.current)
+                processingSafetyTimeoutRef.current = null
+              }
               return
             }
 
@@ -1514,17 +1556,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               realtimeSubscriptionManager.reconnectAll()
               lastProcessedUserIdRef.current = user.uid
               isProcessingRef.current = false
+              if (processingSafetyTimeoutRef.current) {
+                clearTimeout(processingSafetyTimeoutRef.current)
+                processingSafetyTimeoutRef.current = null
+              }
               return
             }
             
-            // CRITICAL: If profile is still loading (status is 'loading'), don't reload
-            // This prevents interrupting the initial profile load
-            if (loading && !userProfile) {
-              console.debug('[AuthContext] Profile still loading, skipping visibility handler')
-              isProcessingRef.current = false
-              return
-            }
-
             // Only validate session - DON'T reload profile unnecessarily
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
 
@@ -1551,22 +1589,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   lastProcessedUserIdRef.current = sessionUser.id
                 }
                 realtimeSubscriptionManager.reconnectAll()
+              } else if (!userProfile && !loading) {
+                // No profile but not loading - try to restore it
+                console.debug('[AuthContext] Profile missing, attempting restore')
+                const mapped = mapAuthUser(sessionUser)
+                if (mapped.uid === user.uid) {
+                  await loadUserProfileWithTimeout(mapped)
+                }
               }
-              // If userProfile is null and we're not loading, it means profile failed to load
-              // Don't reload here - let the normal flow handle it
+              // If userProfile is null and we're loading, let the normal flow handle it
+            } else if (!loading) {
+              // Session invalid or missing, but we're not loading
+              // This might indicate a stale state - try to restore
+              console.debug('[AuthContext] Session validation failed, checking for recovery')
+              if (user?.uid) {
+                // Try to get fresh session
+                try {
+                  const { data: freshSession } = await supabase.auth.getSession()
+                  if (freshSession?.session?.user) {
+                    const mapped = mapAuthUser(freshSession.session.user)
+                    if (mapped.uid === user.uid && !userProfile) {
+                      await loadUserProfileWithTimeout(mapped)
+                    }
+                  }
+                } catch (recoveryError) {
+                  console.warn('[AuthContext] Session recovery failed:', recoveryError)
+                }
+              }
             }
           } catch (error) {
             console.warn('[AuthContext] Error on visibility restore:', error)
             // Don't clear state on error - session might still be valid
           } finally {
+            // GUARANTEED CLEANUP: Always reset processing flag, even on errors
             isProcessingRef.current = false
             // CRITICAL: Ensure timeout is cleared after processing completes
             if (visibilityTimeoutRef.current) {
               clearTimeout(visibilityTimeoutRef.current)
               visibilityTimeoutRef.current = null
             }
+            // Clear safety timeout
+            if (processingSafetyTimeoutRef.current) {
+              clearTimeout(processingSafetyTimeoutRef.current)
+              processingSafetyTimeoutRef.current = null
+            }
           }
-        }, 1500) // Wait 1500ms before processing visibility change
+        }, 300) // Reduced from 1500ms to 300ms for faster state restoration
       } else {
         console.debug('[AuthContext] Page became hidden')
         lastVisibilityStateRef.current = currentVisibility
@@ -1575,6 +1643,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(visibilityTimeoutRef.current)
           visibilityTimeoutRef.current = null
         }
+        // Clear safety timeout when page becomes hidden
+        if (processingSafetyTimeoutRef.current) {
+          clearTimeout(processingSafetyTimeoutRef.current)
+          processingSafetyTimeoutRef.current = null
+        }
+        // Reset processing flag when page becomes hidden to allow fresh processing on return
+        isProcessingRef.current = false
         // Don't clear session when page is hidden - it should persist
       }
     }
@@ -1609,6 +1684,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('focus', handleFocus)
       if (visibilityTimeoutRef.current) {
         clearTimeout(visibilityTimeoutRef.current)
+      }
+      if (processingSafetyTimeoutRef.current) {
+        clearTimeout(processingSafetyTimeoutRef.current)
       }
     }
   }, [supabase, user?.uid, userProfile?.uid, loadUserProfileWithTimeout, loading])
