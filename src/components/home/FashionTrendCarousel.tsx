@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, Maximize2, ShoppingBag, Store } from "lucide-react"
 
-import { BRAND_PIECES } from "@/data/brandPieces"
 import type { FashionPiece, GenderTarget } from "@/types/arrivals"
 import { cn } from "@/lib/utils"
 
@@ -58,7 +57,8 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
     }
   }, [])
 
-  const basePieces = remotePieces && remotePieces.length > 0 ? remotePieces : BRAND_PIECES
+  // Only use vendor products from API (no fallback to external sources)
+  const basePieces = remotePieces ?? []
 
   const pieces = useMemo(() => {
     const matches = basePieces.filter(
@@ -122,7 +122,8 @@ export function FashionTrendCarousel({ gender }: FashionCarouselProps) {
   if (!active) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center text-sm text-gray-500 shadow-lg">
-        We’re curating outfits for you—check back shortly for fresh picks from Egyptian boutiques.
+        <p className="font-semibold text-gray-700 mb-2">No vendor products available yet</p>
+        <p>We're curating fresh picks from our marketplace vendors. Check back soon for new arrivals!</p>
       </div>
     )
   }

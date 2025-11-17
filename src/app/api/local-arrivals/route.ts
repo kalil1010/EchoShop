@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getOnlinePieces } from "@/lib/fashionPieces"
+import { getVendorPiecesOnly } from "@/lib/fashionPieces"
 import type { GenderTarget } from "@/types/arrivals"
 
 export async function GET(request: NextRequest) {
@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
     ? (genderParam as GenderTarget)
     : undefined
 
-  const pieces = await getOnlinePieces(genderFilter, undefined)
+  // Only return inboard vendor products (no external sources)
+  const pieces = await getVendorPiecesOnly(genderFilter, undefined)
 
   return NextResponse.json({ arrivals: pieces })
 }

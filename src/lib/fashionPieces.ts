@@ -377,6 +377,23 @@ const filterPiecesByOccasion = (pieces: FashionPiece[], occasion?: string | null
   return filtered.length > 0 ? filtered : pieces
 }
 
+// Vendor-only function for home carousel (inboard vendors only)
+export const getVendorPiecesOnly = async (gender?: GenderTarget | null, occasion?: string | null): Promise<FashionPiece[]> => {
+  const vendorPieces = await fetchVendorMarketplacePieces()
+
+  const uniquePieces: FashionPiece[] = []
+  const seen = new Set<string>()
+  for (const piece of vendorPieces) {
+    if (!piece || seen.has(piece.id)) continue
+    seen.add(piece.id)
+    uniquePieces.push(piece)
+  }
+
+  const genderFiltered = filterPiecesByGender(uniquePieces, gender)
+  const occasionFiltered = filterPiecesByOccasion(genderFiltered, occasion)
+  return occasionFiltered.slice(0, 24)
+}
+
 export const getOnlinePieces = async (gender?: GenderTarget | null, occasion?: string | null): Promise<FashionPiece[]> => {
   const [vendorPieces, brandPieces] = await Promise.all([
     fetchVendorMarketplacePieces(),
