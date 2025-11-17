@@ -699,6 +699,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Session cache constants
+  const SESSION_CACHE_VERSION = 1 // Increment when cache structure changes
+  const SESSION_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+  interface SessionCacheData {
+    version: number
+    user: AuthUser
+    profile: UserProfile
+    role: UserRole
+    timestamp: number
+  }
+
+  const getSessionCache = useCallback((): SessionCacheData | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const cached = sessionStorage.getItem('echoshop_session_cache')
+      if (!cached) return null
+      
+      const data = JSON.parse(cached) as SessionCacheData
+      
+      // Validate version
+      if (data.version !== SESSION_CACHE_VERSION) {
+        sessionStorage.removeItem('echoshop_session_cache')
+        return null
+      }
+      
+      // Validate TTL
+      if (!data.timestamp || Date.now() - data.timestamp > SESSION_CACHE_TTL) {
+        sessionStorage.removeItem('echoshop_session_cache')
+        return null
+      }
+      
+      // Validate required fields
+      if (!data.user?.uid || !data.profile || !data.role) {
+        sessionStorage.removeItem('echoshop_session_cache')
+        return null
+      }
+      
+      return data
+    } catch (e) {
+      console.warn('[AuthContext] Failed to read session cache:', e)
+      try {
+        sessionStorage.removeItem('echoshop_session_cache')
+      } catch {
+        // Ignore cleanup errors
+      }
+      return null
+    }
+  }, [])
+
+  const setSessionCache = useCallback((
+    user: AuthUser, 
+    profile: UserProfile, 
+    session: Session | null
+  ) => {
+    if (typeof window === 'undefined' || !session) return
+    try {
+      const cacheData: SessionCacheData = {
+        version: SESSION_CACHE_VERSION,
+        user,
+        profile,
+        role: profile.role,
+        timestamp: Date.now(),
+      }
+      sessionStorage.setItem('echoshop_session_cache', JSON.stringify(cacheData))
+    } catch (e) {
+      // Storage quota exceeded or other error - silently fail
+      console.debug('[AuthContext] Failed to write session cache (may be expected):', e)
+    }
+  }, [])
+
   const applyProfileToState = useCallback(
     (profile: UserProfile, sourceUser: AuthUser) => {
       setUserProfile(profile)
@@ -1074,6 +1145,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       
+      // Check if we already have valid state from cache
+      // This prevents re-initialization on refresh if cache is fresh
+      if (typeof window !== 'undefined') {
+        const cached = getSessionCache()
+        if (cached) {
+          console.debug('[AuthContext] Found session cache, verifying session validity')
+          // Verify session is still valid before skipping initialization
+          try {
+            const { data } = await supabase.auth.getSession()
+            if (data?.session?.user?.id === cached.user.uid) {
+              // Session is valid and matches cache - hydrate from cache
+              console.debug('[AuthContext] Session valid, hydrating from cache')
+              setUser(cached.user)
+              setUserProfile(cached.profile)
+              setSession(data.session)
+              setLoading(false)
+              isInitializing = false
+              return
+            }
+          } catch {
+            // Session check failed, continue with full initialization
+            console.debug('[AuthContext] Session verification failed, continuing with full initialization')
+          }
+        }
+      }
+      
       isInitializing = true
       initializationStartedRef.current = true
       console.log('[AuthContext] Starting session initialization')
@@ -1206,6 +1303,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Task C1: Re-sync with profile data after it's loaded (async, don't block)
           if (finalProfile && nextSession) {
+            // Set cache immediately after profile is loaded
+            setSessionCache(mapped, finalProfile, nextSession)
+            
+            // Also sync to server (existing code)
             void syncServerSession('SIGNED_IN', nextSession, finalProfile)
           }
         } else {
@@ -1337,7 +1438,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       initializationStartedRef.current = false // Reset on cleanup
       listener.subscription.unsubscribe()
     }
-  }, [supabase]) // CRITICAL: Only depend on supabase to prevent re-runs
+  }, [supabase, getSessionCache, setSessionCache]) // Include cache functions
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return

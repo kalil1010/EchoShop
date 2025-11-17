@@ -23,6 +23,7 @@ import { AuditLogViewer } from './AuditLogViewer'
 import { FeatureFlagsPanel } from './FeatureFlagsPanel'
 import { AlertCenter } from './AlertCenter'
 import type { OwnerAnalyticsSnapshot } from './types'
+import { analyticsCache } from '@/lib/analyticsCache'
 
 type OwnerTab =
   | 'overview'
@@ -129,13 +130,15 @@ export default function OwnerDashboardLayout({
   // Ensure all hooks are called unconditionally at the top level
   // This is critical to prevent React error #300 during rapid auth state changes
   // ALL hooks must be called before any conditional returns (Rules of Hooks)
-  const { roleMeta, logout, loading: authLoading } = useAuth()
+  const { roleMeta, logout, loading: authLoading, userProfile, user } = useAuth()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<OwnerTab>('overview')
   const [analytics, setAnalytics] = useState<OwnerAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
   const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+  const [hasHydrated, setHasHydrated] = useState(false)
 
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true)
@@ -163,24 +166,80 @@ export default function OwnerDashboardLayout({
   }, [logout])
 
   const fetchAnalytics = useCallback(async () => {
-    setAnalyticsLoading(true)
+    // Check cache first
+    const cached = analyticsCache.get()
+    const hadCache = Boolean(cached)
+    
+    if (cached) {
+      setAnalytics(cached)
+      setAnalyticsLoading(false)
+      // Still fetch in background to refresh cache
+      // But don't show loading state
+    } else {
+      setAnalyticsLoading(true)
+    }
+    
     setAnalyticsError(null)
+    
     try {
-      const response = await fetch('/api/admin/analytics', { credentials: 'include' })
+      const response = await fetch('/api/admin/analytics', { 
+        credentials: 'include',
+        // Add cache headers to prevent unnecessary requests
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+      
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload?.error ?? 'Failed to load analytics.')
       }
+      
       const payload = await response.json()
-      setAnalytics(adaptAnalytics(payload))
+      const adapted = adaptAnalytics(payload)
+      
+      setAnalytics(adapted)
+      analyticsCache.set(adapted) // Cache after successful fetch
     } catch (requestError) {
-      setAnalyticsError(
-        requestError instanceof Error ? requestError.message : 'Unable to load analytics.',
-      )
+      // If we have cached data, keep showing it (don't show error)
+      if (!hadCache) {
+        setAnalyticsError(
+          requestError instanceof Error ? requestError.message : 'Unable to load analytics.',
+        )
+      }
     } finally {
       setAnalyticsLoading(false)
     }
   }, [])
+
+  // CRITICAL: Hydrate from session cache on mount
+  useEffect(() => {
+    setIsMounted(true)
+    
+    // Try to hydrate from session cache immediately
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('echoshop_session_cache')
+        if (cached) {
+          const data = JSON.parse(cached)
+          // If cache is fresh and we have roleMeta, we're already hydrated
+          if (data.timestamp && Date.now() - data.timestamp < 300000 && roleMeta) {
+            setHasHydrated(true)
+            return
+          }
+        }
+      } catch {
+        // Ignore cache errors
+      }
+    }
+  }, [])
+
+  // Mark as hydrated once we have roleMeta (even if from cache)
+  useEffect(() => {
+    if (roleMeta && !hasHydrated) {
+      setHasHydrated(true)
+    }
+  }, [roleMeta, hasHydrated])
 
   // Only fetch analytics when not loading, not redirecting, and auth is ready
   // This prevents unnecessary API calls and state updates during auth transitions
@@ -246,10 +305,19 @@ export default function OwnerDashboardLayout({
     [],
   )
 
-  // Show loading/redirecting state if auth is still loading, external loading is requested, or redirecting
-  // roleMeta is always defined (computed in useMemo with fallbacks), so no need to check it
-  // This must come AFTER all hooks are called to prevent React error #300
-  if (authLoading || externalLoading || externalRedirecting) {
+  // Show skeleton ONLY if:
+  // 1. Not mounted yet (first render)
+  // 2. Auth is loading AND we haven't hydrated from cache
+  // 3. External loading is requested
+  // 4. Redirecting
+  // This prevents skeleton on tab return/refresh when cache exists
+  const shouldShowSkeleton = 
+    !isMounted || 
+    (authLoading && !hasHydrated && !roleMeta) ||
+    externalLoading ||
+    externalRedirecting
+
+  if (shouldShowSkeleton) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -260,6 +328,13 @@ export default function OwnerDashboardLayout({
         </div>
       </div>
     )
+  }
+
+  // If we have roleMeta, we're ready - render dashboard
+  // This prevents skeleton on tab return/refresh
+  if (!roleMeta) {
+    // No roleMeta and not loading means auth failed
+    return null
   }
 
   const renderContent = () => {
