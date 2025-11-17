@@ -1218,9 +1218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error: sessionError } = sessionResult
         if (sessionError) {
           const message = typeof sessionError.message === 'string' ? sessionError.message : ''
-          const code = typeof (sessionError as { code?: string }).code === 'string' 
-            ? (sessionError as { code: string }).code 
-            : ''
+          const code = getErrorCode(sessionError) ?? ''
           
           // Handle refresh token errors gracefully - these are expected when tokens expire
           if (
