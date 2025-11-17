@@ -28,64 +28,46 @@ export default function DashboardPage() {
   const { userProfile, loading, roleMeta } = useAuth()
   const router = useRouter()
   const redirectedRef = useRef(false)
-  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  useEffect(() => {
-    // Cleanup timeout on unmount
-    return () => {
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current)
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (redirectedRef.current) return
 
-    // CRITICAL: Check cache FIRST and redirect IMMEDIATELY if exists
+    // Check cache FIRST without waiting for auth
     const cachedRoute = getCachedRoute()
     if (cachedRoute) {
       redirectedRef.current = true
-      // Redirect immediately, don't wait for auth loading
-      redirectTimeoutRef.current = setTimeout(() => {
-        router.replace(cachedRoute)
-      }, 0)
+      router.replace(cachedRoute) // Redirect immediately
       return
     }
 
-    // Only wait for auth if no cache exists
+    // Only then wait for auth if no cache
     if (loading) return
 
     // No user profile means not authenticated
     if (!userProfile) {
       redirectedRef.current = true
-      redirectTimeoutRef.current = setTimeout(() => {
-        router.replace('/auth/login')
-      }, 0)
+      router.replace('/auth/login')
       return
     }
 
     // Calculate target route
     const targetRoute = roleMeta?.defaultRoute || getDefaultRouteForRole(userProfile.role)
     
-    // CRITICAL: Set cache IMMEDIATELY and synchronously before redirect
-    if (typeof window !== 'undefined') {
+    // BEFORE router.replace() - set cache IMMEDIATELY
+    if (targetRoute && typeof window !== 'undefined') {
       try {
         sessionStorage.setItem('echoshop_route_cache', JSON.stringify({
           route: targetRoute,
           timestamp: Date.now(),
         }))
-        // Force synchronous write verification
-        sessionStorage.getItem('echoshop_route_cache') // Verify write
-      } catch (error) {
-        console.warn('[DashboardPage] Failed to cache route:', error)
+      } catch (e) {
+        // Ignore cache errors
       }
     }
 
+    // NOW redirect
     redirectedRef.current = true
-    redirectTimeoutRef.current = setTimeout(() => {
-      router.replace(targetRoute)
-    }, 0)
+    router.replace(targetRoute)
   }, [loading, userProfile?.role, roleMeta, router])
 
   // Return null immediately - no skeleton, no spinner
