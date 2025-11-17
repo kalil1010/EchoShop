@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, {
   createContext,
@@ -1117,6 +1117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Use ref to track if initialization has been started to prevent multiple runs
   const initializationStartedRef = useRef(false)
+  const initializationInProgressRef = useRef(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -1126,44 +1127,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetProfileState()
       setLoading(false)
       initializationStartedRef.current = false
+      initializationInProgressRef.current = false
       return
     }
 
     // CRITICAL: Prevent effect from running multiple times
-    if (initializationStartedRef.current) {
-      console.debug('[AuthContext] Initialization already started, skipping effect re-run')
+    // Check both started AND in-progress to prevent race conditions
+    if (initializationStartedRef.current || initializationInProgressRef.current) {
+      console.debug('[AuthContext] Initialization already started or in progress, skipping effect re-run')
       return
     }
 
     let isMounted = true
-    let isInitializing = false // Guard to prevent multiple simultaneous initializations
 
     const primeSession = async () => {
-      // CRITICAL: Prevent multiple simultaneous initializations
-      if (isInitializing) {
+      // CRITICAL: Prevent multiple simultaneous initializations with double-check
+      if (initializationInProgressRef.current) {
         console.debug('[AuthContext] Session initialization already in progress, skipping...')
         return
       }
       
-      isInitializing = true
+      initializationInProgressRef.current = true
       initializationStartedRef.current = true
       console.log('[AuthContext] Starting session initialization')
-      setLoading(true)
       
-      // CRITICAL FIX: Check cache FIRST before Supabase calls
-      // Use cache as fallback when Supabase fails, not verification of success
+      // CRITICAL FIX: Check cache FIRST and restore immediately
+      // This enables instant UI rendering on refresh
       let cachedData: SessionCacheData | null = null
-      let isCacheRestoration = false
+      let hasCachedData = false
       if (typeof window !== 'undefined') {
         cachedData = getSessionCache()
         if (cachedData) {
-          isCacheRestoration = true
-          console.debug('[AuthContext] Found session cache, will use as fallback if Supabase fails')
+          hasCachedData = true
+          console.debug('[AuthContext] Found valid session cache, restoring immediately')
           // Hydrate from cache immediately for instant UI
           setUser(cachedData.user)
           setUserProfile(cachedData.profile)
-          // Don't set loading to false yet - verify with Supabase in background
+          setLoading(false) // CRITICAL: Set loading to false immediately with cache
+          // Continue in background to verify with Supabase
+        } else {
+          // No cache - show loading state
+          setLoading(true)
         }
+      } else {
+        setLoading(true)
       }
       try {
         // Task A2: Try to load role from localStorage for faster hydration
@@ -1172,11 +1179,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.debug('[AuthContext] Found cached role in localStorage:', cachedRole.role)
         }
 
-        // First, try to get session from storage (this reads from localStorage)
-        // Add a small delay to ensure localStorage is accessible after page navigation
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        // CRITICAL FIX: Add timeout to prevent hanging on getSession()
+        // If Supabase hangs, we need to fall back to cache or fail gracefully
+        const SESSION_TIMEOUT_MS = 5000 // 5 second timeout
+        let timeoutId: NodeJS.Timeout | null = null
         
-        const { data, error: sessionError } = await supabase.auth.getSession()
+        const sessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('SESSION_TIMEOUT'))
+          }, SESSION_TIMEOUT_MS)
+        })
+        
+        let sessionResult: { data: { session: Session | null }, error: Error | null }
+        try {
+          const result = await Promise.race([sessionPromise, timeoutPromise])
+          if (timeoutId) clearTimeout(timeoutId)
+          sessionResult = result as typeof sessionResult
+        } catch (timeoutError) {
+          if (timeoutId) clearTimeout(timeoutId)
+          if (timeoutError instanceof Error && timeoutError.message === 'SESSION_TIMEOUT') {
+            console.warn('[AuthContext] getSession() timed out after 5s')
+            // If we have cache, use it; otherwise, fail gracefully
+            if (hasCachedData && cachedData) {
+              console.debug('[AuthContext] Using cache after session timeout')
+              // Cache already loaded above, just sync to server in background
+              if (isMounted) {
+                void syncServerSession('SIGNED_IN', null, cachedData.profile)
+              }
+              return
+            }
+            // No cache - fail gracefully by clearing state
+            throw timeoutError
+          }
+          throw timeoutError
+        }
+        
+        const { data, error: sessionError } = sessionResult
         if (sessionError) {
           const message = typeof sessionError.message === 'string' ? sessionError.message : ''
           const code = typeof (sessionError as { code?: string }).code === 'string' 
@@ -1191,22 +1230,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             message.includes('refresh_token_not_found')
           ) {
             // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
-            if (cachedData) {
+            if (hasCachedData && cachedData) {
               console.debug('[AuthContext] Supabase session failed, but cache exists - using cache as fallback')
-              // Cache already hydrated user and profile above
+              // Cache already hydrated user and profile above, loading already set to false
               // Try to get session in background, but don't block
               supabase.auth.getSession()
                 .then(({ data }) => {
                   if (data?.session && isMounted) {
                     setSession(data.session)
+                    void syncServerSession('SIGNED_IN', data.session, cachedData.profile)
                   }
                 })
                 .catch(() => {
                   // Session retrieval failed - use cache without session
                   console.debug('[AuthContext] Using cache without session - will restore on next interaction')
                 })
-              setLoading(false)
-              isInitializing = false
               return
             }
             
@@ -1235,11 +1273,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           
           // For other errors, if cache exists, use it as fallback
-          if (cachedData) {
+          if (hasCachedData && cachedData) {
             console.debug('[AuthContext] Supabase session error, but cache exists - using cache as fallback')
-            // Cache already hydrated state above
-            setLoading(false)
-            isInitializing = false
+            // Cache already hydrated state above, loading already set to false
             return
           }
           
@@ -1337,11 +1373,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
-        if (cachedData && isMounted) {
+        if (hasCachedData && cachedData && isMounted) {
           console.debug('[AuthContext] Supabase initialization failed, but cache exists - using cache as fallback')
-          // Cache already hydrated state above
-          setLoading(false)
-          isInitializing = false
+          // Cache already hydrated state above, loading already set to false
           return
         }
         
@@ -1356,14 +1390,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } finally {
         if (isMounted) {
-          // Always set loading to false, even if there were errors
-          // This ensures the UI doesn't get stuck in loading state
-          setLoading(false)
-          isInitializing = false // Reset guard
+          // CRITICAL: Only set loading to false if we don't have cached data
+          // If we have cache, loading was already set to false above
+          if (!hasCachedData) {
+            setLoading(false)
+          }
+          initializationInProgressRef.current = false // Reset guard
           console.log('[AuthContext] Session initialization complete', {
             hasUser: Boolean(user),
             hasSession: Boolean(session),
             hasProfile: Boolean(userProfile),
+            usedCache: hasCachedData,
           })
         }
       }
@@ -1376,7 +1413,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // CRITICAL: Ignore INITIAL_SESSION events during initialization to prevent loops
       // INITIAL_SESSION is fired when Supabase detects an existing session, but we're already handling that in primeSession
-      if (event === 'INITIAL_SESSION' && isInitializing) {
+      if (event === 'INITIAL_SESSION' && initializationInProgressRef.current) {
         console.debug('[AuthContext] Ignoring INITIAL_SESSION during initialization')
         return
       }
@@ -1466,7 +1503,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false
-      initializationStartedRef.current = false // Reset on cleanup
+      // DON'T reset initializationStartedRef on cleanup - it should persist
+      // Only reset on unmount of the entire provider
       listener.subscription.unsubscribe()
     }
   }, [supabase, getSessionCache, setSessionCache]) // Include cache functions

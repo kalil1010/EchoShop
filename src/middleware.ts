@@ -336,22 +336,22 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next()
     }
     
-    // Handle stale cookies (cookies exist but session is invalid)
+    // CRITICAL FIX: Handle stale cookies (cookies exist but session is invalid)
     // This happens when:
     // 1. Refresh token is invalid/expired (cookies exist but session is invalid)
-    // 2. Session restoration from localStorage hasn't completed yet (timing issue)
-    // 3. Session is being restored after login (cookies set but not yet validated)
-    // CRITICAL FIX: Always allow through when cookies exist, even if session fails
+    // 2. Session restoration from sessionStorage cache hasn't completed yet (timing issue)
+    // 3. User just refreshed the page and session is being restored
+    // ALWAYS allow through when cookies exist, even if middleware can't validate session
     // This gives AuthContext time to restore from sessionStorage cache before
     // making redirect decisions. The client-side will handle validation and cleanup.
     if (hasStaleCookies) {
       // For page routes, always allow through for client-side session restoration
       // The client-side AuthContext will:
-      // - Check sessionStorage cache FIRST (before Supabase)
-      // - Restore session from cache if available
-      // - Validate the session server-side in background
-      // - Clear stale cookies and redirect to login if truly invalid
-      // This prevents blocking legitimate users during session restoration
+      // - Check sessionStorage cache FIRST (instant restoration on refresh)
+      // - Restore session from cache if valid (TTL < 5 minutes)
+      // - Validate the session with Supabase in background (with timeout)
+      // - Clear stale cookies and redirect to login only if truly invalid
+      // This prevents the infinite loading bug where middleware blocks valid users
       console.debug('[middleware] Stale cookies detected, allowing through for client-side recovery', { pathname })
       return NextResponse.next()
     }

@@ -38,17 +38,20 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   }, [user, session, loading])
   
   // CRITICAL FIX: Check cache FIRST on mount to enable optimistic rendering
+  // This prevents the infinite loading state on refresh
   useEffect(() => {
     if (cacheCheckedRef.current || typeof window === 'undefined') return
     cacheCheckedRef.current = true
     
     try {
-      // Check session cache for user data
+      // Check session cache for user data (TTL: 5 minutes)
       const cached = sessionStorage.getItem('echoshop_session_cache')
       if (cached) {
         const data = JSON.parse(cached)
-        if (data.user && data.timestamp && Date.now() - data.timestamp < 300000) {
-          // Cache shows user exists - enable optimistic rendering
+        // Validate cache structure and TTL
+        if (data.version === 1 && data.user && data.timestamp && Date.now() - data.timestamp < 300000) {
+          // Cache shows user exists - enable optimistic rendering immediately
+          // This prevents the page from showing loading state on refresh
           console.debug('[useRequireAuth] Cache shows user, enabling optimistic rendering')
           setOptimisticUser(data.user)
           setOptimisticLoading(false)
@@ -56,13 +59,14 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
         }
       }
       
-      // Check localStorage for auth tokens
+      // Check localStorage for auth tokens (backup check)
       const hasAuthStorage = Object.keys(localStorage).some(key => 
         key.includes('supabase.auth') || key.includes('sb-')
       )
       
       if (hasAuthStorage) {
         // Auth storage exists - user likely authenticated, just waiting for restoration
+        // Show loading state briefly while AuthContext restores session
         console.debug('[useRequireAuth] Auth storage found, waiting for restoration')
         setOptimisticLoading(true)
       } else {
@@ -70,7 +74,7 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
         setOptimisticLoading(false)
       }
     } catch {
-      // Ignore cache errors
+      // Ignore cache errors - fallback to auth context loading state
       setOptimisticLoading(loading)
     }
   }, [loading])
