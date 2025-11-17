@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { normaliseRole } from '@/lib/roles'
+import { VendorHealthBadge } from './VendorHealthBadge'
 import type { OwnerUserRecord } from './types'
 import type { UserRole } from '@/types/user'
+import type { VendorHealthStatus } from '@/lib/vendorHealthCalculation'
 
 type RoleFilter = 'all' | 'user' | 'vendor' | 'owner'
 
@@ -40,6 +42,12 @@ const resolveManagedRole = (value: string | null | undefined): ManagedRole => {
   return resolved === 'admin' ? 'owner' : resolved
 }
 
+interface VendorHealthData {
+  vendor_id: string
+  overall_score: number
+  status: VendorHealthStatus
+}
+
 export default function UserManagement({
   heading = 'User management',
   description = 'Review accounts and adjust their platform roles.',
@@ -48,10 +56,13 @@ export default function UserManagement({
 }: UserManagementProps) {
   const { toast } = useToast()
   const [users, setUsers] = useState<OwnerUserRecord[]>([])
+  const [healthScores, setHealthScores] = useState<Record<string, VendorHealthData>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'name' | 'health_score'>('name')
+  const [filterStatus, setFilterStatus] = useState<VendorHealthStatus | ''>('')
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -72,6 +83,36 @@ export default function UserManagement({
       const payload = await response.json()
       const list: OwnerUserRecord[] = Array.isArray(payload?.users) ? payload.users : []
       setUsers(list)
+
+      // Fetch health scores for vendors
+      if (roleFilter === 'vendor' || roleFilter === 'all') {
+        const vendorIds = list.filter(u => resolveManagedRole(u.role) === 'vendor').map(u => u.id)
+        if (vendorIds.length > 0) {
+          try {
+            const healthPromises = vendorIds.map(async (id) => {
+              const healthResponse = await fetch(`/api/admin/vendor-health/${id}`, {
+                credentials: 'include',
+              })
+              if (healthResponse.ok) {
+                const healthData = await healthResponse.json()
+                return healthData ? { vendor_id: id, ...healthData } : null
+              }
+              return null
+            })
+            const healthResults = await Promise.all(healthPromises)
+            const healthMap: Record<string, VendorHealthData> = {}
+            healthResults.forEach((result) => {
+              if (result) {
+                healthMap[result.vendor_id] = result
+              }
+            })
+            setHealthScores(healthMap)
+          } catch (err) {
+            console.error('Failed to fetch health scores:', err)
+            // Don't fail the whole request if health scores fail
+          }
+        }
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load users.')
     } finally {
@@ -84,13 +125,43 @@ export default function UserManagement({
   }, [fetchUsers])
 
   const displayedUsers = useMemo(() => {
-    if (!searchTerm) return users
-    const query = searchTerm.toLowerCase()
-    return users.filter((user) => {
-      const candidate = `${user.displayName ?? ''} ${user.email ?? ''} ${user.vendorBusinessName ?? ''}`.toLowerCase()
-      return candidate.includes(query)
-    })
-  }, [users, searchTerm])
+    let filtered = users
+
+    // Filter by search term
+    if (searchTerm) {
+      const query = searchTerm.toLowerCase()
+      filtered = filtered.filter((user) => {
+        const candidate = `${user.displayName ?? ''} ${user.email ?? ''} ${user.vendorBusinessName ?? ''}`.toLowerCase()
+        return candidate.includes(query)
+      })
+    }
+
+    // Filter by health status (for vendors only)
+    if (filterStatus && (roleFilter === 'vendor' || roleFilter === 'all')) {
+      filtered = filtered.filter((user) => {
+        if (resolveManagedRole(user.role) !== 'vendor') return true
+        const health = healthScores[user.id]
+        return health?.status === filterStatus
+      })
+    }
+
+    // Sort
+    if (sortBy === 'health_score' && (roleFilter === 'vendor' || roleFilter === 'all')) {
+      filtered = [...filtered].sort((a, b) => {
+        const healthA = healthScores[a.id]?.overall_score ?? 0
+        const healthB = healthScores[b.id]?.overall_score ?? 0
+        return healthB - healthA // Descending
+      })
+    } else {
+      filtered = [...filtered].sort((a, b) => {
+        const nameA = (a.displayName ?? a.email ?? '').toLowerCase()
+        const nameB = (b.displayName ?? b.email ?? '').toLowerCase()
+        return nameA.localeCompare(nameB)
+      })
+    }
+
+    return filtered
+  }, [users, searchTerm, sortBy, filterStatus, healthScores, roleFilter])
 
   const handleRoleChange = async (user: OwnerUserRecord, nextRole: ManagedRole) => {
     if (user.id === updatingUserId || resolveManagedRole(user.role) === nextRole) {
@@ -153,6 +224,29 @@ export default function UserManagement({
             className="md:max-w-sm"
           />
           <div className="flex gap-2">
+            {(roleFilter === 'vendor' || roleFilter === 'all') && (
+              <>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'health_score')}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                >
+                  <option value="name">Sort by Name</option>
+                  <option value="health_score">Sort by Health Score</option>
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as VendorHealthStatus | '')}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                >
+                  <option value="">All Vendors</option>
+                  <option value="excellent">Excellent</option>
+                  <option value="good">Good</option>
+                  <option value="warning">At Risk</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </>
+            )}
             <Button variant="outline" onClick={fetchUsers} disabled={loading}>
               Refresh
             </Button>
@@ -182,7 +276,7 @@ export default function UserManagement({
               return (
                 <div
                   key={user.id}
-                  className="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-[2fr,1fr,auto]"
+                  className="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-[2fr,1fr,auto,auto]"
                 >
                   <div>
                     <p className="text-sm font-medium text-slate-800">
@@ -211,6 +305,16 @@ export default function UserManagement({
                       {user.isSuperAdmin ? ' • Super admin' : ''}
                     </p>
                   </div>
+                  {role === 'vendor' && healthScores[user.id] && (
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Health</p>
+                      <VendorHealthBadge
+                        score={healthScores[user.id].overall_score}
+                        status={healthScores[user.id].status}
+                        showLabel={false}
+                      />
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <label className="sr-only" htmlFor={`role-${user.id}`}>
                       Change role

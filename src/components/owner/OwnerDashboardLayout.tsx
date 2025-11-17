@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShieldCheck, Inbox, BarChart3, Users, LogOut, Shield, MessageSquare } from 'lucide-react'
+import { ShieldCheck, Inbox, BarChart3, Users, LogOut, Shield, MessageSquare, Activity, DollarSign, Flag, Bell, FileText, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,12 @@ import SystemAnalytics from './SystemAnalytics'
 import OwnerInvitations from './OwnerInvitations'
 import OwnerSecuritySettings from './OwnerSecuritySettings'
 import OwnerSupportTickets from './OwnerSupportTickets'
+import { VendorHealthScoring } from './VendorHealthScoring'
+import { PayoutManagement } from './PayoutManagement'
+import { ActivityFeed } from './ActivityFeed'
+import { AuditLogViewer } from './AuditLogViewer'
+import { FeatureFlagsPanel } from './FeatureFlagsPanel'
+import { AlertCenter } from './AlertCenter'
 import type { OwnerAnalyticsSnapshot } from './types'
 
 type OwnerTab =
@@ -27,16 +33,26 @@ type OwnerTab =
   | 'invitations'
   | 'analytics'
   | 'security'
+  | 'health'
+  | 'payouts'
+  | 'activity'
+  | 'audit'
+  | 'features'
 
-const TABS: Array<{ key: OwnerTab; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'users', label: 'Users' },
-  { key: 'vendors', label: 'Vendors' },
-  { key: 'requests', label: 'Vendor Requests' },
-  { key: 'support', label: 'Support Tickets' },
-  { key: 'invitations', label: 'Invitations' },
-  { key: 'analytics', label: 'Analytics' },
-  { key: 'security', label: 'Security' },
+const TABS: Array<{ key: OwnerTab; label: string; icon: typeof ShieldCheck }> = [
+  { key: 'overview', label: 'Overview', icon: ShieldCheck },
+  { key: 'users', label: 'Users', icon: Users },
+  { key: 'vendors', label: 'Vendors', icon: Users },
+  { key: 'requests', label: 'Vendor Requests', icon: Inbox },
+  { key: 'support', label: 'Support Tickets', icon: MessageSquare },
+  { key: 'invitations', label: 'Invitations', icon: Shield },
+  { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { key: 'health', label: 'Vendor Health', icon: ShieldCheck },
+  { key: 'payouts', label: 'Payouts', icon: DollarSign },
+  { key: 'activity', label: 'Activity Feed', icon: Activity },
+  { key: 'audit', label: 'Audit Log', icon: FileText },
+  { key: 'features', label: 'Feature Flags', icon: Flag },
+  { key: 'security', label: 'Security', icon: Shield },
 ]
 
 type OwnerAnalyticsResponse = {
@@ -188,6 +204,16 @@ export default function OwnerDashboardLayout({
         return 'Invite trusted teammates to help operate the platform.'
       case 'analytics':
         return 'Dive deeper into engagement trends and recent activity.'
+      case 'health':
+        return 'Monitor vendor health scores and trustworthiness metrics.'
+      case 'payouts':
+        return 'Manage vendor payouts, holds, and financial compliance.'
+      case 'activity':
+        return 'Real-time monitoring of vendor activities and actions.'
+      case 'audit':
+        return 'GDPR-compliant audit log of all admin actions.'
+      case 'features':
+        return 'Control features without code changes using feature flags.'
       default:
         return ''
     }
@@ -266,6 +292,16 @@ export default function OwnerDashboardLayout({
             onRetry={fetchAnalytics}
           />
         )
+      case 'health':
+        return <VendorHealthScoring />
+      case 'payouts':
+        return <PayoutManagement />
+      case 'activity':
+        return <ActivityFeed />
+      case 'audit':
+        return <AuditLogViewer />
+      case 'features':
+        return <FeatureFlagsPanel />
       case 'security':
         return <OwnerSecuritySettings />
       default:
@@ -324,30 +360,38 @@ export default function OwnerDashboardLayout({
               <p className="text-sm text-slate-600">{headerDescription}</p>
             ) : null}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="flex items-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            {isLoggingOut ? 'Logging out...' : 'Logout'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <AlertCenter />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
+            </Button>
+          </div>
         </div>
       </header>
 
       <div className="flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <Button
-            key={tab.key}
-            variant={activeTab === tab.key ? 'default' : 'outline'}
-            onClick={() => setActiveTab(tab.key)}
-            data-tour={`owner-tab-${tab.key}`}
-          >
-            {tab.label}
-          </Button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <Button
+              key={tab.key}
+              variant={activeTab === tab.key ? 'default' : 'outline'}
+              onClick={() => setActiveTab(tab.key)}
+              data-tour={`owner-tab-${tab.key}`}
+              className="flex items-center gap-2"
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </Button>
+          )
+        })}
       </div>
 
       <section className={cn('space-y-6', activeTab === 'overview' ? 'mt-4' : 'mt-2')}>
