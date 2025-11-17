@@ -413,6 +413,8 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
                     className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
                   >
                     <input
+                      id={`category-${category}`}
+                      name={`category-${category}`}
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleCategory(category)}
@@ -434,6 +436,7 @@ export default function VendorApplicationForm({ onSubmitted, onCancel }: VendorA
             </label>
             <Textarea
               id="vendor-notes"
+              name="notes"
               value={notes}
               onChange={(event) => setNotes(event.target.value.slice(0, MAX_NOTES_LENGTH))}
               rows={4}

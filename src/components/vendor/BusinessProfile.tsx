@@ -275,9 +275,11 @@ export default function BusinessProfile() {
               </label>
               <Input
                 id="vendor-business-name"
+                name="businessName"
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
                 placeholder="Echo Shop Boutique"
+                autoComplete="organization"
                 required
               />
             </div>
@@ -287,10 +289,12 @@ export default function BusinessProfile() {
               </label>
               <Input
                 id="vendor-contact-email"
+                name="contactEmail"
                 type="email"
                 value={contactEmail}
                 onChange={(event) => setContactEmail(event.target.value)}
                 placeholder="hello@yourbrand.com"
+                autoComplete="email"
                 required
               />
             </div>
@@ -303,9 +307,12 @@ export default function BusinessProfile() {
               </label>
               <Input
                 id="vendor-phone"
+                name="phone"
+                type="tel"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 placeholder="+20 101 234 5678"
+                autoComplete="tel"
               />
             </div>
             <div className="space-y-2">
@@ -314,9 +321,12 @@ export default function BusinessProfile() {
               </label>
               <Input
                 id="vendor-website"
+                name="website"
+                type="url"
                 value={website}
                 onChange={(event) => setWebsite(event.target.value)}
                 placeholder="https://yourbrand.com"
+                autoComplete="url"
               />
             </div>
           </div>
@@ -327,10 +337,12 @@ export default function BusinessProfile() {
             </label>
             <Textarea
               id="vendor-address"
+              name="businessAddress"
               value={businessAddress}
               onChange={(event) => setBusinessAddress(event.target.value)}
               placeholder="Street, City, Country"
               rows={3}
+              autoComplete="street-address"
             />
           </div>
 
@@ -340,6 +352,7 @@ export default function BusinessProfile() {
             </label>
             <Textarea
               id="vendor-about"
+              name="aboutText"
               value={aboutText}
               onChange={(event) => setAboutText(event.target.value)}
               placeholder="Tell customers about your brand, mission, and what makes you unique..."
@@ -377,6 +390,8 @@ export default function BusinessProfile() {
             )}
             <input
               ref={logoInputRef}
+              id="logo-upload"
+              name="logo"
               type="file"
               accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleLogoUpload}
@@ -417,6 +432,8 @@ export default function BusinessProfile() {
             )}
             <input
               ref={bannerInputRef}
+              id="banner-upload"
+              name="banner"
               type="file"
               accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleBannerUpload}
@@ -462,6 +479,8 @@ export default function BusinessProfile() {
             </label>
             <Input
               id="social-instagram"
+              name="socialInstagram"
+              type="url"
               value={socialInstagram}
               onChange={(event) => setSocialInstagram(event.target.value)}
               placeholder="https://instagram.com/yourbrand or @yourbrand"
@@ -475,6 +494,8 @@ export default function BusinessProfile() {
             </label>
             <Input
               id="social-facebook"
+              name="socialFacebook"
+              type="url"
               value={socialFacebook}
               onChange={(event) => setSocialFacebook(event.target.value)}
               placeholder="https://facebook.com/yourbrand"
@@ -488,6 +509,8 @@ export default function BusinessProfile() {
             </label>
             <Input
               id="social-twitter"
+              name="socialTwitter"
+              type="url"
               value={socialTwitter}
               onChange={(event) => setSocialTwitter(event.target.value)}
               placeholder="https://twitter.com/yourbrand or @yourbrand"
