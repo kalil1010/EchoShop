@@ -90,6 +90,16 @@ const nextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      // Prevent browser caching of dashboard pages
+      {
+        source: '/dashboard/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
       // CDN caching headers for static images
       {
         source: '/api/image-generator',

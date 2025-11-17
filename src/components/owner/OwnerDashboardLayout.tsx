@@ -212,17 +212,27 @@ export default function OwnerDashboardLayout({
     }
   }, [])
 
-  // CRITICAL: Hydrate from session cache on mount
+  // CRITICAL: Hydrate from session cache AND route cache on mount
   useEffect(() => {
     setIsMounted(true)
     
-    // Try to hydrate from session cache immediately
+    // Check for cached route first - if exists, we can skip skeleton
     if (typeof window !== 'undefined') {
       try {
+        const cachedRoute = sessionStorage.getItem('echoshop_route_cache')
+        if (cachedRoute) {
+          const routeData = JSON.parse(cachedRoute)
+          if (routeData.timestamp && Date.now() - routeData.timestamp < 30000) {
+            // Route cache exists and is fresh - mark as hydrated immediately
+            setHasHydrated(true)
+            return
+          }
+        }
+        
+        // Also check session cache
         const cached = sessionStorage.getItem('echoshop_session_cache')
         if (cached) {
           const data = JSON.parse(cached)
-          // If cache is fresh and we have roleMeta, we're already hydrated
           if (data.timestamp && Date.now() - data.timestamp < 300000 && roleMeta) {
             setHasHydrated(true)
             return
@@ -305,15 +315,21 @@ export default function OwnerDashboardLayout({
     [],
   )
 
+  // Check for cached route FIRST - if exists, skip skeleton entirely
+  const hasValidCachedRoute = Boolean(
+    typeof window !== 'undefined' &&
+    sessionStorage.getItem('echoshop_route_cache')
+  )
+
   // Show skeleton ONLY if:
-  // 1. Not mounted yet (first render)
-  // 2. Auth is loading AND we haven't hydrated from cache
-  // 3. External loading is requested
-  // 4. Redirecting
+  // 1. Initial mount when auth is loading AND no cache exists
+  // 2. External loading is requested
+  // 3. Redirecting
   // This prevents skeleton on tab return/refresh when cache exists
-  const shouldShowSkeleton = 
-    !isMounted || 
-    (authLoading && !hasHydrated && !roleMeta) ||
+  const shouldShowSkeleton =
+    // Only show on initial mount when auth is loading AND no cache exists
+    (!isMounted && authLoading && !hasValidCachedRoute) ||
+    // External loading/redirecting flags
     externalLoading ||
     externalRedirecting
 

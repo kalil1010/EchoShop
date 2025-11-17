@@ -42,18 +42,18 @@ export default function DashboardPage() {
   useEffect(() => {
     if (redirectedRef.current) return
 
-    // CRITICAL: Check sessionStorage cache FIRST for instant redirect
+    // CRITICAL: Check cache FIRST and redirect IMMEDIATELY if exists
     const cachedRoute = getCachedRoute()
-    if (cachedRoute && !loading) {
+    if (cachedRoute) {
       redirectedRef.current = true
-      // Use replace with a tiny delay to ensure smooth transition
+      // Redirect immediately, don't wait for auth loading
       redirectTimeoutRef.current = setTimeout(() => {
         router.replace(cachedRoute)
       }, 0)
       return
     }
 
-    // If still loading, wait
+    // Only wait for auth if no cache exists
     if (loading) return
 
     // No user profile means not authenticated
@@ -68,15 +68,17 @@ export default function DashboardPage() {
     // Calculate target route
     const targetRoute = roleMeta?.defaultRoute || getDefaultRouteForRole(userProfile.role)
     
-    // Cache the route for next time
+    // CRITICAL: Set cache IMMEDIATELY and synchronously before redirect
     if (typeof window !== 'undefined') {
       try {
         sessionStorage.setItem('echoshop_route_cache', JSON.stringify({
           route: targetRoute,
           timestamp: Date.now(),
         }))
-      } catch {
-        // Ignore storage errors
+        // Force synchronous write verification
+        sessionStorage.getItem('echoshop_route_cache') // Verify write
+      } catch (error) {
+        console.warn('[DashboardPage] Failed to cache route:', error)
       }
     }
 
