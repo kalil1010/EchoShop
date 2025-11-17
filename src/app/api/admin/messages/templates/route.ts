@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { template_name, subject, body, template_type, variables } = body
+    const bodyData = await request.json()
+    const { template_name, subject, body, template_type, variables } = bodyData
 
     if (!template_name || !subject || !body || !template_type) {
       return NextResponse.json(

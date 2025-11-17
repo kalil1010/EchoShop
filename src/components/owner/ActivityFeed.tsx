@@ -86,26 +86,35 @@ export function ActivityFeed() {
 
   // Subscribe to real-time updates
   useEffect(() => {
-    const channel = supabase
-      .channel('vendor_activity_updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'vendor_activity_log',
-        },
-        () => {
-          // Refresh activities when new ones are added
-          if (page === 1) {
-            fetchActivities()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    
+    try {
+      channel = supabase
+        .channel('vendor_activity_updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'vendor_activity_log',
+          },
+          () => {
+            // Refresh activities when new ones are added
+            if (page === 1) {
+              fetchActivities()
+            }
           }
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
+    } catch (error) {
+      // Supabase may not be initialized during build time
+      console.warn('Supabase real-time subscription failed:', error)
+    }
 
     return () => {
-      channel.unsubscribe()
+      if (channel) {
+        channel.unsubscribe()
+      }
     }
   }, [page, fetchActivities])
 

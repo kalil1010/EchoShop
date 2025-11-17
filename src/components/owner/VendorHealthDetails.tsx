@@ -40,24 +40,33 @@ export function VendorHealthDetails({ vendorId }: VendorHealthDetailsProps) {
     fetchHealth()
     
     // Subscribe to real-time updates
-    const subscription = supabase
-      .channel(`vendor_health_${vendorId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'vendor_health_scores',
-          filter: `vendor_id=eq.${vendorId}`,
-        },
-        () => {
-          fetchHealth()
-        }
-      )
-      .subscribe()
+    let subscription: ReturnType<typeof supabase.channel> | null = null
+    
+    try {
+      subscription = supabase
+        .channel(`vendor_health_${vendorId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'vendor_health_scores',
+            filter: `vendor_id=eq.${vendorId}`,
+          },
+          () => {
+            fetchHealth()
+          }
+        )
+        .subscribe()
+    } catch (error) {
+      // Supabase may not be initialized during build time
+      console.warn('Supabase real-time subscription failed:', error)
+    }
 
     return () => {
-      subscription.unsubscribe()
+      if (subscription) {
+        subscription.unsubscribe()
+      }
     }
   }, [vendorId])
 

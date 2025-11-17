@@ -9,6 +9,9 @@ export const metadata = {
   description: 'Secure access for verified Echo Shop owners.',
 }
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function DowntownEntryPage() {
   try {
     const supabase = createRouteClient()

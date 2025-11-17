@@ -11,6 +11,9 @@ export const metadata = {
   description: 'Sign in to manage your Echo Shop marketplace storefront.',
 }
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function VendorLoginPage() {
   const supabase = createRouteClient()
   const {

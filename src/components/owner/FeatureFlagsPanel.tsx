@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { FeatureFlagEditor } from './FeatureFlagEditor'
-import { Toggle, Plus, Calendar, Globe, User } from 'lucide-react'
+import { Power, Plus, Calendar, Globe, User } from 'lucide-react'
 
 interface FeatureFlag {
   id: string
@@ -197,7 +197,7 @@ export function FeatureFlagsPanel() {
                         onClick={() => handleToggle(flag)}
                         disabled={togglingId === flag.id}
                       >
-                        <Toggle className="h-4 w-4 mr-1" />
+                        <Power className="h-4 w-4 mr-1" />
                         {togglingId === flag.id ? 'Toggling...' : flag.is_enabled ? 'Disable' : 'Enable'}
                       </Button>
                     </div>
