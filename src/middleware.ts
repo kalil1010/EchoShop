@@ -86,18 +86,22 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         const errorCode = (sessionError as { code?: string })?.code
         const errorMessage = sessionError.message || String(sessionError)
         
-        // Refresh token errors indicate the session is invalid/expired
+        // CRITICAL FIX: When cookies exist but session fails, return null to allow
+        // client-side recovery. The middleware will allow through page routes,
+        // giving AuthContext time to restore from localStorage/sessionStorage cache.
+        // Don't immediately reject - let client-side handle session restoration.
         if (errorCode === 'refresh_token_not_found' || 
             errorMessage.includes('Refresh Token Not Found') ||
             errorMessage.includes('refresh_token_not_found')) {
-          // Session is invalid - cookies are stale
+          // Cookies exist but session invalid - return null to allow client-side recovery
+          // Middleware will detect hasStaleCookies and allow through
           return null
         }
       }
 
       // If getSession() fails but cookies exist, the session might be restoring
       // Return null to allow stale cookie handling below
-      // This allows client-side session restoration to proceed
+      // This allows client-side session restoration to proceed from cache
       return null
     } catch (sessionError: unknown) {
       // Supabase's internal session management (token refresh, session cleanup)
@@ -337,13 +341,18 @@ export async function middleware(req: NextRequest) {
     // 1. Refresh token is invalid/expired (cookies exist but session is invalid)
     // 2. Session restoration from localStorage hasn't completed yet (timing issue)
     // 3. Session is being restored after login (cookies set but not yet validated)
+    // CRITICAL FIX: Always allow through when cookies exist, even if session fails
+    // This gives AuthContext time to restore from sessionStorage cache before
+    // making redirect decisions. The client-side will handle validation and cleanup.
     if (hasStaleCookies) {
       // For page routes, always allow through for client-side session restoration
       // The client-side AuthContext will:
-      // - Restore session from localStorage if available
-      // - Validate the session server-side
+      // - Check sessionStorage cache FIRST (before Supabase)
+      // - Restore session from cache if available
+      // - Validate the session server-side in background
       // - Clear stale cookies and redirect to login if truly invalid
       // This prevents blocking legitimate users during session restoration
+      console.debug('[middleware] Stale cookies detected, allowing through for client-side recovery', { pathname })
       return NextResponse.next()
     }
     

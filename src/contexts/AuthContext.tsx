@@ -1145,36 +1145,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       
-      // Check if we already have valid state from cache
-      // This prevents re-initialization on refresh if cache is fresh
-      if (typeof window !== 'undefined') {
-        const cached = getSessionCache()
-        if (cached) {
-          console.debug('[AuthContext] Found session cache, verifying session validity')
-          // Verify session is still valid before skipping initialization
-          try {
-            const { data } = await supabase.auth.getSession()
-            if (data?.session?.user?.id === cached.user.uid) {
-              // Session is valid and matches cache - hydrate from cache
-              console.debug('[AuthContext] Session valid, hydrating from cache')
-              setUser(cached.user)
-              setUserProfile(cached.profile)
-              setSession(data.session)
-              setLoading(false)
-              isInitializing = false
-              return
-            }
-          } catch {
-            // Session check failed, continue with full initialization
-            console.debug('[AuthContext] Session verification failed, continuing with full initialization')
-          }
-        }
-      }
-      
       isInitializing = true
       initializationStartedRef.current = true
       console.log('[AuthContext] Starting session initialization')
       setLoading(true)
+      
+      // CRITICAL FIX: Check cache FIRST before Supabase calls
+      // Use cache as fallback when Supabase fails, not verification of success
+      let cachedData: SessionCacheData | null = null
+      if (typeof window !== 'undefined') {
+        cachedData = getSessionCache()
+        if (cachedData) {
+          console.debug('[AuthContext] Found session cache, will use as fallback if Supabase fails')
+          // Hydrate from cache immediately for instant UI
+          setUser(cachedData.user)
+          setUserProfile(cachedData.profile)
+          // Don't set loading to false yet - verify with Supabase in background
+        }
+      }
       try {
         // Task A2: Try to load role from localStorage for faster hydration
         const cachedRole = getRoleFromLocalStorage()
@@ -1200,7 +1188,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             code === 'refresh_token_not_found' ||
             message.includes('refresh_token_not_found')
           ) {
-            console.debug('[AuthContext] Refresh token invalid or expired, clearing session and cookies')
+            // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
+            if (cachedData) {
+              console.debug('[AuthContext] Supabase session failed, but cache exists - using cache as fallback')
+              // Cache already hydrated user and profile above
+              // Try to get session in background, but don't block
+              supabase.auth.getSession()
+                .then(({ data }) => {
+                  if (data?.session && isMounted) {
+                    setSession(data.session)
+                  }
+                })
+                .catch(() => {
+                  // Session retrieval failed - use cache without session
+                  console.debug('[AuthContext] Using cache without session - will restore on next interaction')
+                })
+              setLoading(false)
+              isInitializing = false
+              return
+            }
+            
+            // No cache - clear everything
+            console.debug('[AuthContext] Refresh token invalid or expired, no cache - clearing session and cookies')
             // Clear local session first
             try {
               await supabase.auth.signOut({ scope: 'local' })
@@ -1222,8 +1231,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return
           }
-          // Only log non-token errors as warnings
-          console.warn('[AuthContext] Session error:', sessionError)
+          
+          // For other errors, if cache exists, use it as fallback
+          if (cachedData) {
+            console.debug('[AuthContext] Supabase session error, but cache exists - using cache as fallback')
+            // Cache already hydrated state above
+            setLoading(false)
+            isInitializing = false
+            return
+          }
+          
+          // No cache and error - log and throw
+          console.warn('[AuthContext] Session error and no cache:', sessionError)
           throw sessionError
         }
         if (!isMounted) return
@@ -1315,6 +1334,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           resetProfileState()
         }
       } catch (error) {
+        // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
+        if (cachedData && isMounted) {
+          console.debug('[AuthContext] Supabase initialization failed, but cache exists - using cache as fallback')
+          // Cache already hydrated state above
+          setLoading(false)
+          isInitializing = false
+          return
+        }
+        
+        // No cache - clear everything
         console.warn('Failed to bootstrap Supabase session:', error)
         if (isMounted) {
           setUser(null)
