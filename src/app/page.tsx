@@ -127,22 +127,21 @@ export default function Home() {
       setEmergencyShow(false)
       return
     }
-    // Only show emergency content if we've been loading for a while
-    // and we don't have a user yet (if we have a user, profile might still be loading)
+    // IMPROVED: Show content faster - only wait 3 seconds instead of 8
+    // This prevents the "stuck loading" perception on page refresh
     const timer = window.setTimeout(() => {
       if (loading && !emergencyShow) {
-        // If we have a user but profile is still loading, that's okay - don't show warning
-        // Only show warning if we don't even have a user after 8 seconds
-        if (!user) {
-          console.debug('[Home] Auth loading taking longer than expected, showing content')
-          setEmergencyShow(true)
-        }
+        // Show content even if loading - auth will complete in background
+        console.debug('[Home] Showing content while auth completes in background')
+        setEmergencyShow(true)
       }
-    }, 8000)
+    }, 3000)
     return () => window.clearTimeout(timer)
   }, [loading, emergencyShow, user])
 
-  if (loading && !emergencyShow) {
+  // IMPROVED: Show skeleton only briefly, then show content
+  // This prevents the "content disappearing" issue
+  if (loading && !emergencyShow && !user && !userProfile) {
     return (
       <div className='container mx-auto px-4 py-16'>
         <div className='space-y-8 animate-pulse'>

@@ -12,7 +12,7 @@ import type { Post } from '@/types/post'
 type FeedType = 'following' | 'discover' | 'trending'
 
 export default function FeedPage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
   const [feedType, setFeedType] = useState<FeedType>('following')
   const [posts, setPosts] = useState<Post[]>([])
@@ -137,6 +137,18 @@ export default function FeedPage() {
     if (!loadingMore && hasMore) {
       fetchPosts(false)
     }
+  }
+
+  // IMPROVED: Show loading state while auth is completing
+  // Don't immediately show "sign in" message on refresh
+  if (authLoading && !user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </div>
+    )
   }
 
   if (!user) {

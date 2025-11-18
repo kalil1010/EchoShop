@@ -364,16 +364,11 @@ export async function middleware(req: NextRequest) {
         console.debug('[middleware] Stale cookies detected, allowing through for client-side recovery', { pathname })
       }
       
-      // Create response and clear stale cookies to prevent repeated detection
-      const response = NextResponse.next()
-      
-      // Clear all auth cookies to prevent stale cookie loop
-      // Client-side will restore from sessionStorage if valid, or redirect to login
-      for (const cookie of authCookies) {
-        response.cookies.set(cookie.name, '', { path: '/', maxAge: 0 })
-      }
-      
-      return response
+      // IMPROVEMENT: Don't clear cookies immediately - let client-side decide
+      // Clearing cookies here can interfere with ongoing session restoration
+      // Client-side will clear them if session is truly invalid
+      // This gives AuthContext more time to restore from cache
+      return NextResponse.next()
     }
     
     // Check if this is an obvious attack pattern (vulnerability scanning)

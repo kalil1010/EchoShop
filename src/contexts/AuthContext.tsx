@@ -1138,7 +1138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // CRITICAL FIX: Add timeout to prevent hanging on getSession()
         // If Supabase hangs, we need to fall back to cache or fail gracefully
-        const SESSION_TIMEOUT_MS = 10000 // 10 second timeout - faster failover
+        const SESSION_TIMEOUT_MS = 15000 // 15 second timeout - give more time for restoration
         let timeoutId: NodeJS.Timeout | null = null
         
         const sessionPromise = supabase.auth.getSession()
@@ -1156,28 +1156,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (timeoutError) {
           if (timeoutId) clearTimeout(timeoutId)
           if (timeoutError instanceof Error && timeoutError.message === 'SESSION_TIMEOUT') {
-            console.error('[AuthContext] getSession() timed out after 10s - likely corrupted cookies')
+            console.warn('[AuthContext] getSession() timed out after 15s')
             
-            // CRITICAL: Clear corrupted session data that's causing the hang
-            // This includes both Supabase storage and our caches
+            // IMPROVED: If we have valid cache, use it and continue without redirecting
+            // This prevents the "content disappearing" issue on slow connections
+            if (hasCachedData && cachedData) {
+              const cacheAge = Date.now() - cachedData.timestamp
+              // Use cache if it's reasonably fresh (< 5 minutes - matching TTL)
+              if (cacheAge < SESSION_CACHE_TTL) {
+                console.debug('[AuthContext] Using cache after timeout - session will be restored in background')
+                if (isMounted) {
+                  setUser(cachedData.user)
+                  setUserProfile(cachedData.profile)
+                  setLoading(false)
+                  
+                  // Try to restore session in background without blocking UI
+                  // This is non-blocking and won't cause redirect if it fails
+                  supabase.auth.getSession()
+                    .then(({ data, error }) => {
+                      if (data?.session && isMounted) {
+                        setSession(data.session)
+                        void syncServerSession('SIGNED_IN', data.session, cachedData.profile)
+                      } else if (error) {
+                        // Session truly invalid - clear corrupted data
+                        console.debug('[AuthContext] Background session restore failed, will prompt re-login on next action')
+                      }
+                    })
+                    .catch(() => {
+                      // Fail silently - user can continue with cached data
+                    })
+                }
+                return
+              }
+            }
+            
+            // No valid cache - clear corrupted data and show a user-friendly message
+            console.warn('[AuthContext] No valid cache after timeout, cleaning up')
             try {
               // Use Supabase's built-in signOut to clear local storage
               await supabase.auth.signOut({ scope: 'local' }).catch(() => {
                 // Ignore errors if signOut itself hangs
               })
-              
-              // Manually clear any remaining Supabase keys
-              if (typeof window !== 'undefined' && window.localStorage) {
-                const keysToRemove: string[] = []
-                for (let i = 0; i < window.localStorage.length; i++) {
-                  const key = window.localStorage.key(i)
-                  if (key && (key.includes('supabase') || key.includes('sb-') || key.includes('echoshop'))) {
-                    keysToRemove.push(key)
-                  }
-                }
-                keysToRemove.forEach(key => window.localStorage.removeItem(key))
-                console.log('[AuthContext] Cleared localStorage keys:', keysToRemove.length)
-              }
               
               // Clear our session cache
               clearSessionCache()
@@ -1186,41 +1205,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await syncServerSession('SIGNED_OUT', null).catch(() => {
                 // Ignore errors - cookies might already be cleared
               })
-              
-              console.log('[AuthContext] Cleared corrupted session data')
             } catch (cleanupError) {
               console.warn('[AuthContext] Error during session cleanup:', cleanupError)
             }
             
-            // If we have valid cache, try using it briefly
-            if (hasCachedData && cachedData) {
-              const cacheAge = Date.now() - cachedData.timestamp
-              // Only use cache if it's very fresh (< 1 minute)
-              if (cacheAge < 60000) {
-                console.debug('[AuthContext] Using fresh cache after timeout, will redirect to login shortly')
-                if (isMounted) {
-                  setUser(cachedData.user)
-                  setUserProfile(cachedData.profile)
-                  setLoading(false)
-                  // Redirect to login after 2 seconds to let user see their data
-                  setTimeout(() => {
-                    window.location.href = '/auth?timeout=true'
-                  }, 2000)
-                }
-                return
-              }
-            }
-            
-            // No cache or cache is stale - redirect to login
-            console.warn('[AuthContext] No valid cache, redirecting to login')
+            // Set a message for the user instead of immediately redirecting
             if (isMounted) {
               setLoading(false)
               setUser(null)
               setUserProfile(null)
               setSession(null)
               resetProfileState()
-              // Redirect to auth page with timeout indicator
-              window.location.href = '/auth?timeout=true&reason=session_corrupted'
+              
+              // Don't redirect immediately - let the page show an error message
+              // useRequireAuth hook will handle redirecting after a delay
             }
             return // Don't throw - gracefully degrade instead
           }

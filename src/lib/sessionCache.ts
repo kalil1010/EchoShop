@@ -3,7 +3,7 @@ import type { AuthUser, UserProfile, UserRole } from '@/types/user'
 const SESSION_CACHE_STORAGE_KEY = 'echoshop_session_cache'
 const SESSION_CACHE_BACKUP_KEY = 'echoshop_session_cache_backup'
 const SESSION_CACHE_VERSION = 1
-const SESSION_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const SESSION_CACHE_TTL = 10 * 60 * 1000 // 10 minutes - increased from 5 for better UX
 const SESSION_CACHE_BACKUP_TTL = 30 * 60 * 1000 // 30 minutes for backup copy
 
 export interface SessionCacheData {
