@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/toast'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { getDefaultRouteForRole, getPortalAccess, normaliseRole } from '@/lib/roles'
+import { readSessionCache } from '@/lib/sessionCache'
 
 export default function OwnerDashboardPage() {
   // ALL hooks must be called unconditionally before any returns (Rules of Hooks)
@@ -29,20 +30,12 @@ export default function OwnerDashboardPage() {
     if (typeof window === 'undefined') return
     
     // Check session cache for owner role
-    try {
-      const cached = sessionStorage.getItem('echoshop_session_cache')
-      if (cached) {
-        const data = JSON.parse(cached)
-        if (data.role === 'owner' && data.timestamp && Date.now() - data.timestamp < 300000) {
-          // Cache shows owner role - grant access immediately
-          console.debug('[owner-dashboard] Cache shows owner role, granting immediate access')
-          setHasAccess(true)
-          hasAccessRef.current = true
-          setIsLoading(false)
-        }
-      }
-    } catch {
-      // Ignore cache errors
+    const cached = readSessionCache()
+    if (cached?.role === 'owner') {
+      console.debug('[owner-dashboard] Cache shows owner role, granting immediate access')
+      setHasAccess(true)
+      hasAccessRef.current = true
+      setIsLoading(false)
     }
   }, [])
 

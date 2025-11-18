@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { readSessionCache } from '@/lib/sessionCache'
 
 interface UseRequireAuthOptions {
   redirectTo?: string
@@ -40,41 +41,33 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   // CRITICAL FIX: Check cache FIRST on mount to enable optimistic rendering
   // This prevents the infinite loading state on refresh
   useEffect(() => {
-    if (cacheCheckedRef.current || typeof window === 'undefined') return
+    if (cacheCheckedRef.current) return
     cacheCheckedRef.current = true
-    
+
+    const cached = readSessionCache()
+    if (cached) {
+      console.debug('[useRequireAuth] Cache shows user, enabling optimistic rendering')
+      setOptimisticUser(cached.user)
+      setOptimisticLoading(false)
+      return
+    }
+
+    if (typeof window === 'undefined') return
+
     try {
-      // Check session cache for user data (TTL: 5 minutes)
-      const cached = sessionStorage.getItem('echoshop_session_cache')
-      if (cached) {
-        const data = JSON.parse(cached)
-        // Validate cache structure and TTL
-        if (data.version === 1 && data.user && data.timestamp && Date.now() - data.timestamp < 300000) {
-          // Cache shows user exists - enable optimistic rendering immediately
-          // This prevents the page from showing loading state on refresh
-          console.debug('[useRequireAuth] Cache shows user, enabling optimistic rendering')
-          setOptimisticUser(data.user)
-          setOptimisticLoading(false)
-          return
-        }
-      }
-      
       // Check localStorage for auth tokens (backup check)
-      const hasAuthStorage = Object.keys(localStorage).some(key => 
-        key.includes('supabase.auth') || key.includes('sb-')
+      const hasAuthStorage = Object.keys(localStorage).some((key) =>
+        key.includes('supabase.auth') || key.includes('sb-'),
       )
-      
+
       if (hasAuthStorage) {
         // Auth storage exists - user likely authenticated, just waiting for restoration
-        // Show loading state briefly while AuthContext restores session
         console.debug('[useRequireAuth] Auth storage found, waiting for restoration')
         setOptimisticLoading(true)
       } else {
-        // No auth storage - user likely not authenticated
         setOptimisticLoading(false)
       }
     } catch {
-      // Ignore cache errors - fallback to auth context loading state
       setOptimisticLoading(loading)
     }
   }, [loading])

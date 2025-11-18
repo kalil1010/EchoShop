@@ -17,6 +17,13 @@ import { disableOptionalProfileColumn, extractMissingProfileColumn, filterProfil
 import type { RoleMeta } from '@/lib/roles'
 import { AuthUser, UserProfile, UserRole } from '@/types/user'
 import { realtimeSubscriptionManager } from '@/lib/realtimeSubscriptionManager'
+import {
+  clearSessionCache,
+  persistSessionCache,
+  readSessionCache,
+  recoverSessionCacheSnapshot,
+  type SessionCacheData,
+} from '@/lib/sessionCache'
 
 type SignInResult = {
   user: AuthUser
@@ -697,77 +704,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Session cache constants
-  const SESSION_CACHE_VERSION = 1 // Increment when cache structure changes
-  const SESSION_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-
-  interface SessionCacheData {
-    version: number
-    user: AuthUser
-    profile: UserProfile
-    role: UserRole
-    timestamp: number
-  }
-
-  const getSessionCache = useCallback((): SessionCacheData | null => {
-    if (typeof window === 'undefined') return null
-    try {
-      const cached = sessionStorage.getItem('echoshop_session_cache')
-      if (!cached) return null
-      
-      const data = JSON.parse(cached) as SessionCacheData
-      
-      // Validate version
-      if (data.version !== SESSION_CACHE_VERSION) {
-        sessionStorage.removeItem('echoshop_session_cache')
-        return null
-      }
-      
-      // Validate TTL
-      if (!data.timestamp || Date.now() - data.timestamp > SESSION_CACHE_TTL) {
-        sessionStorage.removeItem('echoshop_session_cache')
-        return null
-      }
-      
-      // Validate required fields
-      if (!data.user?.uid || !data.profile || !data.role) {
-        sessionStorage.removeItem('echoshop_session_cache')
-        return null
-      }
-      
-      return data
-    } catch (e) {
-      console.warn('[AuthContext] Failed to read session cache:', e)
-      try {
-        sessionStorage.removeItem('echoshop_session_cache')
-      } catch {
-        // Ignore cleanup errors
-      }
-      return null
-    }
-  }, [])
-
-  const setSessionCache = useCallback((
-    user: AuthUser, 
-    profile: UserProfile, 
-    session: Session | null
-  ) => {
-    if (typeof window === 'undefined' || !session) return
-    try {
-      const cacheData: SessionCacheData = {
-        version: SESSION_CACHE_VERSION,
-        user,
-        profile,
-        role: profile.role,
-        timestamp: Date.now(),
-      }
-      sessionStorage.setItem('echoshop_session_cache', JSON.stringify(cacheData))
-    } catch (e) {
-      // Storage quota exceeded or other error - silently fail
-      console.debug('[AuthContext] Failed to write session cache (may be expected):', e)
-    }
-  }, [])
-
   const applyProfileToState = useCallback(
     (profile: UserProfile, sourceUser: AuthUser) => {
       setUserProfile(profile)
@@ -1177,7 +1113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let cachedData: SessionCacheData | null = null
       let hasCachedData = false
       if (typeof window !== 'undefined') {
-        cachedData = getSessionCache()
+        cachedData = readSessionCache()
         if (cachedData) {
           hasCachedData = true
           console.debug('[AuthContext] Found valid session cache, restoring immediately')
@@ -1244,9 +1180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
               
               // Clear our session cache
-              if (typeof window !== 'undefined' && window.sessionStorage) {
-                window.sessionStorage.removeItem('echoshop_session_cache')
-              }
+              clearSessionCache()
               
               // Clear server-side cookies via our existing callback endpoint
               await syncServerSession('SIGNED_OUT', null).catch(() => {
@@ -1344,6 +1278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUserProfile(null)
               setSession(null)
               resetProfileState()
+              clearSessionCache()
             }
             return
           }
@@ -1437,7 +1372,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Task C1: Re-sync with profile data after it's loaded (async, don't block)
           if (finalProfile && nextSession) {
             // Set cache immediately after profile is loaded
-            setSessionCache(mapped, finalProfile, nextSession)
+            persistSessionCache(mapped, finalProfile)
             
             // Also sync to server (existing code)
             void syncServerSession('SIGNED_IN', nextSession, finalProfile)
@@ -1583,7 +1518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Only reset on unmount of the entire provider
       listener.subscription.unsubscribe()
     }
-  }, [supabase, getSessionCache, setSessionCache]) // Include cache functions
+  }, [supabase])
 
   useEffect(() => {
     if (!supabase || typeof window === 'undefined') return
@@ -1692,6 +1627,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentVisibility === 'visible' && lastVisibilityStateRef.current !== 'visible') {
         lastVisibilityStateRef.current = 'visible'
         
+        const recovered = recoverSessionCacheSnapshot()
+        if (recovered && (!user || !userProfile)) {
+          console.debug('[AuthContext] Restored session state from backup cache after visibility change')
+          setUser((previous) => previous ?? recovered.user)
+          setUserProfile((previous) => previous ?? recovered.profile)
+          setLoading(false)
+        }
+        
         // INSTANT, NON-BLOCKING: Reconnect subscriptions immediately
         // This never blocks rendering - all work happens in background
         if (supabase && user?.uid && userProfile?.uid === user.uid) {
@@ -1732,6 +1675,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Also handle window focus - same simple, non-blocking approach
     const handleFocus = () => {
       if (document.visibilityState === 'visible' && supabase && user?.uid) {
+        if (!userProfile) {
+          const recovered = recoverSessionCacheSnapshot()
+          if (recovered) {
+            console.debug('[AuthContext] Restored session state from backup cache on focus')
+            setUser((previous) => previous ?? recovered.user)
+            setUserProfile((previous) => previous ?? recovered.profile)
+            setLoading(false)
+          }
+        }
         // Reconnect subscriptions in background - never blocks
         void (async () => {
           try {
@@ -1971,6 +1923,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetProfileState()
       // Task A2: Clear role cookies and localStorage
       clearRoleStorage()
+      clearSessionCache()
       
       // Then sign out from Supabase (clears client-side auth)
       const { data } = await supabase.auth.getSession()

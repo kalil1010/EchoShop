@@ -24,6 +24,7 @@ import { FeatureFlagsPanel } from './FeatureFlagsPanel'
 import { AlertCenter } from './AlertCenter'
 import type { OwnerAnalyticsSnapshot } from './types'
 import { analyticsCache } from '@/lib/analyticsCache'
+import { readSessionCache } from '@/lib/sessionCache'
 
 type OwnerTab =
   | 'overview'
@@ -215,34 +216,28 @@ export default function OwnerDashboardLayout({
   // CRITICAL: Hydrate from session cache AND route cache on mount
   useEffect(() => {
     setIsMounted(true)
-    
-    // Check for cached route first - if exists, we can skip skeleton
-    if (typeof window !== 'undefined') {
-      try {
-        const cachedRoute = sessionStorage.getItem('echoshop_route_cache')
-        if (cachedRoute) {
-          const routeData = JSON.parse(cachedRoute)
-          if (routeData.timestamp && Date.now() - routeData.timestamp < 30000) {
-            // Route cache exists and is fresh - mark as hydrated immediately
-            setHasHydrated(true)
-            return
-          }
-        }
-        
-        // Also check session cache
-        const cached = sessionStorage.getItem('echoshop_session_cache')
-        if (cached) {
-          const data = JSON.parse(cached)
-          if (data.timestamp && Date.now() - data.timestamp < 300000 && roleMeta) {
-            setHasHydrated(true)
-            return
-          }
-        }
-      } catch {
-        // Ignore cache errors
-      }
+    if (hasHydrated || typeof window === 'undefined') {
+      return
     }
-  }, [])
+
+    try {
+      const cachedRoute = sessionStorage.getItem('echoshop_route_cache')
+      if (cachedRoute) {
+        const routeData = JSON.parse(cachedRoute)
+        if (routeData.timestamp && Date.now() - routeData.timestamp < 30000) {
+          setHasHydrated(true)
+          return
+        }
+      }
+
+      const cachedSession = readSessionCache()
+      if (cachedSession && roleMeta) {
+        setHasHydrated(true)
+      }
+    } catch {
+      // Ignore cache errors
+    }
+  }, [roleMeta, hasHydrated])
 
   // Mark as hydrated once we have roleMeta (even if from cache)
   useEffect(() => {
