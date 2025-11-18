@@ -14,7 +14,6 @@ import { useToast } from '@/components/ui/toast'
 import type { VendorProduct, VendorProductStatus } from '@/types/vendor'
 import EnhancedProductUpload from './EnhancedProductUpload'
 import ProductEditDialog from './ProductEditDialog'
-import TwoFactorVerificationModal from '@/components/auth/TwoFactorVerificationModal'
 
 interface EnhancedProductManagementProps {
   products: VendorProduct[]
@@ -63,9 +62,6 @@ export default function EnhancedProductManagement({
   const [bulkImporting, setBulkImporting] = useState(false)
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
   const bulkImportInputRef = useRef<HTMLInputElement>(null)
-  const [show2FA, setShow2FA] = useState(false)
-  const [twoFASessionToken, setTwoFASessionToken] = useState<string | null>(null)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -179,70 +175,20 @@ export default function EnhancedProductManagement({
       return
     }
 
-    // Check if 2FA is required for this critical action
-    try {
-      const twoFAResponse = await fetch('/api/auth/2fa/require', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          purpose: 'critical_action',
-          actionType: 'delete_product',
-          actionContext: { productId },
-        }),
-      })
-
-      if (twoFAResponse.ok) {
-        const twoFAData = await twoFAResponse.json()
-        if (twoFAData.required && twoFAData.enabled) {
-          // 2FA required - show verification modal
-          setPendingDeleteId(productId)
-          setTwoFASessionToken(twoFAData.sessionToken)
-          setShow2FA(true)
-          return
-        } else if (twoFAData.required && !twoFAData.enabled) {
-          toast({
-            variant: 'warning',
-            title: '2FA Required',
-            description: 'Please enable 2FA in your security settings to delete products.',
-          })
-          return
-        }
-      }
-    } catch (twoFAError) {
-      console.warn('Failed to check 2FA requirement:', twoFAError)
-      // Continue with delete if 2FA check fails
-    }
-
-    // Proceed with delete (2FA not required or already verified)
     await performDelete(productId)
   }, [toast, onProductUpdated])
 
   const performDelete = useCallback(
-    async (productId: string, sessionToken?: string) => {
+    async (productId: string) => {
       setProcessingIds((prev) => new Set(prev).add(productId))
       try {
-        const headers: HeadersInit = { 'Content-Type': 'application/json' }
-        if (sessionToken) {
-          headers['x-2fa-session-token'] = sessionToken
-        }
-
         const response = await fetch(`/api/vendor/products/${productId}`, {
           method: 'DELETE',
-          headers,
+          headers: { 'Content-Type': 'application/json' },
         })
 
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}))
-          if (payload.requires2FA) {
-            // 2FA verification required
-            toast({
-              variant: 'warning',
-              title: '2FA Verification Required',
-              description: 'Please verify your identity to complete this action.',
-            })
-            return
-          }
           throw new Error(payload?.error ?? 'Failed to delete product')
         }
 
@@ -649,48 +595,6 @@ export default function EnhancedProductManagement({
           }}
         />
       )}
-
-      {/* 2FA Verification Modal for Critical Actions */}
-      <TwoFactorVerificationModal
-        isOpen={show2FA}
-        onClose={() => {
-          setShow2FA(false)
-          setTwoFASessionToken(null)
-          setPendingDeleteId(null)
-        }}
-        onVerify={async (code, backupCode) => {
-          if (!twoFASessionToken || !pendingDeleteId) {
-            throw new Error('Session token or product ID missing')
-          }
-
-          const response = await fetch('/api/auth/2fa/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              code,
-              backupCode,
-              sessionToken: twoFASessionToken,
-            }),
-          })
-
-          if (!response.ok) {
-            const data = await response.json().catch(() => ({}))
-            throw new Error(data.error || '2FA verification failed')
-          }
-
-          // 2FA verified - proceed with delete
-          setShow2FA(false)
-          const sessionToken = twoFASessionToken
-          setTwoFASessionToken(null)
-          const productId = pendingDeleteId
-          setPendingDeleteId(null)
-
-          await performDelete(productId, sessionToken)
-        }}
-        purpose="critical_action"
-        actionType="delete_product"
-      />
     </div>
   )
 }

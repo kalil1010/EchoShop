@@ -26,8 +26,6 @@ type SignInResult = {
   profileIssueMessage: string | null
   profileError: Error | null
   isProfileFallback: boolean
-  requires2FA?: boolean
-  twoFASessionToken?: string
 }
 
 type ProfileLoadState = 'idle' | 'loading' | 'ready' | 'degraded' | 'error'
@@ -1822,128 +1820,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(authUser)
 
-      // CRITICAL: Check 2FA requirement BEFORE loading profile
-      // This ensures 2FA is checked for all logins, not just owner logins
-      // IMPORTANT: Only check 2FA during actual sign-in, not during session restoration
-      // Use API route instead of direct server function calls (client component limitation)
-      // The API route will check the actual role from the database profile
-      try {
-        console.debug('[AuthContext] Checking 2FA requirement for user', { userId: authUser.uid })
-        // Use API route to check 2FA requirement and create session
-        // The API will fetch the profile and check the actual role
-        const twoFAResponse = await fetch('/api/auth/2fa/require', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            purpose: 'login',
-            userId: authUser.uid,
-          }),
-        }).catch((fetchError) => {
-          // Handle network errors gracefully
-          console.warn('[AuthContext] Network error checking 2FA requirement:', fetchError)
-          // Return a mock response to continue with normal flow
-          return new Response(JSON.stringify({ required: false }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        })
-        
-        console.debug('[AuthContext] 2FA check response status:', twoFAResponse.status)
-
-        if (twoFAResponse.ok) {
-          const twoFAData = await twoFAResponse.json()
-          
-          if (twoFAData.required && twoFAData.enabled && twoFAData.sessionToken) {
-            console.debug('[AuthContext] 2FA session created, signing out and requiring verification')
-            
-            // Sign out immediately to prevent session from being used until 2FA is verified
-            try {
-              await supabase.auth.signOut({ scope: 'local' })
-              setSession(null)
-              setUser(null)
-              void syncServerSession('SIGNED_OUT', null)
-            } catch (signOutError) {
-              console.warn('[AuthContext] Failed to sign out after 2FA requirement:', signOutError)
-            }
-            
-            // Return early with 2FA requirement flag
-            // The login form will catch this and show 2FA modal
-            return {
-              user: authUser,
-              profile: buildBootstrapProfile(authUser),
-              session: null, // Session cleared until 2FA verified
-              profileStatus: 'loading',
-              profileIssueMessage: 'Two-factor authentication required',
-              profileError: null,
-              isProfileFallback: false,
-              requires2FA: true,
-              twoFASessionToken: twoFAData.sessionToken,
-            }
-          } else if (twoFAData.required && !twoFAData.enabled) {
-            // 2FA is required but not enabled - sign out and throw error
-            console.warn('[AuthContext] 2FA required but not enabled for user', { userId: authUser.uid })
-            
-            try {
-              await supabase.auth.signOut({ scope: 'local' })
-              setSession(null)
-              setUser(null)
-              void syncServerSession('SIGNED_OUT', null)
-            } catch (signOutError) {
-              console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
-            }
-            
-            throw new Error('2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
-          }
-          // If 2FA is not required, continue with normal flow
-        } else if (twoFAResponse.status === 403) {
-          // 2FA required but not enabled
-          const errorData = await twoFAResponse.json().catch(() => ({}))
-          console.warn('[AuthContext] 2FA required but not enabled', errorData)
-          
-          try {
-            await supabase.auth.signOut({ scope: 'local' })
-            setSession(null)
-            setUser(null)
-            void syncServerSession('SIGNED_OUT', null)
-          } catch (signOutError) {
-            console.warn('[AuthContext] Failed to sign out after 2FA requirement check:', signOutError)
-          }
-          
-          throw new Error(errorData.message || '2FA is required for your account but is not enabled. Please enable 2FA in your security settings before logging in.')
-        } else {
-          // API error - log but continue (fallback behavior)
-          // Only log if it's not a 200 (which means 2FA not required)
-          if (twoFAResponse.status !== 200) {
-            console.warn('[AuthContext] Failed to check 2FA requirement:', twoFAResponse.status)
-            // If it's a 500 error, it's likely a temporary service issue
-            // Allow login to proceed rather than blocking the user
-            if (twoFAResponse.status === 500) {
-              console.warn('[AuthContext] 2FA service unavailable, allowing login to proceed')
-            }
-          }
-          // Continue with normal flow as fallback
-        }
-      } catch (twoFAError) {
-        // If 2FA check fails, check if it's an error we should throw
-        if (twoFAError instanceof Error && twoFAError.message.includes('2FA is required')) {
-          throw twoFAError
-        }
-        // Otherwise, log error but continue with normal flow
-        // This prevents login from being blocked if 2FA service is temporarily unavailable
-        // Network errors (fetch failed) should not block login
-        const isNetworkError = twoFAError instanceof TypeError && 
-          (twoFAError.message.includes('fetch failed') || twoFAError.message.includes('Failed to fetch'))
-        
-        if (isNetworkError) {
-          console.warn('[AuthContext] Network error checking 2FA requirement - allowing login to proceed:', twoFAError)
-        } else {
-          console.error('[AuthContext] Error checking 2FA requirement:', twoFAError)
-        }
-        // Continue with normal flow as fallback - don't block login
-      }
-
-      // Continue with normal flow for users who don't require 2FA or have completed 2FA
+      // Load user profile
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
       // Task C1: Re-sync with profile after it's loaded
       if (profileOutcome.profile && session) {
@@ -1979,7 +1856,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profileIssueMessage: finalMessage,
         profileError: finalError,
         isProfileFallback: finalFallback,
-        requires2FA: false,
       }
     },
     [

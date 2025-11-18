@@ -1,5 +1,5 @@
 /**
- * Encryption utilities for sensitive data like 2FA secrets
+ * Encryption utilities for sensitive data
  * Uses Node.js crypto module for AES-256-GCM encryption
  */
 
@@ -23,11 +23,11 @@ function getEncryptionKey(): Buffer {
   }
 
   // Derive a 32-byte key from the environment key using PBKDF2
-  return crypto.pbkdf2Sync(key, 'echoshop-2fa-salt', 100000, KEY_LENGTH, 'sha256')
+  return crypto.pbkdf2Sync(key, 'echoshop-encryption-salt', 100000, KEY_LENGTH, 'sha256')
 }
 
 /**
- * Encrypt sensitive data (e.g., 2FA secret)
+ * Encrypt sensitive data
  */
 export function encrypt(plaintext: string): string {
   try {
@@ -48,7 +48,7 @@ export function encrypt(plaintext: string): string {
 }
 
 /**
- * Decrypt sensitive data (e.g., 2FA secret)
+ * Decrypt sensitive data
  */
 export function decrypt(encryptedData: string): string {
   try {
@@ -74,18 +74,5 @@ export function decrypt(encryptedData: string): string {
     console.error('[encryption] Failed to decrypt:', error)
     throw new Error('Decryption failed')
   }
-}
-
-/**
- * Generate backup codes for 2FA recovery
- */
-export function generateBackupCodes(count: number = 8): string[] {
-  const codes: string[] = []
-  for (let i = 0; i < count; i++) {
-    // Generate 8-digit codes
-    const code = crypto.randomInt(10000000, 99999999).toString()
-    codes.push(code)
-  }
-  return codes
 }
 

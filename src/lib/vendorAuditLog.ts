@@ -9,8 +9,6 @@ export type VendorAuditAction =
   | 'product_deleted'
   | 'product_status_changed'
   | 'profile_updated'
-  | '2fa_enabled'
-  | '2fa_disabled'
   | 'login_success'
   | 'login_failed'
   | 'password_changed'

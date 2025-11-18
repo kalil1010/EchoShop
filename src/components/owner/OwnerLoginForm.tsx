@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getDefaultRouteForRole, getPortalAccess, getRoleMeta, normaliseRole } from '@/lib/roles'
 import type { PortalNotice } from '@/lib/roles'
 import { PortalNoticeBanner } from '@/components/access/PortalNoticeBanner'
-import TwoFactorVerificationModal from '@/components/auth/TwoFactorVerificationModal'
 
 export function OwnerLoginForm() {
   const [email, setEmail] = useState('')
@@ -21,10 +20,6 @@ export function OwnerLoginForm() {
   const router = useRouter()
   const { toast } = useToast()
   const [retryingProfile, setRetryingProfile] = useState(false)
-  const [show2FA, setShow2FA] = useState(false)
-  const [twoFASessionToken, setTwoFASessionToken] = useState<string | null>(null)
-  const [pendingProfile, setPendingProfile] = useState<{ role: string } | null>(null)
-  const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null)
 
   const handleProfileRetry = useCallback(async () => {
     setRetryingProfile(true)
@@ -73,35 +68,6 @@ export function OwnerLoginForm() {
     try {
       const result = await signIn(trimmedEmail, trimmedPassword)
       
-      // CRITICAL: Check if 2FA is required (now handled in AuthContext)
-      // This MUST be checked before any other processing to prevent navigation
-      if (result.requires2FA && result.twoFASessionToken) {
-        console.debug('[owner-login] 2FA required from AuthContext, showing verification modal', {
-          hasToken: !!result.twoFASessionToken,
-          requires2FA: result.requires2FA
-        })
-        setTwoFASessionToken(result.twoFASessionToken)
-        setPendingProfile(result.profile)
-        setPendingCredentials({ email: trimmedEmail, password: trimmedPassword })
-        setShow2FA(true)
-        setLoading(false)
-        // CRITICAL: Return early to prevent any navigation or further processing
-        return
-      }
-      
-      // If 2FA was required but we don't have a token, something went wrong
-      if (result.requires2FA && !result.twoFASessionToken) {
-        console.error('[owner-login] 2FA required but no session token provided')
-        setError('2FA verification is required but the session could not be created. Please try again.')
-        toast({
-          variant: 'error',
-          title: '2FA Error',
-          description: 'Failed to create 2FA verification session. Please try again.',
-        })
-        setLoading(false)
-        return
-      }
-      
       const { profile, profileStatus: status, isProfileFallback: fallback, profileIssueMessage: issueMessage } = result
       const access = getPortalAccess(profile.role, 'owner')
 
@@ -149,9 +115,6 @@ export function OwnerLoginForm() {
         })
         return
       }
-
-      // 2FA check is now handled in AuthContext.signIn() - no need to check here
-      // If we reach here, 2FA has been verified or is not required
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : 'Failed to sign in'
@@ -229,77 +192,6 @@ export function OwnerLoginForm() {
           </Button>
         </form>
       </CardContent>
-
-      {/* 2FA Verification Modal */}
-      <TwoFactorVerificationModal
-        isOpen={show2FA}
-        onClose={() => {
-          setShow2FA(false)
-          setTwoFASessionToken(null)
-          setPendingProfile(null)
-          setPendingCredentials(null)
-        }}
-        onVerify={async (code, backupCode) => {
-          if (!twoFASessionToken) {
-            throw new Error('Session token missing')
-          }
-
-          const response = await fetch('/api/auth/2fa/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              code,
-              backupCode,
-              sessionToken: twoFASessionToken,
-            }),
-          })
-
-          if (!response.ok) {
-            const data = await response.json().catch(() => ({}))
-            throw new Error(data.error || '2FA verification failed')
-          }
-
-          // 2FA verified - now sign in again to create the session
-          // We signed out earlier to prevent unauthorized session use
-          setShow2FA(false)
-          setLoading(true)
-          
-          try {
-            // Use stored credentials for re-authentication after 2FA verification
-            const credentials = pendingCredentials || { email: email.trim().toLowerCase(), password: password.trim() }
-            if (!credentials.email || !credentials.password) {
-              throw new Error('Credentials not available. Please sign in again.')
-            }
-            
-            // Re-authenticate now that 2FA is verified
-            const result = await signIn(credentials.email, credentials.password)
-            const { profile } = result
-            const normalisedRole = normaliseRole(profile.role)
-            const roleMeta = getRoleMeta(normalisedRole)
-            
-            // Clear stored credentials
-            setPendingCredentials(null)
-            setPendingProfile(null)
-            setTwoFASessionToken(null)
-            
-            toast({
-              variant: 'success',
-              title: roleMeta.welcomeTitle,
-              description: roleMeta.welcomeSubtitle,
-            })
-            
-            router.replace(getDefaultRouteForRole(normalisedRole))
-          } catch (signInError) {
-            console.error('[owner-login] Failed to sign in after 2FA verification:', signInError)
-            throw new Error('Failed to complete login after 2FA verification. Please try again.')
-          } finally {
-            setLoading(false)
-          }
-        }}
-        purpose="login"
-        loading={loading}
-      />
     </Card>
   )
 }
