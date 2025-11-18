@@ -25,6 +25,9 @@ import {
   type SessionCacheData,
 } from '@/lib/sessionCache'
 
+// Cache TTL constant - matches sessionCache.ts
+const SESSION_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+
 type SignInResult = {
   user: AuthUser
   profile: UserProfile
