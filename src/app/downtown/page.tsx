@@ -43,7 +43,8 @@ export default async function DowntownEntryPage() {
         // Try to get user from session instead (read-only)
         try {
           const sessionResult = await supabase.auth.getSession()
-          // If session error is also a refresh token error, user is not authenticated
+          
+          // Check for refresh token errors
           if (sessionResult.error) {
             const sessionErrorCode = (sessionResult.error as { code?: string })?.code
             const sessionErrorMessage = sessionResult.error.message || String(sessionResult.error)
@@ -51,11 +52,16 @@ export default async function DowntownEntryPage() {
               sessionErrorCode === 'refresh_token_not_found' ||
               sessionErrorMessage.includes('Refresh Token Not Found') ||
               sessionErrorMessage.includes('refresh_token_not_found')
-            if (!isSessionRefreshTokenError) {
-              // Only use session if error is not a refresh token error
-              user = sessionResult.data?.session?.user ?? null
+            
+            // If it's a refresh token error, don't use the session
+            if (isSessionRefreshTokenError) {
+              user = null
+            } else {
+              // Use type assertion to bypass TypeScript narrowing
+              user = (sessionResult as any).data?.session?.user ?? null
             }
           } else {
+            // No error, use the session
             user = sessionResult.data?.session?.user ?? null
           }
         } catch {
