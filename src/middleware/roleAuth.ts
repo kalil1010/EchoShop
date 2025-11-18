@@ -25,6 +25,7 @@ export async function requireRole(
   const supabase = createRouteHandlerClient({ cookies })
   const { data, error } = await supabase.auth.getSession()
   if (error) {
+    // mapSupabaseError will handle refresh token errors silently
     throw mapSupabaseError(error)
   }
 

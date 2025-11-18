@@ -55,9 +55,22 @@ export function classifySupabaseError(error: unknown): PermissionReason | 'other
 }
 
 export function mapSupabaseError(error: unknown): Error {
+  const message = extractMessage(error)
+  const code = extractCode(error)
+  
+  // Check if this is a refresh token error - suppress logging for these
+  const isRefreshTokenError = 
+    code === 'refresh_token_not_found' ||
+    message.includes('Refresh Token Not Found') ||
+    message.includes('refresh_token_not_found') ||
+    (error && typeof error === 'object' && '__isAuthError' in error && code === 'refresh_token_not_found')
+  
   const classification = classifySupabaseError(error)
   if (classification === 'auth') {
-    console.warn('[supabase] authentication required', error)
+    // Don't log refresh token errors - they're expected when tokens expire
+    if (!isRefreshTokenError) {
+      console.warn('[supabase] authentication required', error)
+    }
     return new PermissionError('auth', 'You must be logged in to continue.')
   }
   if (classification === 'forbidden') {

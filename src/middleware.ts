@@ -86,15 +86,12 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         const errorCode = (sessionError as { code?: string })?.code
         const errorMessage = sessionError.message || String(sessionError)
         
-        // CRITICAL FIX: When cookies exist but session fails, return null to allow
-        // client-side recovery. The middleware will allow through page routes,
-        // giving AuthContext time to restore from localStorage/sessionStorage cache.
-        // Don't immediately reject - let client-side handle session restoration.
+        // When refresh token is invalid/expired, cookies are stale
+        // Return null to allow stale cookie handling below
         if (errorCode === 'refresh_token_not_found' || 
             errorMessage.includes('Refresh Token Not Found') ||
             errorMessage.includes('refresh_token_not_found')) {
           // Cookies exist but session invalid - return null to allow client-side recovery
-          // Middleware will detect hasStaleCookies and allow through
           return null
         }
       }
@@ -111,11 +108,15 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError)
       const errorCode = (sessionError as { code?: string })?.code || ''
       
+      // Check if this is a refresh token error (can be thrown as exception)
+      const isRefreshTokenError = 
+        errorCode === 'refresh_token_not_found' ||
+        errorMessage.includes('Refresh Token Not Found') ||
+        errorMessage.includes('refresh_token_not_found') ||
+        (sessionError && typeof sessionError === 'object' && '__isAuthError' in sessionError && errorCode === 'refresh_token_not_found')
+      
       // Suppress refresh token errors - these indicate invalid/expired sessions
-      // But if cookies exist, still allow through for client-side cleanup
-      if (errorCode === 'refresh_token_not_found' ||
-          errorMessage.includes('Refresh Token Not Found') ||
-          errorMessage.includes('refresh_token_not_found')) {
+      if (isRefreshTokenError) {
         // Session is invalid - return null to allow stale cookie handling
         // Client-side will detect and clean up
         return null
@@ -132,9 +133,7 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         return null
       }
       
-      // For other errors, log but still allow through if cookies exist
-      // The client-side will handle validation
-      console.warn('[middleware] Unexpected session error (allowing through):', errorMessage)
+      // For other errors, suppress them silently - client-side will handle validation
       return null
     }
   } catch (error: unknown) {
@@ -142,10 +141,15 @@ const getAuthenticatedUser = async (req: NextRequest) => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorCode = (error as { code?: string })?.code || ''
     
+    // Check if this is a refresh token error (can be thrown as exception)
+    const isRefreshTokenError = 
+      errorCode === 'refresh_token_not_found' ||
+      errorMessage.includes('Refresh Token Not Found') ||
+      errorMessage.includes('refresh_token_not_found') ||
+      (error && typeof error === 'object' && '__isAuthError' in error && errorCode === 'refresh_token_not_found')
+    
     // Suppress refresh token errors - these indicate invalid/expired sessions
-    if (errorCode === 'refresh_token_not_found' ||
-        errorMessage.includes('Refresh Token Not Found') ||
-        errorMessage.includes('refresh_token_not_found')) {
+    if (isRefreshTokenError) {
       // Session is invalid - return null to allow client-side cleanup
       return null
     }
@@ -158,14 +162,17 @@ const getAuthenticatedUser = async (req: NextRequest) => {
       return null
     }
     
-    // Log other unexpected errors (but not session/JWT/token errors which are common)
-    if (!errorMessage.includes('session') && 
-        !errorMessage.includes('JWT') && 
-        !errorMessage.includes('token') &&
-        !errorMessage.includes('Refresh Token')) {
-      console.warn('[middleware] Error getting authenticated user:', errorMessage)
+    // Suppress all auth/session/token errors silently - they're expected
+    if (errorMessage.includes('session') || 
+        errorMessage.includes('JWT') || 
+        errorMessage.includes('token') ||
+        errorMessage.includes('Refresh Token') ||
+        errorMessage.includes('auth')) {
+      return null
     }
     
+    // Only log truly unexpected errors (not auth-related)
+    console.warn('[middleware] Unexpected error getting authenticated user:', errorMessage)
     return null
   }
 }
@@ -352,8 +359,21 @@ export async function middleware(req: NextRequest) {
       // - Validate the session with Supabase in background (with timeout)
       // - Clear stale cookies and redirect to login only if truly invalid
       // This prevents the infinite loading bug where middleware blocks valid users
-      console.debug('[middleware] Stale cookies detected, allowing through for client-side recovery', { pathname })
-      return NextResponse.next()
+      // Only log in development to reduce noise in production
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[middleware] Stale cookies detected, allowing through for client-side recovery', { pathname })
+      }
+      
+      // Create response and clear stale cookies to prevent repeated detection
+      const response = NextResponse.next()
+      
+      // Clear all auth cookies to prevent stale cookie loop
+      // Client-side will restore from sessionStorage if valid, or redirect to login
+      for (const cookie of authCookies) {
+        response.cookies.set(cookie.name, '', { path: '/', maxAge: 0 })
+      }
+      
+      return response
     }
     
     // Check if this is an obvious attack pattern (vulnerability scanning)

@@ -25,19 +25,39 @@ export default async function DowntownEntryPage() {
     } catch (error: unknown) {
       // Supabase may try to refresh tokens which attempts to modify cookies
       // This is not allowed in server components, but it's not harmful
-      // Check if it's a cookie modification error
+      // Check if it's a cookie modification error or refresh token error
       const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorCode = (error as { code?: string })?.code || ''
       const isCookieError = 
         errorMessage.includes('Cookies can only be modified') ||
         errorMessage.includes('Server Action') ||
         errorMessage.includes('Route Handler')
+      const isRefreshTokenError = 
+        errorCode === 'refresh_token_not_found' ||
+        errorMessage.includes('Refresh Token Not Found') ||
+        errorMessage.includes('refresh_token_not_found')
       
-      if (isCookieError) {
+      if (isCookieError || isRefreshTokenError) {
         // This is expected - Supabase tried to manage sessions but can't modify cookies
+        // or refresh token is invalid/expired
         // Try to get user from session instead (read-only)
         try {
-          const { data: sessionData } = await supabase.auth.getSession()
-          user = sessionData?.session?.user ?? null
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+          // If session error is also a refresh token error, user is not authenticated
+          if (sessionError) {
+            const sessionErrorCode = (sessionError as { code?: string })?.code
+            const sessionErrorMessage = sessionError.message || String(sessionError)
+            const isSessionRefreshTokenError = 
+              sessionErrorCode === 'refresh_token_not_found' ||
+              sessionErrorMessage.includes('Refresh Token Not Found') ||
+              sessionErrorMessage.includes('refresh_token_not_found')
+            if (!isSessionRefreshTokenError) {
+              // Only use session if error is not a refresh token error
+              user = sessionData?.session?.user ?? null
+            }
+          } else {
+            user = sessionData?.session?.user ?? null
+          }
         } catch {
           // If that also fails, user is not authenticated
           user = null
@@ -109,15 +129,21 @@ export default async function DowntownEntryPage() {
       throw error
     }
     
-    // Check if it's a cookie modification error (expected in server components)
+    // Check if it's a cookie modification error or refresh token error (expected in server components)
     const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorCode = (error as { code?: string })?.code || ''
     const isCookieError = 
       errorMessage.includes('Cookies can only be modified') ||
       errorMessage.includes('Server Action') ||
       errorMessage.includes('Route Handler')
+    const isRefreshTokenError = 
+      errorCode === 'refresh_token_not_found' ||
+      errorMessage.includes('Refresh Token Not Found') ||
+      errorMessage.includes('refresh_token_not_found')
     
-    if (isCookieError) {
+    if (isCookieError || isRefreshTokenError) {
       // This is expected - Supabase tried to manage sessions but can't modify cookies in server components
+      // or refresh token is invalid/expired
       // Not harmful, just show login form
       // Don't log as error since it's expected behavior
     } else {
