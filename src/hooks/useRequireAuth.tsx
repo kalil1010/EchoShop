@@ -17,7 +17,7 @@ interface UseRequireAuthResult {
 }
 
 export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthResult {
-  const { user, loading, session } = useAuth()
+  const { user, loading, session, profileStatus } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const redirected = useRef(false)
@@ -30,13 +30,15 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   const userRef = useRef(user)
   const sessionRef = useRef(session)
   const loadingRef = useRef(loading)
+  const profileStatusRef = useRef(profileStatus)
 
   // Keep refs in sync with current values
   useEffect(() => {
     userRef.current = user
     sessionRef.current = session
     loadingRef.current = loading
-  }, [user, session, loading])
+    profileStatusRef.current = profileStatus
+  }, [user, session, loading, profileStatus])
   
   // CRITICAL FIX: Check cache FIRST on mount to enable optimistic rendering
   // This prevents the infinite loading state on refresh
@@ -92,7 +94,8 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
 
     // Use optimistic user if available, otherwise use real user
     const currentUser = user || optimisticUser
-    const currentLoading = loading && optimisticLoading
+    // Wait for both loading AND profile status (like vendor/owner dashboards)
+    const currentLoading = (loading || profileStatus === 'loading') && optimisticLoading
 
     // Reset redirected flag if user becomes available
     if (currentUser || session) {
@@ -117,7 +120,7 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
     // This helps with slower cookie/session initialization on mobile browsers
     timeoutRef.current = setTimeout(() => {
       // Re-check current auth state using refs (they're always up-to-date)
-      if (userRef.current || sessionRef.current || loadingRef.current || redirected.current) {
+      if (userRef.current || sessionRef.current || loadingRef.current || profileStatusRef.current === 'loading' || redirected.current) {
         redirected.current = false
         return
       }
@@ -138,12 +141,13 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
         timeoutRef.current = null
       }
     }
-  }, [loading, optimisticLoading, optimisticUser, options?.redirectTo, pathname, router, user, session])
+  }, [loading, profileStatus, optimisticLoading, optimisticUser, options?.redirectTo, pathname, router, user, session])
 
   // CRITICAL FIX: Return optimistic state if real state is still loading
   // This allows pages to render immediately on refresh if cache shows user exists
+  // Also wait for profileStatus to be ready (not 'loading')
   const effectiveUser = user || optimisticUser
-  const effectiveLoading = loading && optimisticLoading && !optimisticUser
+  const effectiveLoading = (loading || profileStatus === 'loading') && optimisticLoading && !optimisticUser
 
   return { 
     user: effectiveUser, 

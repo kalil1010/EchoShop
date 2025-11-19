@@ -1,74 +1,53 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import OwnerDashboardLayout from '@/components/owner/OwnerDashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
+import { getPortalAccess, getDefaultRouteForRole } from '@/lib/roles'
+import type { PortalDenial } from '@/lib/roles'
 import { useToast } from '@/components/ui/toast'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-import { getDefaultRouteForRole, getPortalAccess, normaliseRole } from '@/lib/roles'
-import { readSessionCache } from '@/lib/sessionCache'
 
 export default function OwnerDashboardPage() {
   // ALL hooks must be called unconditionally before any returns (Rules of Hooks)
   const router = useRouter()
   const { toast } = useToast()
-  const { user, userProfile, loading: authLoading, roleMeta } = useAuth()
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRedirecting, setIsRedirecting] = useState(false)
-  const [hasAccess, setHasAccess] = useState(false)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const lastCheckedUserIdRef = useRef<string | null>(null)
+  const { user, userProfile, loading, profileStatus } = useAuth()
+  const [denial, setDenial] = useState<PortalDenial | null>(null)
+  const handledRef = useRef(false)
   const sessionCheckAttemptsRef = useRef(0)
-  const hasAccessRef = useRef(false) // Use ref to track access without causing re-renders
   const MAX_SESSION_CHECK_ATTEMPTS = 5 // Wait up to 2.5 seconds for session restoration
-  const accessCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // CRITICAL FIX: Check cache FIRST on mount to set access immediately
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    
-    // Check session cache for owner role
-    const cached = readSessionCache()
-    if (cached?.role === 'owner') {
-      console.debug('[owner-dashboard] Cache shows owner role, granting immediate access')
-      setHasAccess(true)
-      hasAccessRef.current = true
-      setIsLoading(false)
-    }
-  }, [])
+
+  // Track if we've already verified access to prevent re-checks
+  const verifiedRef = useRef(false)
+  const verifiedUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // Clear any existing timeout to prevent multiple simultaneous checks
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
-    }
-
-    // Wait for auth context to finish initializing
-    if (authLoading) {
+    // Task B2: Wait for loading to complete AND profile status to be ready
+    if (loading || profileStatus === 'loading') {
       sessionCheckAttemptsRef.current = 0
-      setIsLoading(true)
       return
     }
 
-    // If no user after auth has loaded, wait a bit for session restoration from localStorage
+    // If we've already verified access for this user, skip re-check
+    // This prevents reloads when tab regains focus
+    if (verifiedRef.current && verifiedUserIdRef.current === user?.uid && userProfile) {
+      return
+    }
+
+    // If no user after loading, wait a bit for session restoration from localStorage
     // This handles the race condition where middleware allows the request but
     // AuthContext hasn't finished restoring session from localStorage yet
     if (!user) {
       if (sessionCheckAttemptsRef.current < MAX_SESSION_CHECK_ATTEMPTS) {
         sessionCheckAttemptsRef.current += 1
         // Wait 500ms before checking again (allows localStorage session to be restored)
-        timeoutRef.current = setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           // The useEffect will run again due to dependency changes
         }, 500)
-        return () => {
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current)
-            timeoutRef.current = null
-          }
-        }
+        return () => clearTimeout(timeoutId)
       }
       // After max attempts, check localStorage directly as a last resort
       // Only redirect if we're certain there's no session
@@ -84,182 +63,87 @@ export default function OwnerDashboardPage() {
       }
       // No auth storage found, redirect to login
       console.debug('[owner-dashboard] No user and no auth storage, redirecting to login')
-      setIsRedirecting(true)
-      setIsLoading(false)
-      setHasAccess(false)
-      hasAccessRef.current = false
-      lastCheckedUserIdRef.current = null
-      
-      // Use a timeout to prevent rapid redirects and ensure auth state is cleared
-      // Redirect to /downtown (login page) instead of home to allow re-login
-      timeoutRef.current = setTimeout(() => {
-        router.replace('/downtown')
-      }, 100)
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
+      router.replace('/downtown')
       return
     }
 
     // Reset attempts once we have a user
     sessionCheckAttemptsRef.current = 0
 
-    // CRITICAL FIX: Check if we already verified access for this exact user/profile combination
-    // This prevents infinite loops when userProfile changes but user hasn't
-    const currentUserId = user.uid
-    const currentProfileRole = userProfile?.role
-    const checkKey = `${currentUserId}:${currentProfileRole || 'unknown'}`
-    
-    // If we already have access and same user/profile, skip re-check
-    if (hasAccessRef.current && lastCheckedUserIdRef.current === checkKey && userProfile && !isLoading) {
-      console.debug('[owner-dashboard] Already verified access, skipping re-check', { checkKey })
+    if (!userProfile) {
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
+      router.replace('/downtown')
       return
     }
 
-    // Check if this is a different user than we last checked
-    // If so, reset access state to re-check
-    if (lastCheckedUserIdRef.current && !lastCheckedUserIdRef.current.startsWith(currentUserId)) {
-      setHasAccess(false)
-      hasAccessRef.current = false
-      setIsLoading(true)
-    }
-    
-    // Update last checked reference with userId:role to track both
-    lastCheckedUserIdRef.current = checkKey
-
-    // CRITICAL: Don't check access if profile is still loading (unless we have a fallback role)
-    // Wait for profile to load OR use user.role if available
-    const role = normaliseRole(userProfile?.role ?? user?.role)
-    
-    // CRITICAL FIX: If we already have access from cache, skip waiting
-    if (hasAccessRef.current) {
-      console.debug('[owner-dashboard] Access already granted from cache, skipping check')
-      return
-    }
-    
-    // If we don't have a role yet and profile is still loading, wait BUT with timeout
-    // BUT: If we have user.role from auth metadata, use it (owner role is set in auth metadata)
-    if (!role || (role === 'user' && !userProfile && !user?.role && authLoading)) {
-      // Set a timeout to prevent infinite loading
-      if (!accessCheckTimeoutRef.current) {
-        accessCheckTimeoutRef.current = setTimeout(() => {
-          console.warn('[owner-dashboard] Access check timeout - using available role data')
-          // Force check with whatever role we have
-          const fallbackRole = normaliseRole(user?.role ?? 'user')
-          if (fallbackRole === 'owner') {
-            setHasAccess(true)
-            hasAccessRef.current = true
-            setIsLoading(false)
-          }
-        }, 3000) // 3 second timeout
-      }
-      console.debug('[owner-dashboard] Waiting for profile to load...', { 
-        hasUserRole: !!user?.role,
-        hasProfile: !!userProfile,
-        currentRole: role 
+    const access = getPortalAccess(userProfile.role, 'owner')
+    if (!access.allowed) {
+      console.warn('[owner-dashboard] access denied', {
+        userId: user?.uid ?? null,
+        role: userProfile.role,
+        denial: access.denial ?? null,
       })
+      setDenial(access.denial ?? null)
+      verifiedRef.current = false
+      verifiedUserIdRef.current = null
+
+      if (!handledRef.current) {
+        handledRef.current = true
+        const toastPayload = access.denial?.toast
+        toast({
+          variant: toastPayload?.variant ?? 'warning',
+          title: toastPayload?.title ?? 'Access denied',
+          description:
+            toastPayload?.description ??
+            'You do not have permission to access the owner console.',
+        })
+
+        // Task B2: Redirect to their correct dashboard based on role
+        const defaultRoute = getDefaultRouteForRole(userProfile.role)
+        router.replace(access.denial?.redirect ?? defaultRoute)
+      }
       return
     }
-    
-    // Clear timeout if we have role now
-    if (accessCheckTimeoutRef.current) {
-      clearTimeout(accessCheckTimeoutRef.current)
-      accessCheckTimeoutRef.current = null
-    }
 
-    // Use a minimal delay only if profile is still loading
-    const delay = userProfile ? 0 : 100 // Small delay if profile not ready
-    timeoutRef.current = setTimeout(() => {
-      try {
-        // Determine the user's role - prefer profile role, fall back to user role
-        const finalRole = normaliseRole(userProfile?.role ?? user?.role ?? role)
-        
-        console.debug('[owner-dashboard] Checking access', { 
-          userId: currentUserId, 
-          role: finalRole,
-          hasProfile: !!userProfile 
-        })
-        
-        // Check if user has access to owner portal
-        const access = getPortalAccess(finalRole, 'owner')
+    // Access granted - mark as verified
+    verifiedRef.current = true
+    verifiedUserIdRef.current = user.uid
+    setDenial(null)
+    handledRef.current = false
+  }, [loading, userProfile, user, router, toast, profileStatus])
 
-        if (!access.allowed) {
-          // User doesn't have owner access - redirect them
-          console.debug('[owner-dashboard] Access denied', { role: finalRole })
-          setIsRedirecting(true)
-          setIsLoading(false)
-          setHasAccess(false)
-          hasAccessRef.current = false
-          
-          const toastPayload = access.denial?.toast
-          toast({
-            variant: toastPayload?.variant ?? 'warning',
-            title: toastPayload?.title ?? 'Access denied',
-            description:
-              toastPayload?.description ??
-              'You do not have permission to access the owner console.',
-          })
+  // Task B2: Show loading state while auth context is hydrating
+  if (loading || profileStatus === 'loading') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
+      </div>
+    )
+  }
 
-          router.replace(access.denial?.redirect ?? getDefaultRouteForRole(finalRole))
-          return
-        }
+  if (!user || !userProfile) {
+    return null // useEffect handles redirect
+  }
 
-        // User has owner access - show dashboard immediately
-        console.debug('[owner-dashboard] Access granted, showing dashboard')
-        setIsLoading(false)
-        setIsRedirecting(false)
-        setHasAccess(true)
-        hasAccessRef.current = true // Update ref to prevent re-checks
-      } catch (error) {
-        console.error('[owner-dashboard] Error in auth check:', error)
-        setIsLoading(false)
-        setHasAccess(false)
-        hasAccessRef.current = false
-      }
-    }, delay)
+  if (userProfile.role === 'owner' || userProfile.role === 'admin') {
+    return (
+      <ErrorBoundary
+        onError={(error, errorInfo) => {
+          console.error('[owner-dashboard] Error caught by boundary:', error, errorInfo)
+        }}
+      >
+        <OwnerDashboardLayout
+          isLoading={false}
+          isRedirecting={false}
+          user={user}
+          userProfile={userProfile}
+        />
+      </ErrorBoundary>
+    )
+  }
 
-    // Cleanup function - always returned to prevent React error #300
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
-      }
-      if (accessCheckTimeoutRef.current) {
-        clearTimeout(accessCheckTimeoutRef.current)
-        accessCheckTimeoutRef.current = null
-      }
-    }
-  }, [user, userProfile, authLoading, router, toast])
-
-  // Memoize the loading state to prevent unnecessary re-renders
-  // CRITICAL FIX: Only include !hasAccess if we don't have roleMeta (which means auth is ready)
-  // If roleMeta exists and shows owner, we can show dashboard even if hasAccess check is pending
-  const isLoadingState = useMemo(() => {
-    // If we have roleMeta showing owner role, trust it and don't wait for hasAccess
-    const hasOwnerRoleMeta = roleMeta?.id === 'owner'
-    
-    // Only wait for hasAccess if:
-    // 1. We don't have owner roleMeta yet, OR
-    // 2. Auth is still loading
-    const shouldWaitForAccess = !hasOwnerRoleMeta && !hasAccess
-    
-    return isLoading || (authLoading && !hasOwnerRoleMeta) || isRedirecting || shouldWaitForAccess
-  }, [isLoading, authLoading, isRedirecting, hasAccess, roleMeta])
-
-  // CRITICAL: Always render the exact same component structure to prevent React error #300
-  // React error #300 occurs when the component tree structure changes between renders,
-  // causing hooks to be called in different orders. By always rendering OwnerDashboardLayout
-  // (even when redirecting), we ensure hooks are always called in the same order.
-  // The layout component will handle showing loading/redirect states internally.
-  return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-        console.error('[owner-dashboard] Error caught by boundary:', error, errorInfo)
-      }}
-    >
-      <OwnerDashboardLayout
-        isLoading={isLoadingState}
-        isRedirecting={isRedirecting}
-        user={user}
-        userProfile={userProfile}
-      />
-    </ErrorBoundary>
-  )
+  return null // useEffect handles redirect for wrong role
 }

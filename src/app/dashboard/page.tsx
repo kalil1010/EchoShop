@@ -25,7 +25,7 @@ const getCachedRoute = (): string | null => {
 }
 
 export default function DashboardPage() {
-  const { userProfile, loading, roleMeta } = useAuth()
+  const { userProfile, loading, roleMeta, profileStatus } = useAuth()
   const router = useRouter()
   const redirectedRef = useRef(false)
 
@@ -40,8 +40,8 @@ export default function DashboardPage() {
       return
     }
 
-    // Only then wait for auth if no cache
-    if (loading) return
+    // Wait for loading AND profile status to be ready (like vendor/owner dashboards)
+    if (loading || profileStatus === 'loading') return
 
     // No user profile means not authenticated
     if (!userProfile) {
@@ -68,7 +68,7 @@ export default function DashboardPage() {
     // NOW redirect
     redirectedRef.current = true
     router.replace(targetRoute)
-  }, [loading, userProfile?.role, roleMeta, router])
+  }, [loading, profileStatus, userProfile?.role, roleMeta, router])
 
   // Return null immediately - no skeleton, no spinner
   // The redirect happens so fast it's imperceptible
