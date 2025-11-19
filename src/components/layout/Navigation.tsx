@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   ShoppingBag,
   Store,
+  Rss,
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +37,7 @@ export function Navigation() {
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { href: '/', label: 'Home', icon: Home },
+      { href: '/feed', label: 'Feed', icon: Rss, requiresAuth: true },
       { href: '/outfit', label: 'Outfit Suggestions', icon: Sparkles, requiresAuth: true, tourId: 'nav-outfit' },
       { href: '/closet', label: 'My Closet', icon: Shirt, requiresAuth: true, tourId: 'nav-my-closet' },
       { href: '/chat', label: 'Echo Shop Chat', icon: MessageCircle, requiresAuth: true },
