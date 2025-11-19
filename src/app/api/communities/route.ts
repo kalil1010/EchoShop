@@ -47,22 +47,25 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     return NextResponse.json({
-      communities: (communities || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        coverImage: c.cover_image,
-        createdBy: c.created_by,
-        creator: c.profiles ? {
-          id: c.profiles.id,
-          displayName: c.profiles.display_name,
-          photoURL: c.profiles.photo_url,
-        } : null,
-        isPublic: c.is_public,
-        memberCount: c.member_count,
-        postCount: c.post_count,
-        createdAt: c.created_at,
-      })),
+      communities: (communities || []).map((c: any) => {
+        const profile = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          coverImage: c.cover_image,
+          createdBy: c.created_by,
+          creator: profile ? {
+            id: profile.id,
+            displayName: profile.display_name,
+            photoURL: profile.photo_url,
+          } : null,
+          isPublic: c.is_public,
+          memberCount: c.member_count,
+          postCount: c.post_count,
+          createdAt: c.created_at,
+        }
+      }),
     })
   } catch (error) {
     const mapped = mapSupabaseError(error)

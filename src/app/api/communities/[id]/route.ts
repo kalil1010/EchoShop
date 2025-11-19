@@ -59,6 +59,8 @@ export async function GET(
       isMember = !!member
     }
 
+    const profile = Array.isArray(community.profiles) ? community.profiles[0] : community.profiles
+
     return NextResponse.json({
       community: {
         id: community.id,
@@ -66,10 +68,10 @@ export async function GET(
         description: community.description,
         coverImage: community.cover_image,
         createdBy: community.created_by,
-        creator: community.profiles ? {
-          id: community.profiles.id,
-          displayName: community.profiles.display_name,
-          photoURL: community.profiles.photo_url,
+        creator: profile ? {
+          id: profile.id,
+          displayName: profile.display_name,
+          photoURL: profile.photo_url,
         } : null,
         isPublic: community.is_public,
         memberCount: community.member_count,
