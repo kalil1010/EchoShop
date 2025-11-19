@@ -1094,6 +1094,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Use ref to track if initialization has been started to prevent multiple runs
   const initializationStartedRef = useRef(false)
   const initializationInProgressRef = useRef(false)
+  const profileLoadInProgressRef = useRef(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -1520,10 +1521,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
       
-      // CRITICAL: Ignore INITIAL_SESSION events during initialization to prevent loops
+      // CRITICAL: Ignore INITIAL_SESSION events completely to prevent loops
       // INITIAL_SESSION is fired when Supabase detects an existing session, but we're already handling that in primeSession
-      if (event === 'INITIAL_SESSION' && initializationInProgressRef.current) {
-        console.debug('[AuthContext] Ignoring INITIAL_SESSION during initialization')
+      // It can fire AFTER initialization completes, causing infinite loops
+      if (event === 'INITIAL_SESSION') {
+        console.debug('[AuthContext] Ignoring INITIAL_SESSION event (handled in primeSession)')
         return
       }
       
@@ -1558,6 +1560,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void syncServerSession(event, newSession ?? null, userProfile)
       }
 
+      // CRITICAL FIX: If we already have a user and session matches, don't reload everything
+      // This prevents infinite loops when SIGNED_IN fires multiple times
+      if (event === 'SIGNED_IN' && newSession && user && session && newSession.user.id === user.uid) {
+        console.debug('[AuthContext] SIGNED_IN event for existing session, skipping reload')
+        // Just update session if needed, but don't reload profile
+        setSession(newSession)
+        setLoading(false)
+        return
+      }
+
+      // CRITICAL FIX: Prevent concurrent profile loads
+      // If profile is already loading, skip this event to prevent infinite loops
+      if (profileLoadInProgressRef.current && event === 'SIGNED_IN') {
+        console.debug('[AuthContext] Profile load already in progress, skipping duplicate SIGNED_IN event')
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
         setSession(newSession ?? null)
@@ -1565,15 +1585,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
           setUser(mapped)
-          const profileResult = await loadUserProfileWithTimeout(mapped)
           
-          // Sync role from auth metadata to profile (for OAuth and auth state changes)
-          if (profileResult.profile) {
-            try {
-              await reconcileProfileAfterAuth(mapped, profileResult.profile)
-            } catch (syncError) {
-              console.warn('[AuthContext] Role sync failed during auth state change:', syncError)
+          // Mark profile load as in progress
+          profileLoadInProgressRef.current = true
+          
+          try {
+            const profileResult = await loadUserProfileWithTimeout(mapped)
+            
+            // CRITICAL: Ensure profileStatus is set even if profile load fails
+            // loadUserProfileWithTimeout should set this, but ensure it's not stuck on 'loading'
+            if (profileResult.status === 'loading') {
+              // This shouldn't happen, but if it does, set to degraded
+              setProfileStatus('degraded')
+              setIsProfileFallback(true)
             }
+            
+            // Sync role from auth metadata to profile (for OAuth and auth state changes)
+            if (profileResult.profile) {
+              try {
+                await reconcileProfileAfterAuth(mapped, profileResult.profile)
+              } catch (syncError) {
+                console.warn('[AuthContext] Role sync failed during auth state change:', syncError)
+              }
+            }
+          } finally {
+            // Always clear the flag when done
+            profileLoadInProgressRef.current = false
           }
         } else {
           setUser(null)
