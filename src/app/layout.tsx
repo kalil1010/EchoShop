@@ -4,6 +4,7 @@ import '../styles/globals.css'
 import 'react-image-crop/dist/ReactCrop.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { OwnerPortalRedirect } from '@/components/auth/OwnerPortalRedirect'
+import { CacheIndicator } from '@/components/auth/CacheIndicator'
 import { Navigation } from '@/components/layout/Navigation'
 import { Footer } from '@/components/layout/Footer'
 import { ToastProvider } from '@/components/ui/toast'
@@ -41,6 +42,7 @@ export default function RootLayout({
                 </main>
                 <Footer />
                 <FloatingAssistant />
+                <CacheIndicator />
               </OnboardingProvider>
             </AuthProvider>
           </ToastProvider>

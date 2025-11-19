@@ -67,6 +67,7 @@ interface AuthContextType {
   profileIssueMessage: string | null
   isProfileFallback: boolean
   refreshProfile: () => Promise<UserProfile | null>
+  usingCache: boolean
 }
 
 interface ProfileRow {
@@ -545,6 +546,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileError, setProfileError] = useState<Error | null>(null)
   const [profileIssueMessage, setProfileIssueMessage] = useState<string | null>(null)
   const [isProfileFallback, setIsProfileFallback] = useState(false)
+  const [usingCache, setUsingCache] = useState(false)
 
   const resetProfileState = useCallback(() => {
     setProfileStatus('idle')
@@ -1193,6 +1195,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfileError(null)
           setProfileIssueMessage(null)
           setIsProfileFallback(false)
+          // OPTIONAL: Show cache indicator
+          setUsingCache(true)
+          // Clear indicator after background session restore completes
+          setTimeout(() => setUsingCache(false), 5000)
           // Continue in background to verify with Supabase
         } else {
           // No cache - show loading state
@@ -1251,6 +1257,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   setProfileError(null)
                   setProfileIssueMessage(null)
                   setIsProfileFallback(false)
+                  // OPTIONAL: Show cache indicator
+                  setUsingCache(true)
+                  // Clear indicator after background session restore completes
+                  setTimeout(() => setUsingCache(false), 5000)
                   
                   // Try to restore session in background with retry
                   // This is non-blocking and won't cause redirect if it fails
@@ -2342,7 +2352,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profileIssueMessage,
     isProfileFallback,
     refreshProfile,
+    usingCache,
   }
+
+  // OPTIONAL: Health check logging in development mode
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+
+    const healthCheck = setInterval(() => {
+      const cache = readSessionCache()
+      console.table({
+        'User ID': user?.uid || 'null',
+        'Profile ID': userProfile?.uid || 'null',
+        'Role': role,
+        'Loading': loading,
+        'Profile Status': profileStatus,
+        'Has Cache': cache ? 'Yes' : 'No',
+        'Cache Role': cache?.profile?.role || 'N/A',
+        'User Role in Object': user?.role || 'undefined',
+        'Using Cache': usingCache ? 'Yes' : 'No',
+      })
+    }, 10000) // Every 10 seconds in dev
+
+    return () => clearInterval(healthCheck)
+  }, [user, userProfile, role, loading, profileStatus, usingCache])
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
 }
