@@ -1141,7 +1141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // CRITICAL FIX: Add timeout to prevent hanging on getSession()
         // If Supabase hangs, we need to fall back to cache or fail gracefully
-        const SESSION_TIMEOUT_MS = 15000 // 15 second timeout - give more time for restoration
+        const SESSION_TIMEOUT_MS = 20000 // 20 second timeout - give more time for slow connections
         let timeoutId: NodeJS.Timeout | null = null
         
         const sessionPromise = supabase.auth.getSession()
@@ -1159,13 +1159,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (timeoutError) {
           if (timeoutId) clearTimeout(timeoutId)
           if (timeoutError instanceof Error && timeoutError.message === 'SESSION_TIMEOUT') {
-            console.warn('[AuthContext] getSession() timed out after 15s')
+            console.warn('[AuthContext] getSession() timed out after 20s - this may indicate network issues')
             
             // IMPROVED: If we have valid cache, use it and continue without redirecting
             // This prevents the "content disappearing" issue on slow connections
             if (hasCachedData && cachedData) {
               const cacheAge = Date.now() - cachedData.timestamp
-              // Use cache if it's reasonably fresh (< 5 minutes - matching TTL)
+              // Use cache if it's reasonably fresh (< 10 minutes - matching TTL)
               if (cacheAge < SESSION_CACHE_TTL) {
                 console.debug('[AuthContext] Using cache after timeout - session will be restored in background')
                 if (isMounted) {
@@ -1173,59 +1173,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   setUserProfile(cachedData.profile)
                   setLoading(false)
                   
-                  // Try to restore session in background without blocking UI
+                  // Try to restore session in background with retry
                   // This is non-blocking and won't cause redirect if it fails
-                  supabase.auth.getSession()
-                    .then(({ data, error }) => {
+                  const retrySessionRestore = async (attempt = 1, maxAttempts = 3) => {
+                    try {
+                      const { data, error } = await supabase.auth.getSession()
                       if (data?.session && isMounted) {
+                        console.debug('[AuthContext] Background session restored successfully')
                         setSession(data.session)
                         void syncServerSession('SIGNED_IN', data.session, cachedData.profile)
-                      } else if (error) {
-                        // Session truly invalid - clear corrupted data
-                        console.debug('[AuthContext] Background session restore failed, will prompt re-login on next action')
+                      } else if (error && attempt < maxAttempts) {
+                        // Retry after delay
+                        console.debug(`[AuthContext] Retrying session restore (attempt ${attempt + 1}/${maxAttempts})`)
+                        setTimeout(() => retrySessionRestore(attempt + 1, maxAttempts), 3000 * attempt)
                       }
-                    })
-                    .catch(() => {
+                    } catch (err) {
+                      if (attempt < maxAttempts) {
+                        setTimeout(() => retrySessionRestore(attempt + 1, maxAttempts), 3000 * attempt)
+                      }
                       // Fail silently - user can continue with cached data
-                    })
+                    }
+                  }
+                  
+                  void retrySessionRestore()
                 }
                 return
               }
             }
             
-            // No valid cache - clear corrupted data and show a user-friendly message
-            console.warn('[AuthContext] No valid cache after timeout, cleaning up')
+            // No valid cache - this is likely first login with network issues
+            // Try one more time with a longer timeout before giving up
+            console.warn('[AuthContext] No valid cache after timeout, attempting final retry')
             try {
-              // Use Supabase's built-in signOut to clear local storage
-              await supabase.auth.signOut({ scope: 'local' }).catch(() => {
-                // Ignore errors if signOut itself hangs
-              })
+              const finalAttempt = await Promise.race([
+                supabase.auth.getSession(),
+                new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error('FINAL_TIMEOUT')), 10000)
+                )
+              ]) as Awaited<ReturnType<typeof supabase.auth.getSession>>
               
-              // Clear our session cache
-              clearSessionCache()
+              if (finalAttempt.data?.session && isMounted) {
+                console.debug('[AuthContext] Final retry successful')
+                sessionResult = finalAttempt
+                // Continue with normal flow below
+              } else {
+                throw new Error('FINAL_TIMEOUT')
+              }
+            } catch (finalError) {
+              // Give up and clean up
+              console.error('[AuthContext] All session restore attempts failed')
+              try {
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+                clearSessionCache()
+                await syncServerSession('SIGNED_OUT', null).catch(() => {})
+              } catch (cleanupError) {
+                console.warn('[AuthContext] Error during session cleanup:', cleanupError)
+              }
               
-              // Clear server-side cookies via our existing callback endpoint
-              await syncServerSession('SIGNED_OUT', null).catch(() => {
-                // Ignore errors - cookies might already be cleared
-              })
-            } catch (cleanupError) {
-              console.warn('[AuthContext] Error during session cleanup:', cleanupError)
+              if (isMounted) {
+                setLoading(false)
+                setUser(null)
+                setUserProfile(null)
+                setSession(null)
+                resetProfileState()
+              }
+              return // Don't throw - gracefully degrade instead
             }
-            
-            // Set a message for the user instead of immediately redirecting
-            if (isMounted) {
-              setLoading(false)
-              setUser(null)
-              setUserProfile(null)
-              setSession(null)
-              resetProfileState()
-              
-              // Don't redirect immediately - let the page show an error message
-              // useRequireAuth hook will handle redirecting after a delay
-            }
-            return // Don't throw - gracefully degrade instead
+          } else {
+            throw timeoutError
           }
-          throw timeoutError
         }
         
         const { data, error: sessionError } = sessionResult
