@@ -216,7 +216,7 @@ function isTimeoutError(error: unknown): boolean {
   )
 }
 
-const DEFAULT_PROFILE_TIMEOUT_MS = 20000 // 20 seconds - balance between UX and reliability
+const DEFAULT_PROFILE_TIMEOUT_MS = 30000 // 30 seconds - increased for better reliability on slower connections
 
 const PERMISSION_ISSUE_MESSAGE =
   'Profile loading failed due to database permission issues. Please contact support or retry later.'
@@ -1012,25 +1012,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Aggressively retry in background with increasing delays
           // This gives the database multiple chances to respond
           const retryWithDelay = (delay: number, attempt: number) => {
-            if (attempt > 3) return // Max 3 retries
+            if (attempt > 4) {
+              // Max 4 retries (1s, 2s, 4s, 8s) - total ~15s additional wait time
+              console.debug('[AuthContext] Background retries exhausted, profile will remain in fallback mode')
+              return
+            }
             setTimeout(() => {
               console.debug(`[AuthContext] Background retry attempt ${attempt} after ${delay}ms`)
               loadUserProfile(authUser)
                 .then((result) => {
                   if (result.status === 'ready' && !result.fallback) {
-                    console.log('[AuthContext] Background retry succeeded, profile loaded')
+                    console.log('[AuthContext] Background retry succeeded, profile loaded and synced')
+                    // Profile loaded successfully - update state to reflect ready status
+                    setProfileStatus('ready')
+                    setProfileError(null)
+                    setProfileIssueMessage(null)
+                    setIsProfileFallback(false)
+                    // applyProfileToState is already called in loadUserProfile result
+                  } else if (result.status === 'degraded' && !result.fallback) {
+                    // Partial success - update status but keep fallback flag
+                    console.log('[AuthContext] Background retry partially succeeded')
+                    setProfileStatus('degraded')
+                    setIsProfileFallback(result.fallback || false)
                   } else {
-                    // Retry with exponential backoff: 2s, 4s, 8s
+                    // Retry with exponential backoff: 1s, 2s, 4s, 8s
                     retryWithDelay(delay * 2, attempt + 1)
                   }
                 })
-                .catch(() => {
-                  // Retry with exponential backoff: 2s, 4s, 8s
+                .catch((error) => {
+                  console.debug(`[AuthContext] Background retry attempt ${attempt} failed:`, error)
+                  // Retry with exponential backoff: 1s, 2s, 4s, 8s
                   retryWithDelay(delay * 2, attempt + 1)
                 })
             }, delay)
           }
-          retryWithDelay(2000, 1) // Start with 2 second delay
+          retryWithDelay(1000, 1) // Start with 1 second delay for faster recovery
         }
         return {
           profile,
