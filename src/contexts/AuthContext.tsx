@@ -1147,6 +1147,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(cachedUserWithRole)
           setUserProfile(cachedData.profile)
           setLoading(false) // CRITICAL: Set loading to false immediately with cache
+          // CRITICAL: Set profileStatus to 'ready' when restoring from cache
+          // This prevents profileStatus from being stuck on 'loading'
+          setProfileStatus('ready')
+          setProfileError(null)
+          setProfileIssueMessage(null)
+          setIsProfileFallback(false)
           // Continue in background to verify with Supabase
         } else {
           // No cache - show loading state
@@ -1200,6 +1206,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   setUser(cachedUserWithRole)
                   setUserProfile(cachedData.profile)
                   setLoading(false)
+                  // CRITICAL: Set profileStatus to 'ready' when restoring from cache after timeout
+                  setProfileStatus('ready')
+                  setProfileError(null)
+                  setProfileIssueMessage(null)
+                  setIsProfileFallback(false)
                   
                   // Try to restore session in background with retry
                   // This is non-blocking and won't cause redirect if it fails
@@ -1259,11 +1270,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
               
               if (isMounted) {
+                // CRITICAL: Don't clear user/profile if we restored from cache earlier
+                // Only clear if we never had cache
+                if (!hasCachedData) {
+                  setUser(null)
+                  setUserProfile(null)
+                  setSession(null)
+                  resetProfileState()
+                } else {
+                  // Keep cached user/profile, just mark as no session
+                  console.debug('[AuthContext] Keeping cached user/profile despite session timeout')
+                  setSession(null)
+                }
                 setLoading(false)
-                setUser(null)
-                setUserProfile(null)
-                setSession(null)
-                resetProfileState()
               }
               return // Don't throw - gracefully degrade instead
             }
@@ -1506,11 +1525,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false)
           }
           initializationInProgressRef.current = false // Reset guard
+          // CRITICAL: Use current state values, not closure values
+          // The closure might have stale values, so check the actual state
           console.log('[AuthContext] Session initialization complete', {
             hasUser: Boolean(user),
             hasSession: Boolean(session),
             hasProfile: Boolean(userProfile),
             usedCache: hasCachedData,
+            cacheUser: cachedData?.user?.uid,
+            cacheProfile: cachedData?.profile?.uid,
           })
         }
       }
@@ -2175,9 +2198,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updated_at: merged.updatedAt.toISOString(),
       }
 
-      const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
-      if (error) throw error
+      // CRITICAL: Filter payload to remove any columns that might not exist in DB
+      const filteredRow = filterProfilePayload(row)
+      
+      const { error } = await supabase.from('profiles').upsert(filteredRow, { onConflict: 'id' })
+      if (error) {
+        console.error('[AuthContext] Profile update failed:', error)
+        // Check if it's a missing column error
+        const missingColumn = extractMissingProfileColumn(error)
+        if (missingColumn) {
+          console.warn(`[AuthContext] Missing column detected: ${missingColumn}, retrying without it`)
+          // Disable the column and retry
+          disableOptionalProfileColumn(missingColumn)
+          const retryRow = filterProfilePayload(row)
+          const { error: retryError } = await supabase.from('profiles').upsert(retryRow, { onConflict: 'id' })
+          if (retryError) {
+            console.error('[AuthContext] Profile update retry failed:', retryError)
+            throw retryError
+          }
+        } else {
+          throw error
+        }
+      }
 
+      // Update state immediately (optimistic update)
       applyProfileToState(merged, user)
       
       // CRITICAL: Update cache immediately after profile update to ensure role persists on refresh
@@ -2187,7 +2231,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       persistSessionCache(userWithRole, merged)
       
-      await refreshProfile()
+      // Refresh profile in background (non-blocking) to get latest from DB
+      // Don't await - let it happen in background so UI updates immediately
+      refreshProfile().catch((refreshError) => {
+        console.warn('[AuthContext] Background profile refresh failed (non-critical):', refreshError)
+        // Non-critical - we already updated state optimistically
+      })
     },
     [supabase, user, userProfile, applyProfileToState, refreshProfile],
   )
