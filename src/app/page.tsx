@@ -123,25 +123,33 @@ export default function Home() {
   }, [refreshProfile])
 
   useEffect(() => {
-    if (!loading) {
+    // Show content if both loading and profileStatus are done, or after timeout
+    const isStillLoading = loading || profileStatus === 'loading'
+    if (!isStillLoading) {
       setEmergencyShow(false)
       return
     }
     // IMPROVED: Show content faster - only wait 3 seconds instead of 8
     // This prevents the "stuck loading" perception on page refresh
+    // Also handles case where profileStatus is stuck on 'loading'
     const timer = window.setTimeout(() => {
-      if (loading && !emergencyShow) {
+      if (isStillLoading && !emergencyShow) {
         // Show content even if loading - auth will complete in background
-        console.debug('[Home] Showing content while auth completes in background')
+        console.debug('[Home] Showing content while auth completes in background', {
+          loading,
+          profileStatus,
+        })
         setEmergencyShow(true)
       }
     }, 3000)
     return () => window.clearTimeout(timer)
-  }, [loading, emergencyShow, user])
+  }, [loading, profileStatus, emergencyShow, user])
 
   // IMPROVED: Show skeleton only briefly, then show content
   // This prevents the "content disappearing" issue
-  if (loading && !emergencyShow && !user && !userProfile) {
+  // Check both loading and profileStatus to handle stuck profile loading
+  const isStillLoading = loading || profileStatus === 'loading'
+  if (isStillLoading && !emergencyShow && !user && !userProfile) {
     return (
       <div className='container mx-auto px-4 py-16'>
         <div className='space-y-8 animate-pulse'>

@@ -75,15 +75,27 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   }, [loading])
   
   // Update optimistic state when real auth state resolves
+  // Also reset when profileStatus finishes loading (even if it failed)
   useEffect(() => {
     if (!loading && user) {
       setOptimisticUser(user)
-      setOptimisticLoading(false)
+      // Only set optimisticLoading to false if profileStatus is also done
+      if (profileStatus !== 'loading') {
+        setOptimisticLoading(false)
+      }
     } else if (!loading && !user) {
       setOptimisticUser(null)
       setOptimisticLoading(false)
     }
-  }, [loading, user])
+  }, [loading, user, profileStatus])
+  
+  // Reset optimisticLoading when profileStatus finishes (ready, error, or degraded)
+  useEffect(() => {
+    if (profileStatus !== 'loading' && profileStatus !== 'idle') {
+      // Profile status is resolved (ready, error, or degraded) - safe to stop optimistic loading
+      setOptimisticLoading(false)
+    }
+  }, [profileStatus])
 
   useEffect(() => {
     // Clear any pending timeout
@@ -147,7 +159,13 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
   // This allows pages to render immediately on refresh if cache shows user exists
   // Also wait for profileStatus to be ready (not 'loading')
   const effectiveUser = user || optimisticUser
-  const effectiveLoading = (loading || profileStatus === 'loading') && optimisticLoading && !optimisticUser
+  // Show loading if:
+  // - (loading OR profileStatus loading) AND optimisticLoading is true AND no optimistic user
+  // OR
+  // - profileStatus is loading AND we don't have a user yet (wait for both)
+  const effectiveLoading = 
+    ((loading || profileStatus === 'loading') && optimisticLoading && !optimisticUser) ||
+    (profileStatus === 'loading' && !user && !optimisticUser)
 
   return { 
     user: effectiveUser, 
