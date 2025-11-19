@@ -60,24 +60,15 @@ export function Navigation() {
   }, [userProfile?.role, user?.role, loading])
   
   // Filter nav items based on role
-  // Vendors should only see: Home, Marketplace, Profile (no regular user services)
-  // Owners don't see navigation (they use the owner dashboard instead)
+  // Vendors and owners don't see navigation (they use their own dashboards instead)
   const visibleNavItems = useMemo(() => {
     // If role is still loading, show minimal navigation
     if (normalisedRole === null) {
       return navItems.filter((item) => item.href === '/' || item.href === '/analyzer')
     }
-    // Owners don't see navigation - return empty array to maintain component structure
-    if (normalisedRole === 'owner') {
+    // Owners and vendors don't see navigation - return empty array to maintain component structure
+    if (normalisedRole === 'owner' || normalisedRole === 'vendor') {
       return []
-    }
-    if (normalisedRole === 'vendor') {
-      // Vendors only see: Home, Marketplace, Profile
-      return navItems.filter((item) => 
-        item.href === '/' || 
-        item.href === '/marketplace' || 
-        item.href === '/profile'
-      )
     }
     // Regular users see all items (filtered by auth requirement)
     return navItems.filter((item) => !item.requiresAuth || !!user)
@@ -93,15 +84,15 @@ export function Navigation() {
 
   // CRITICAL: Always return the same component structure to prevent React error #300
   // Never conditionally return different structures - always render the nav element
-  // For owners, hide it with CSS but keep the structure consistent
+  // For owners and vendors, hide it with CSS but keep the structure consistent
   // This ensures hooks are always called in the same order, preventing React error #300
-  const isOwner = normalisedRole === 'owner' || normalisedRole === 'admin'
+  const shouldHideNav = normalisedRole === 'owner' || normalisedRole === 'admin' || normalisedRole === 'vendor'
 
   return (
     <nav 
       className="bg-white shadow-sm border-b" 
-      style={isOwner ? { display: 'none' } : undefined}
-      aria-hidden={isOwner ? 'true' : undefined}
+      style={shouldHideNav ? { display: 'none' } : undefined}
+      aria-hidden={shouldHideNav ? 'true' : undefined}
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">

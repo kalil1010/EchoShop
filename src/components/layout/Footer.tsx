@@ -19,9 +19,11 @@ export function Footer() {
   const [showApplication, setShowApplication] = useState(false)
   const normalisedRole = normaliseRole(userProfile?.role ?? user?.role)
   const isOwner = normalisedRole === 'owner'
+  const isVendor = normalisedRole === 'vendor'
+  const shouldHideFooter = isOwner || isVendor
 
   useEffect(() => {
-    if (isOwner) {
+    if (shouldHideFooter) {
       return
     }
     if (!user || loading || profileStatus !== 'ready' || isProfileFallback) {
@@ -59,7 +61,7 @@ export function Footer() {
     return () => {
       isMounted = false
     }
-  }, [user, userProfile, loading, profileStatus, isProfileFallback, isOwner])
+  }, [user, userProfile, loading, profileStatus, isProfileFallback, shouldHideFooter])
 
   const canApply =
     Boolean(user) &&
@@ -74,7 +76,7 @@ export function Footer() {
     setShowApplication(false)
   }
 
-  if (isOwner) {
+  if (shouldHideFooter) {
     return null
   }
 
