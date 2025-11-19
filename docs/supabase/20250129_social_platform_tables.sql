@@ -758,6 +758,41 @@ begin
 end;
 $$ language plpgsql stable;
 
+-- Function to get conversation messages (between two users)
+-- Since there's no conversations table, this gets messages between two specific users
+create or replace function public.get_conversation_messages(
+  user1_id uuid,
+  user2_id uuid,
+  limit_count integer default 50,
+  offset_count integer default 0
+)
+returns table (
+  id uuid,
+  sender_id uuid,
+  recipient_id uuid,
+  content text,
+  read boolean,
+  created_at timestamptz
+) as $$
+begin
+  return query
+  select
+    m.id,
+    m.sender_id,
+    m.recipient_id,
+    m.content,
+    m.read,
+    m.created_at
+  from public.messages m
+  where
+    (m.sender_id = user1_id and m.recipient_id = user2_id)
+    or (m.sender_id = user2_id and m.recipient_id = user1_id)
+  order by m.created_at desc
+  limit limit_count
+  offset offset_count;
+end;
+$$ language plpgsql stable;
+
 -- ------------------------------------------------------------------
 -- Database Triggers
 -- ------------------------------------------------------------------
@@ -964,4 +999,321 @@ drop trigger if exists trg_update_profile_follow_counts on public.follows;
 create trigger trg_update_profile_follow_counts
 after insert or delete on public.follows
 for each row execute function public.update_profile_follow_counts();
+
+-- ------------------------------------------------------------------
+-- Reports Table (Content Moderation)
+-- ------------------------------------------------------------------
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references auth.users(id) on delete cascade,
+  reported_user_id uuid references auth.users(id) on delete cascade,
+  reported_post_id uuid references public.posts(id) on delete cascade,
+  type text not null check (type in ('post', 'user', 'comment')),
+  reason text not null,
+  description text,
+  status text not null default 'pending'
+    check (status in ('pending', 'reviewed', 'resolved', 'dismissed')),
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint reports_target_check check (
+    (type = 'post' and reported_post_id is not null) or
+    (type = 'user' and reported_user_id is not null) or
+    (type = 'comment' and reported_post_id is not null)
+  )
+);
+
+-- Indexes
+create index if not exists reports_reporter_id_idx on public.reports (reporter_id);
+create index if not exists reports_reported_user_id_idx on public.reports (reported_user_id);
+create index if not exists reports_reported_post_id_idx on public.reports (reported_post_id);
+create index if not exists reports_status_idx on public.reports (status);
+create index if not exists reports_type_idx on public.reports (type);
+create index if not exists reports_created_at_idx on public.reports (created_at desc);
+
+-- Enable RLS
+alter table public.reports enable row level security;
+
+-- RLS Policies
+drop policy if exists "Users can create reports" on public.reports;
+create policy "Users can create reports"
+  on public.reports
+  for insert
+  with check (auth.uid() = reporter_id);
+
+drop policy if exists "Users can view their own reports" on public.reports;
+create policy "Users can view their own reports"
+  on public.reports
+  for select
+  using (auth.uid() = reporter_id);
+
+-- Admins can view all reports
+drop policy if exists "Admins can view all reports" on public.reports;
+create policy "Admins can view all reports"
+  on public.reports
+  for select
+  using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role in ('admin', 'owner')
+    )
+  );
+
+-- Admins can update reports
+drop policy if exists "Admins can update reports" on public.reports;
+create policy "Admins can update reports"
+  on public.reports
+  for update
+  using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role in ('admin', 'owner')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role in ('admin', 'owner')
+    )
+  );
+
+-- ------------------------------------------------------------------
+-- Communities Table (Phase 5)
+-- ------------------------------------------------------------------
+create table if not exists public.communities (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  cover_image text,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  is_public boolean not null default true,
+  member_count integer not null default 0,
+  post_count integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+-- Indexes
+create index if not exists communities_created_by_idx on public.communities (created_by);
+create index if not exists communities_is_public_idx on public.communities (is_public);
+create index if not exists communities_created_at_idx on public.communities (created_at desc);
+
+-- Add updated_at trigger
+create or replace function public.touch_communities_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_communities_updated_at on public.communities;
+create trigger trg_communities_updated_at
+before update on public.communities
+for each row execute function public.touch_communities_updated_at();
+
+-- Enable RLS
+alter table public.communities enable row level security;
+
+-- RLS Policies
+drop policy if exists "Users can view public communities" on public.communities;
+create policy "Users can view public communities"
+  on public.communities
+  for select
+  using (is_public = true);
+
+drop policy if exists "Users can create communities" on public.communities;
+create policy "Users can create communities"
+  on public.communities
+  for insert
+  with check (auth.uid() = created_by);
+
+drop policy if exists "Users can update their communities" on public.communities;
+create policy "Users can update their communities"
+  on public.communities
+  for update
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+
+-- ------------------------------------------------------------------
+-- Community Members Table (Phase 5)
+-- ------------------------------------------------------------------
+create table if not exists public.community_members (
+  community_id uuid not null references public.communities(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null default 'member'
+    check (role in ('member', 'moderator', 'admin')),
+  joined_at timestamptz not null default timezone('utc', now()),
+  primary key (community_id, user_id)
+);
+
+-- Indexes
+create index if not exists community_members_community_id_idx on public.community_members (community_id);
+create index if not exists community_members_user_id_idx on public.community_members (user_id);
+
+-- Enable RLS
+alter table public.community_members enable row level security;
+
+-- RLS Policies
+drop policy if exists "Users can view community members" on public.community_members;
+create policy "Users can view community members"
+  on public.community_members
+  for select
+  using (true);
+
+drop policy if exists "Users can join communities" on public.community_members;
+create policy "Users can join communities"
+  on public.community_members
+  for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can leave communities" on public.community_members;
+create policy "Users can leave communities"
+  on public.community_members
+  for delete
+  using (auth.uid() = user_id);
+
+-- Trigger to update community member_count
+create or replace function public.update_community_member_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.communities
+    set member_count = member_count + 1
+    where id = new.community_id;
+    return new;
+  elsif TG_OP = 'DELETE' then
+    update public.communities
+    set member_count = greatest(0, member_count - 1)
+    where id = old.community_id;
+    return old;
+  end if;
+  return null;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_update_community_member_count on public.community_members;
+create trigger trg_update_community_member_count
+after insert or delete on public.community_members
+for each row execute function public.update_community_member_count();
+
+-- ------------------------------------------------------------------
+-- Challenges Table (Phase 5)
+-- ------------------------------------------------------------------
+create table if not exists public.challenges (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  cover_image text,
+  community_id uuid references public.communities(id) on delete set null,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  start_date timestamptz not null,
+  end_date timestamptz not null,
+  is_active boolean not null default true,
+  submission_count integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+-- Indexes
+create index if not exists challenges_community_id_idx on public.challenges (community_id);
+create index if not exists challenges_created_by_idx on public.challenges (created_by);
+create index if not exists challenges_is_active_idx on public.challenges (is_active);
+create index if not exists challenges_start_date_idx on public.challenges (start_date);
+create index if not exists challenges_end_date_idx on public.challenges (end_date);
+
+-- Add updated_at trigger
+create or replace function public.touch_challenges_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_challenges_updated_at on public.challenges;
+create trigger trg_challenges_updated_at
+before update on public.challenges
+for each row execute function public.touch_challenges_updated_at();
+
+-- Enable RLS
+alter table public.challenges enable row level security;
+
+-- RLS Policies
+drop policy if exists "Users can view active challenges" on public.challenges;
+create policy "Users can view active challenges"
+  on public.challenges
+  for select
+  using (is_active = true);
+
+drop policy if exists "Users can create challenges" on public.challenges;
+create policy "Users can create challenges"
+  on public.challenges
+  for insert
+  with check (auth.uid() = created_by);
+
+drop policy if exists "Users can update their challenges" on public.challenges;
+create policy "Users can update their challenges"
+  on public.challenges
+  for update
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+
+-- ------------------------------------------------------------------
+-- Challenge Submissions Table (Phase 5)
+-- ------------------------------------------------------------------
+create table if not exists public.challenge_submissions (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  submitted_at timestamptz not null default timezone('utc', now()),
+  unique (challenge_id, post_id),
+  unique (challenge_id, user_id) -- One submission per user per challenge
+);
+
+-- Indexes
+create index if not exists challenge_submissions_challenge_id_idx on public.challenge_submissions (challenge_id);
+create index if not exists challenge_submissions_post_id_idx on public.challenge_submissions (post_id);
+create index if not exists challenge_submissions_user_id_idx on public.challenge_submissions (user_id);
+
+-- Enable RLS
+alter table public.challenge_submissions enable row level security;
+
+-- RLS Policies
+drop policy if exists "Users can view challenge submissions" on public.challenge_submissions;
+create policy "Users can view challenge submissions"
+  on public.challenge_submissions
+  for select
+  using (true);
+
+drop policy if exists "Users can submit to challenges" on public.challenge_submissions;
+create policy "Users can submit to challenges"
+  on public.challenge_submissions
+  for insert
+  with check (auth.uid() = user_id);
+
+-- Trigger to update challenge submission_count
+create or replace function public.update_challenge_submission_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.challenges
+    set submission_count = submission_count + 1
+    where id = new.challenge_id;
+    return new;
+  elsif TG_OP = 'DELETE' then
+    update public.challenges
+    set submission_count = greatest(0, submission_count - 1)
+    where id = old.challenge_id;
+    return old;
+  end if;
+  return null;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_update_challenge_submission_count on public.challenge_submissions;
+create trigger trg_update_challenge_submission_count
+after insert or delete on public.challenge_submissions
+for each row execute function public.update_challenge_submission_count();
 
