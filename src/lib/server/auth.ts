@@ -17,7 +17,32 @@ export async function resolveAuthenticatedUser(
   request: NextRequest,
 ): Promise<{ userId: string; accessToken: string }> {
   const routeClient = createRouteHandlerClient({ cookies })
-  const { data: sessionData, error: sessionError } = await routeClient.auth.getSession()
+  
+  let sessionData: { session: any } | null = null
+  let sessionError: any = null
+  
+  try {
+    const result = await routeClient.auth.getSession()
+    sessionData = result.data
+    sessionError = result.error
+  } catch (error) {
+    // CRITICAL: Catch and suppress refresh token errors that might be thrown as exceptions
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorCode = (error as { code?: string })?.code
+    const isRefreshTokenError = 
+      errorCode === 'refresh_token_not_found' ||
+      errorMessage.includes('Refresh Token Not Found') ||
+      errorMessage.includes('refresh_token_not_found') ||
+      (error && typeof error === 'object' && '__isAuthError' in error && errorCode === 'refresh_token_not_found')
+    
+    if (isRefreshTokenError) {
+      // Refresh token expired - user is not authenticated
+      throw new PermissionError('auth', 'You must be logged in to continue.')
+    }
+    
+    // Re-throw non-refresh-token errors
+    throw error
+  }
   
   // Check if this is a refresh token error - handle gracefully
   if (sessionError) {

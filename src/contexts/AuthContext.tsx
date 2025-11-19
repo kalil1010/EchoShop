@@ -1347,12 +1347,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const code = getErrorCode(sessionError) ?? ''
           
           // Handle refresh token errors gracefully - these are expected when tokens expire
-          if (
-            message.includes('Refresh Token') || 
-            message.includes('Invalid') ||
+          // CRITICAL: Check for refresh token errors - these are expected when tokens expire
+          const isRefreshTokenError = 
             code === 'refresh_token_not_found' ||
-            message.includes('refresh_token_not_found')
-          ) {
+            (code === 400 && message.includes('Refresh Token')) ||
+            message.includes('Refresh Token Not Found') ||
+            message.includes('refresh_token_not_found') ||
+            (sessionError && typeof sessionError === 'object' && '__isAuthError' in sessionError && code === 'refresh_token_not_found')
+          
+          if (isRefreshTokenError || (message.includes('Refresh Token') || message.includes('Invalid'))) {
           // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
           if (hasCachedData && cachedData) {
             console.debug('[AuthContext] Supabase session failed, but cache exists - using cache as fallback')

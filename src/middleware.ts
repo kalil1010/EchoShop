@@ -88,10 +88,14 @@ const getAuthenticatedUser = async (req: NextRequest) => {
         
         // When refresh token is invalid/expired, cookies are stale
         // Return null to allow stale cookie handling below
+        // CRITICAL: Don't log these errors - they're expected when tokens expire
         if (errorCode === 'refresh_token_not_found' || 
+            errorCode === 400 && errorMessage.includes('Refresh Token') ||
             errorMessage.includes('Refresh Token Not Found') ||
-            errorMessage.includes('refresh_token_not_found')) {
+            errorMessage.includes('refresh_token_not_found') ||
+            (sessionError && typeof sessionError === 'object' && '__isAuthError' in sessionError && errorCode === 'refresh_token_not_found')) {
           // Cookies exist but session invalid - return null to allow client-side recovery
+          // No logging - this is expected behavior
           return null
         }
       }
