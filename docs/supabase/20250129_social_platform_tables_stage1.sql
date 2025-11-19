@@ -853,11 +853,29 @@ begin
 end;
 $$ language plpgsql;
 
-drop trigger if exists trg_update_profile_posts_count on public.posts;
-create trigger trg_update_profile_posts_count
-after insert or delete on public.posts
+drop trigger if exists trg_update_profile_posts_count_insert on public.posts;
+drop trigger if exists trg_update_profile_posts_count_delete on public.posts;
+drop trigger if exists trg_update_profile_posts_count_update on public.posts;
+
+-- Trigger for INSERT: only count if not soft-deleted
+create trigger trg_update_profile_posts_count_insert
+after insert on public.posts
 for each row
-when (old.deleted_at is null or new.deleted_at is not null)
+when (new.deleted_at is null)
+execute function public.update_profile_posts_count();
+
+-- Trigger for DELETE: only count if was not soft-deleted
+create trigger trg_update_profile_posts_count_delete
+after delete on public.posts
+for each row
+when (old.deleted_at is null)
+execute function public.update_profile_posts_count();
+
+-- Trigger for UPDATE: only count if deleted_at status changed
+create trigger trg_update_profile_posts_count_update
+after update on public.posts
+for each row
+when (old.deleted_at is distinct from new.deleted_at)
 execute function public.update_profile_posts_count();
 
 -- Trigger to update profile counts (followers_count, following_count)
