@@ -803,7 +803,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserProfile = useCallback(
     async (authUser: AuthUser): Promise<ProfileLoadResult> => {
       if (!supabase) {
-        const fallback = buildBootstrapProfile(authUser, null)
+        // CRITICAL FIX #5: Check vendor status even when Supabase is unavailable
+        // Use cached vendor status if available
+        let vendorStatus: 'approved' | 'pending' | null = null
+        const cachedSession = readSessionCache()
+        if (cachedSession && cachedSession.user.uid === authUser.uid && cachedSession.profile.role === 'vendor') {
+          vendorStatus = 'approved'
+        }
+        const fallback = buildBootstrapProfile(authUser, vendorStatus)
         const unavailableError = normaliseError(
           new Error('SUPABASE_UNAVAILABLE'),
           'Supabase unavailable',
@@ -918,7 +925,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error,
         )
         const normalised = normaliseError(error, 'Profile fetch failed')
-        const fallback = buildBootstrapProfile(authUser, null)
+        // CRITICAL FIX #5: Check vendor status before building fallback
+        let vendorStatus: 'approved' | 'pending' | null = null
+        if (supabase) {
+          try {
+            vendorStatus = await checkVendorStatus(supabase, authUser.uid)
+          } catch (vendorError) {
+            console.debug('[AuthContext] Vendor status check failed during error handling (non-critical):', vendorError)
+          }
+        }
+        const fallback = buildBootstrapProfile(authUser, vendorStatus)
         let upsertFallbackError: Error | null = null
         try {
           await upsertProfileWithRetry(profileToRow(fallback), authUser, 'fetch-error')
@@ -990,18 +1006,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfileIssueMessage(issueMessage)
         setIsProfileFallback(true)
         
-        // CRITICAL FIX: Preserve existing role instead of defaulting to 'user'
-        // Check localStorage for last known good role, or use current userProfile role
+        // CRITICAL FIX #4: Preserve existing role - check session cache FIRST (most recent)
         let preservedRole: UserRole | undefined = undefined
-        const lastKnownRole = getRoleFromLocalStorage()
-        if (lastKnownRole && lastKnownRole.uid === authUser.uid && lastKnownRole.role !== 'user') {
-          preservedRole = lastKnownRole.role
-        } else if (userProfile && userProfile.uid === authUser.uid && userProfile.role !== 'user') {
-          // Preserve current profile role if it exists and is better than default
-          preservedRole = userProfile.role
+        
+        // 1. Check session cache FIRST (most recent and reliable)
+        const cachedSession = readSessionCache()
+        if (cachedSession && cachedSession.user.uid === authUser.uid) {
+          preservedRole = cachedSession.profile.role
+          console.debug('[AuthContext] Preserving role from session cache:', preservedRole)
         }
         
-        const fallback = buildBootstrapProfile(authUser, null)
+        // 2. Fall back to localStorage vendor status
+        if (!preservedRole) {
+          const lastKnownRole = getRoleFromLocalStorage()
+          if (lastKnownRole && lastKnownRole.uid === authUser.uid && lastKnownRole.role !== 'user') {
+            preservedRole = lastKnownRole.role
+            console.debug('[AuthContext] Preserving role from localStorage:', preservedRole)
+          }
+        }
+        
+        // 3. Fall back to current userProfile
+        if (!preservedRole && userProfile && userProfile.uid === authUser.uid && userProfile.role !== 'user') {
+          preservedRole = userProfile.role
+          console.debug('[AuthContext] Preserving role from current profile:', preservedRole)
+        }
+        
+        // CRITICAL FIX #5: Check vendor status before building bootstrap profile
+        let vendorStatus: 'approved' | 'pending' | null = null
+        if (supabase && (!preservedRole || preservedRole === 'user')) {
+          try {
+            vendorStatus = await checkVendorStatus(supabase, authUser.uid)
+          } catch (error) {
+            console.debug('[AuthContext] Vendor status check failed during timeout (non-critical):', error)
+          }
+        }
+        
+        const fallback = buildBootstrapProfile(authUser, vendorStatus)
         // Override role if we have a preserved role
         if (preservedRole) {
           fallback.role = preservedRole
@@ -1061,7 +1101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [loadUserProfile, applyProfileToState, getRoleFromLocalStorage, userProfile],
+    [loadUserProfile, applyProfileToState, getRoleFromLocalStorage, userProfile, supabase],
   )
 
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
@@ -1431,7 +1471,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
           
-          setUser(mapped)
+          // CRITICAL FIX #1: Don't setUser yet - wait for profile to load first
+          // This prevents caching user object without role
           
           // Load profile with timeout - this will use fallback if it times out
           const profileResult = await loadUserProfileWithTimeout(mapped)
@@ -1446,11 +1487,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (finalProfile.role === 'user' || !finalProfile.role) {
               console.debug('[AuthContext] Profile load failed, preserving role from cache:', preservedRole)
               finalProfile.role = preservedRole
-              // Update the profile state with preserved role immediately
-              applyProfileToState(finalProfile, mapped)
             }
           }
+          
+          // CRITICAL FIX #1: NOW set user with role from profile (before reconciliation)
           if (finalProfile) {
+            const userWithRole = {
+              ...mapped,
+              role: finalProfile.role,
+            }
+            setUser(userWithRole) // Set once with correct role
+            
             try {
               // Add timeout for role reconciliation to prevent hanging
               // If it times out, we'll use the original profile
@@ -1460,6 +1507,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               })
               
               finalProfile = await Promise.race([syncPromise, timeoutPromise])
+              
+              // Update user with final role after reconciliation
+              const finalUserWithRole = {
+                ...mapped,
+                role: finalProfile.role,
+              }
+              setUser(finalUserWithRole)
+              
+              // Cache with final profile and role
+              if (nextSession) {
+                persistSessionCache(finalUserWithRole, finalProfile)
+                void syncServerSession('SIGNED_IN', nextSession, finalProfile)
+              }
             } catch (syncError) {
               // If sync fails or times out, use original profile
               const isTimeout = syncError instanceof Error && syncError.message === 'ROLE_SYNC_TIMEOUT'
@@ -1468,25 +1528,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               } else {
                 console.warn('[AuthContext] Role sync failed during session initialization:', syncError)
               }
-              // Keep original profile if sync fails - finalProfile already has the original value
+              // Cache with original profile if sync fails
+              if (nextSession) {
+                const userWithRole = {
+                  ...mapped,
+                  role: finalProfile.role,
+                }
+                persistSessionCache(userWithRole, finalProfile)
+                void syncServerSession('SIGNED_IN', nextSession, finalProfile)
+              }
             }
-          }
-          
-          // Task C1: Re-sync with profile data after it's loaded (async, don't block)
-          if (finalProfile && nextSession) {
-            // CRITICAL: Ensure role is in user object before caching
-            // This ensures role persists on refresh
-            const userWithRole = {
-              ...mapped,
-              role: finalProfile.role,
-            }
-            // Update user state with role
-            setUser(userWithRole)
-            // Set cache immediately after profile is loaded with role in user object
-            persistSessionCache(userWithRole, finalProfile)
-            
-            // Also sync to server (existing code)
-            void syncServerSession('SIGNED_IN', nextSession, finalProfile)
           }
         } else {
           setUser(null)
@@ -1812,14 +1863,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const recovered = recoverSessionCacheSnapshot()
         if (recovered && (!user || !userProfile)) {
           console.debug('[AuthContext] Restored session state from backup cache after visibility change')
-          // CRITICAL: Ensure role is in user object when restoring from backup cache
+          // CRITICAL FIX #3: Force update - don't use previous if it exists without profile
           const recoveredUserWithRole = {
             ...recovered.user,
             role: recovered.profile.role,
           }
-          setUser((previous) => previous ?? recoveredUserWithRole)
-          setUserProfile((previous) => previous ?? recovered.profile)
+          // Direct assignment, not callback - ensures role is always set
+          setUser(recoveredUserWithRole)
+          setUserProfile(recovered.profile)
           setLoading(false)
+          // Re-cache to refresh timestamp
+          persistSessionCache(recoveredUserWithRole, recovered.profile)
         }
         
         // INSTANT, NON-BLOCKING: Reconnect subscriptions immediately
@@ -1866,14 +1920,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const recovered = recoverSessionCacheSnapshot()
           if (recovered) {
             console.debug('[AuthContext] Restored session state from backup cache on focus')
-            // CRITICAL: Ensure role is in user object when restoring from backup cache
+            // CRITICAL FIX #3: Force update - don't use previous if it exists without profile
             const recoveredUserWithRole = {
               ...recovered.user,
               role: recovered.profile.role,
             }
-            setUser((previous) => previous ?? recoveredUserWithRole)
-            setUserProfile((previous) => previous ?? recovered.profile)
+            // Direct assignment, not callback - ensures role is always set
+            setUser(recoveredUserWithRole)
+            setUserProfile(recovered.profile)
             setLoading(false)
+            // Re-cache to refresh timestamp
+            persistSessionCache(recoveredUserWithRole, recovered.profile)
           }
         }
         // Reconnect subscriptions in background - never blocks
@@ -1992,11 +2049,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalFallback = true
       }
 
-      // CRITICAL: Ensure role is in user object and cache it immediately after login
+      // CRITICAL FIX #2: Ensure role is in user object and update state BEFORE caching
       const authUserWithRole = {
         ...authUser,
         role: finalProfile.role,
       }
+      
+      // Update state immediately with role (before caching)
+      setUser(authUserWithRole)
+      setUserProfile(finalProfile)
       
       // Cache immediately after successful login to enable instant restoration on refresh
       if (finalProfile && session) {
