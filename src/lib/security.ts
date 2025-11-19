@@ -59,12 +59,15 @@ export function mapSupabaseError(error: unknown): Error {
   const code = extractCode(error)
   
   // Check if this is a refresh token error - suppress logging for these
+  // Note: code can be string or number, so check both
+  const codeStr = String(code)
+  const codeNum = typeof code === 'number' ? code : undefined
   const isRefreshTokenError = 
-    code === 'refresh_token_not_found' ||
-    code === 400 && message.includes('Refresh Token') ||
+    codeStr === 'refresh_token_not_found' ||
+    (codeNum === 400 || codeStr === '400') && message.includes('Refresh Token') ||
     message.includes('Refresh Token Not Found') ||
     message.includes('refresh_token_not_found') ||
-    (error && typeof error === 'object' && '__isAuthError' in error && code === 'refresh_token_not_found')
+    (error && typeof error === 'object' && '__isAuthError' in error && codeStr === 'refresh_token_not_found')
   
   // CRITICAL: If it's a refresh token error, return PermissionError without logging
   if (isRefreshTokenError) {

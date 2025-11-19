@@ -1350,7 +1350,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // CRITICAL: Check for refresh token errors - these are expected when tokens expire
           const isRefreshTokenError = 
             code === 'refresh_token_not_found' ||
-            (code === 400 && message.includes('Refresh Token')) ||
+            (code === '400' && message.includes('Refresh Token')) ||
             message.includes('Refresh Token Not Found') ||
             message.includes('refresh_token_not_found') ||
             (sessionError && typeof sessionError === 'object' && '__isAuthError' in sessionError && code === 'refresh_token_not_found')
