@@ -1136,8 +1136,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cachedData) {
           hasCachedData = true
           console.debug('[AuthContext] Found valid session cache, restoring immediately')
+          // CRITICAL: Ensure role is in user object when restoring from cache
+          // This fixes the role persistence issue on refresh
+          const cachedUserWithRole = {
+            ...cachedData.user,
+            role: cachedData.profile.role, // Ensure role is always set from profile
+          }
           // Hydrate from cache immediately for instant UI
-          setUser(cachedData.user)
+          setUser(cachedUserWithRole)
           setUserProfile(cachedData.profile)
           setLoading(false) // CRITICAL: Set loading to false immediately with cache
           // Continue in background to verify with Supabase
@@ -1185,7 +1191,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (cacheAge < SESSION_CACHE_TTL) {
                 console.debug('[AuthContext] Using cache after timeout - session will be restored in background')
                 if (isMounted) {
-                  setUser(cachedData.user)
+                  // CRITICAL: Ensure role is in user object when restoring from cache
+                  const cachedUserWithRole = {
+                    ...cachedData.user,
+                    role: cachedData.profile.role,
+                  }
+                  setUser(cachedUserWithRole)
                   setUserProfile(cachedData.profile)
                   setLoading(false)
                   
@@ -1272,24 +1283,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             code === 'refresh_token_not_found' ||
             message.includes('refresh_token_not_found')
           ) {
-            // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
-            if (hasCachedData && cachedData) {
-              console.debug('[AuthContext] Supabase session failed, but cache exists - using cache as fallback')
-              // Cache already hydrated user and profile above, loading already set to false
-              // Try to get session in background, but don't block
-              supabase.auth.getSession()
-                .then(({ data }) => {
-                  if (data?.session && isMounted) {
-                    setSession(data.session)
-                    void syncServerSession('SIGNED_IN', data.session, cachedData.profile)
-                  }
-                })
-                .catch(() => {
-                  // Session retrieval failed - use cache without session
-                  console.debug('[AuthContext] Using cache without session - will restore on next interaction')
-                })
-              return
+          // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
+          if (hasCachedData && cachedData) {
+            console.debug('[AuthContext] Supabase session failed, but cache exists - using cache as fallback')
+            // CRITICAL: Ensure role is in user object when using cache as fallback
+            const cachedUserWithRole = {
+              ...cachedData.user,
+              role: cachedData.profile.role,
             }
+            if (isMounted) {
+              setUser(cachedUserWithRole)
+              setUserProfile(cachedData.profile)
+              setLoading(false)
+            }
+            // Try to get session in background, but don't block
+            supabase.auth.getSession()
+              .then(({ data }) => {
+                if (data?.session && isMounted) {
+                  setSession(data.session)
+                  void syncServerSession('SIGNED_IN', data.session, cachedData.profile)
+                }
+              })
+              .catch(() => {
+                // Session retrieval failed - use cache without session
+                console.debug('[AuthContext] Using cache without session - will restore on next interaction')
+              })
+            return
+          }
             
             // No cache - clear everything
             console.debug('[AuthContext] Refresh token invalid or expired, no cache - clearing session and cookies')
@@ -1319,7 +1339,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // For other errors, if cache exists, use it as fallback
           if (hasCachedData && cachedData) {
             console.debug('[AuthContext] Supabase session error, but cache exists - using cache as fallback')
-            // Cache already hydrated state above, loading already set to false
+            // CRITICAL: Ensure role is in user object when using cache as fallback
+            const cachedUserWithRole = {
+              ...cachedData.user,
+              role: cachedData.profile.role,
+            }
+            if (isMounted) {
+              setUser(cachedUserWithRole)
+              setUserProfile(cachedData.profile)
+              setLoading(false)
+            }
             return
           }
           
@@ -1350,7 +1379,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const sessionUser = nextSession?.user ?? null
         if (sessionUser) {
           const mapped = mapAuthUser(sessionUser)
-          setUser(mapped)
           
           // CRITICAL: Check localStorage for cached role before loading profile
           // This ensures we preserve owner role even if profile load times out
@@ -1361,7 +1389,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (preservedRole) {
             console.debug('[AuthContext] Using preserved role from localStorage:', preservedRole)
+            // Set role in user object immediately for better UX
+            mapped.role = preservedRole
           }
+          
+          setUser(mapped)
           
           // Load profile with timeout - this will use fallback if it times out
           const profileResult = await loadUserProfileWithTimeout(mapped)
@@ -1404,8 +1436,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Task C1: Re-sync with profile data after it's loaded (async, don't block)
           if (finalProfile && nextSession) {
-            // Set cache immediately after profile is loaded
-            persistSessionCache(mapped, finalProfile)
+            // CRITICAL: Ensure role is in user object before caching
+            // This ensures role persists on refresh
+            const userWithRole = {
+              ...mapped,
+              role: finalProfile.role,
+            }
+            // Update user state with role
+            setUser(userWithRole)
+            // Set cache immediately after profile is loaded with role in user object
+            persistSessionCache(userWithRole, finalProfile)
             
             // Also sync to server (existing code)
             void syncServerSession('SIGNED_IN', nextSession, finalProfile)
@@ -1419,7 +1459,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // CRITICAL FIX: If cache exists, use it as fallback instead of clearing
         if (hasCachedData && cachedData && isMounted) {
           console.debug('[AuthContext] Supabase initialization failed, but cache exists - using cache as fallback')
-          // Cache already hydrated state above, loading already set to false
+          // CRITICAL: Ensure role is in user object when using cache as fallback
+          const cachedUserWithRole = {
+            ...cachedData.user,
+            role: cachedData.profile.role,
+          }
+          setUser(cachedUserWithRole)
+          setUserProfile(cachedData.profile)
+          setLoading(false)
           return
         }
         
@@ -1663,7 +1710,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const recovered = recoverSessionCacheSnapshot()
         if (recovered && (!user || !userProfile)) {
           console.debug('[AuthContext] Restored session state from backup cache after visibility change')
-          setUser((previous) => previous ?? recovered.user)
+          // CRITICAL: Ensure role is in user object when restoring from backup cache
+          const recoveredUserWithRole = {
+            ...recovered.user,
+            role: recovered.profile.role,
+          }
+          setUser((previous) => previous ?? recoveredUserWithRole)
           setUserProfile((previous) => previous ?? recovered.profile)
           setLoading(false)
         }
@@ -1712,7 +1764,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const recovered = recoverSessionCacheSnapshot()
           if (recovered) {
             console.debug('[AuthContext] Restored session state from backup cache on focus')
-            setUser((previous) => previous ?? recovered.user)
+            // CRITICAL: Ensure role is in user object when restoring from backup cache
+            const recoveredUserWithRole = {
+              ...recovered.user,
+              role: recovered.profile.role,
+            }
+            setUser((previous) => previous ?? recoveredUserWithRole)
             setUserProfile((previous) => previous ?? recovered.profile)
             setLoading(false)
           }
@@ -1833,8 +1890,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalFallback = true
       }
 
+      // CRITICAL: Ensure role is in user object and cache it immediately after login
+      const authUserWithRole = {
+        ...authUser,
+        role: finalProfile.role,
+      }
+      
+      // Cache immediately after successful login to enable instant restoration on refresh
+      if (finalProfile && session) {
+        persistSessionCache(authUserWithRole, finalProfile)
+      }
+
       return {
-        user: authUser,
+        user: authUserWithRole,
         profile: finalProfile,
         session,
         profileStatus: finalStatus,
@@ -2032,6 +2100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error
 
       applyProfileToState(merged, user)
+      
+      // CRITICAL: Update cache immediately after profile update to ensure role persists on refresh
+      const userWithRole = {
+        ...user,
+        role: merged.role,
+      }
+      persistSessionCache(userWithRole, merged)
+      
       await refreshProfile()
     },
     [supabase, user, userProfile, applyProfileToState, refreshProfile],
