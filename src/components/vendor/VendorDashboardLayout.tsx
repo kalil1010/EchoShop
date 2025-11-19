@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { UploadCloud, BarChart3, Building2, MessageSquare, DollarSign } from 'lucide-react'
+import { UploadCloud, BarChart3, Building2, MessageSquare, DollarSign, LogOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -78,12 +78,13 @@ const adaptAnalytics = (payload: VendorAnalyticsResponse | null | undefined): Ve
 })
 
 export default function VendorDashboardLayout() {
-  const { userProfile, roleMeta } = useAuth()
+  const { userProfile, roleMeta, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<VendorTab>('overview')
   const [products, setProducts] = useState<VendorProduct[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState<string | null>(null)
   const [productKey, setProductKey] = useState(0)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const [analytics, setAnalytics] = useState<VendorAnalyticsSnapshot | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
@@ -100,6 +101,28 @@ export default function VendorDashboardLayout() {
   }, [userProfile])
 
   const vendorId = userProfile?.uid ?? ''
+
+  const handleLogout = useCallback(async () => {
+    setIsLoggingOut(true)
+    try {
+      // Wait for logout to complete (including server session clearing)
+      await logout()
+      
+      // Small delay to ensure all state is cleared and server has processed the logout
+      // This prevents redirect loops caused by stale session data
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Redirect to home page after logout
+      // Use window.location.href for a full page reload to clear any stale state
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if logout fails, try to redirect to prevent being stuck
+      window.location.href = '/'
+    }
+    // Note: We don't set setIsLoggingOut(false) here because we're doing a full page reload
+    // The component will unmount before this state update would matter
+  }, [logout])
 
   const quickActions = useMemo(
     () => [
@@ -420,7 +443,19 @@ export default function VendorDashboardLayout() {
             details current.
           </p>
         </div>
-        <NotificationBell />
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </Button>
+        </div>
       </header>
 
       {/* Onboarding Wizard */}
