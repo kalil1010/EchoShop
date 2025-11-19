@@ -1393,6 +1393,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             mapped.role = preservedRole
           }
           
+          // CRITICAL FIX: Check vendor status EARLIER (before profile load)
+          // This ensures vendor role upgrade happens even if profile load times out
+          if ((!mapped.role || mapped.role === 'user') && supabase) {
+            try {
+              const vendorStatus = await checkVendorStatus(supabase, mapped.uid)
+              if (vendorStatus === 'approved') {
+                console.debug('[AuthContext] Upgrading to vendor role before profile load', { userId: mapped.uid })
+                mapped.role = 'vendor'
+                // Cache immediately with vendor role to enable instant restoration
+                const bootstrapProfile = buildBootstrapProfile(mapped, vendorStatus)
+                persistSessionCache(mapped, bootstrapProfile)
+              }
+            } catch (vendorCheckError) {
+              // Non-critical - continue with profile load even if vendor check fails
+              console.debug('[AuthContext] Vendor status check failed (non-critical):', vendorCheckError)
+            }
+          }
+          
           setUser(mapped)
           
           // Load profile with timeout - this will use fallback if it times out
@@ -1692,6 +1710,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearInterval(monitorInterval)
     }
   }, [supabase, user?.uid, refreshProfile])
+
+  // CRITICAL FIX: Client-side cookie cleanup for stale cookies
+  // When user is definitely logged out, schedule cleanup of stale auth cookies
+  useEffect(() => {
+    if (!user && session === null && !loading && typeof window !== 'undefined') {
+      // User is definitely logged out - schedule cookie cleanup
+      const cleanupId = setTimeout(() => {
+        // Call the auth callback endpoint to clear stale cookies
+        // This is best-effort and won't block if it fails
+        fetch('/api/auth/callback', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'SIGNED_OUT', session: null }),
+        })
+          .catch(() => {
+            // Ignore errors - cleanup is best-effort
+            // Cookies will be cleared on next login or by middleware
+          })
+      }, 5000) // Wait 5 seconds to be sure user is logged out
+      
+      return () => clearTimeout(cleanupId)
+    }
+  }, [user, session, loading])
 
   // Handle page visibility changes (browser minimized/restored)
   // SIMPLIFIED: Non-blocking, instant restoration for smooth UX

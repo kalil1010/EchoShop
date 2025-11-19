@@ -97,6 +97,19 @@ export function useRequireAuth(options?: UseRequireAuthOptions): UseRequireAuthR
     }
   }, [profileStatus])
 
+  // CRITICAL FIX: Add hard timeout for profileStatus to prevent infinite waiting
+  // If profileStatus gets stuck on 'loading', force resolution after 15 seconds
+  useEffect(() => {
+    if (profileStatus === 'loading') {
+      const timeoutId = setTimeout(() => {
+        console.warn('[useRequireAuth] profileStatus stuck on loading for 15s, forcing resolution')
+        setOptimisticLoading(false)
+      }, 15000) // 15 second max wait
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [profileStatus])
+
   useEffect(() => {
     // Clear any pending timeout
     if (timeoutRef.current) {
