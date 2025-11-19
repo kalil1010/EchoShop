@@ -43,11 +43,31 @@ export async function GET(request: NextRequest) {
 
     const { count: postsCount } = await postsQuery
 
+    // Get user's post IDs first (for likes/comments queries)
+    let userPostsQuery = supabase
+      .from('posts')
+      .select('id')
+      .eq('user_id', targetUserId)
+      .is('deleted_at', null)
+
+    if (dateFilter) {
+      userPostsQuery = userPostsQuery.gte('created_at', dateFilter.toISOString())
+    }
+
+    const { data: userPosts } = await userPostsQuery
+    const postIds = (userPosts || []).map((p: any) => p.id)
+
     // Get likes received on user's posts
     let likesQuery = supabase
       .from('likes')
       .select('id', { count: 'exact', head: true })
-      .in('post_id', supabase.from('posts').select('id').eq('user_id', targetUserId).is('deleted_at', null))
+
+    if (postIds.length > 0) {
+      likesQuery = likesQuery.in('post_id', postIds)
+    } else {
+      // No posts, so no likes
+      likesQuery = likesQuery.eq('post_id', '00000000-0000-0000-0000-000000000000') // Non-existent ID
+    }
 
     if (dateFilter) {
       likesQuery = likesQuery.gte('created_at', dateFilter.toISOString())
@@ -60,7 +80,13 @@ export async function GET(request: NextRequest) {
       .from('comments')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
-      .in('post_id', supabase.from('posts').select('id').eq('user_id', targetUserId).is('deleted_at', null))
+
+    if (postIds.length > 0) {
+      commentsQuery = commentsQuery.in('post_id', postIds)
+    } else {
+      // No posts, so no comments
+      commentsQuery = commentsQuery.eq('post_id', '00000000-0000-0000-0000-000000000000') // Non-existent ID
+    }
 
     if (dateFilter) {
       commentsQuery = commentsQuery.gte('created_at', dateFilter.toISOString())
