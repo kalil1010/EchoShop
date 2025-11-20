@@ -9,7 +9,6 @@ const CreatePostSchema = z.object({
   caption: z.string().max(2000).optional(),
   images: z.array(z.string()).min(1).max(10), // Array of image URLs (uploaded separately)
   imagePaths: z.array(z.string()).min(1).max(10),
-  outfitData: z.any().optional(),
   privacyLevel: z.enum(['public', 'followers', 'private']).default('public'),
   vendorProductIds: z.array(z.string().uuid()).optional(),
 })
@@ -33,7 +32,6 @@ export async function GET(request: NextRequest) {
         caption,
         images,
         image_paths,
-        outfit_data,
         privacy_level,
         created_at,
         updated_at,
