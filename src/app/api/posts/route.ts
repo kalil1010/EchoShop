@@ -36,7 +36,11 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         deleted_at,
-        
+        profiles:user_id (
+          id,
+          display_name,
+          photo_url
+        )
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -109,7 +113,6 @@ export async function GET(request: NextRequest) {
               url,
               path: row.image_paths?.[idx],
             })),
-            outfitData: row.outfit_data,
             privacyLevel: row.privacy_level,
             engagement: {
               likesCount,
@@ -137,7 +140,6 @@ export async function GET(request: NextRequest) {
               url,
               path: row.image_paths?.[idx],
             })),
-            outfitData: row.outfit_data,
             privacyLevel: row.privacy_level,
             engagement: {
               likesCount: 0,
@@ -201,7 +203,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { caption, images, imagePaths, outfitData, privacyLevel, vendorProductIds } = parsed.data
+    const { caption, images, imagePaths, privacyLevel, vendorProductIds } = parsed.data
 
     // Create post
     const { data: postData, error: postError } = await supabase
@@ -211,7 +213,6 @@ export async function POST(request: NextRequest) {
         caption: caption || null,
         images,
         image_paths: imagePaths,
-        outfit_data: outfitData || null,
         privacy_level: privacyLevel,
       })
       .select()
