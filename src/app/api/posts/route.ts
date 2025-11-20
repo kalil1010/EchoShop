@@ -51,17 +51,23 @@ export async function GET(request: NextRequest) {
     // Apply feed type filter
     if (feedType === 'following') {
       // Get posts from users the current user follows
-      const { data: following } = await supabase
+      const { data: following, error: followsError } = await supabase
         .from('follows')
         .select('following_id')
         .eq('follower_id', userId)
 
-      const followingIds = following?.map(f => f.following_id) || []
-      if (followingIds.length > 0) {
-        query = query.in('user_id', [...followingIds, userId]) // Include own posts
-      } else {
-        // If not following anyone, show only own posts
+      if (followsError) {
+        console.error('[posts] Error fetching follows:', followsError)
+        // If follows table doesn't exist or has issues, fall back to own posts only
         query = query.eq('user_id', userId)
+      } else {
+        const followingIds = following?.map(f => f.following_id) || []
+        if (followingIds.length > 0) {
+          query = query.in('user_id', [...followingIds, userId]) // Include own posts
+        } else {
+          // If not following anyone, show only own posts
+          query = query.eq('user_id', userId)
+        }
       }
     } else if (feedType === 'trending') {
       // For trending, we'll use a simple engagement-based query
@@ -74,43 +80,81 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query
 
-    if (error) throw error
+    if (error) {
+      console.error('[posts] Error fetching posts query:', error)
+      throw error
+    }
 
     // Get engagement data for each post
     const postsWithEngagement = await Promise.all(
       (data || []).map(async (row: any) => {
-        const [likesResult, commentsResult, userLikeResult] = await Promise.all([
-          supabase.from('likes').select('id', { count: 'exact', head: true }).eq('post_id', row.id),
-          supabase.from('comments').select('id', { count: 'exact', head: true }).eq('post_id', row.id).is('deleted_at', null),
-          supabase.from('likes').select('id').eq('post_id', row.id).eq('user_id', userId).maybeSingle(),
-        ])
+        try {
+          const [likesResult, commentsResult, userLikeResult] = await Promise.all([
+            supabase.from('likes').select('id', { count: 'exact', head: true }).eq('post_id', row.id),
+            supabase.from('comments').select('id', { count: 'exact', head: true }).eq('post_id', row.id).is('deleted_at', null),
+            supabase.from('likes').select('id').eq('post_id', row.id).eq('user_id', userId).maybeSingle(),
+          ])
 
-        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+          // Handle errors gracefully - if tables don't exist, use defaults
+          const likesCount = likesResult.error ? 0 : (likesResult.count || 0)
+          const commentsCount = commentsResult.error ? 0 : (commentsResult.count || 0)
+          const userLiked = userLikeResult.error ? false : !!userLikeResult.data
 
-        return {
-          id: row.id,
-          userId: row.user_id,
-          user: profile ? {
-            id: profile.id,
-            displayName: profile.display_name,
-            photoURL: profile.photo_url,
-          } : undefined,
-          caption: row.caption,
-          images: (row.images || []).map((url: string, idx: number) => ({
-            url,
-            path: row.image_paths?.[idx],
-          })),
-          outfitData: row.outfit_data,
-          privacyLevel: row.privacy_level,
-          engagement: {
-            likesCount: likesResult.count || 0,
-            commentsCount: commentsResult.count || 0,
-            userLiked: !!userLikeResult.data,
-            userSaved: false, // Will be checked separately if needed
-          },
-          createdAt: new Date(row.created_at),
-          updatedAt: new Date(row.updated_at),
-        } as Post
+          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+
+          return {
+            id: row.id,
+            userId: row.user_id,
+            user: profile ? {
+              id: profile.id,
+              displayName: profile.display_name,
+              photoURL: profile.photo_url,
+            } : undefined,
+            caption: row.caption,
+            images: (row.images || []).map((url: string, idx: number) => ({
+              url,
+              path: row.image_paths?.[idx],
+            })),
+            outfitData: row.outfit_data,
+            privacyLevel: row.privacy_level,
+            engagement: {
+              likesCount,
+              commentsCount,
+              userLiked,
+              userSaved: false, // Will be checked separately if needed
+            },
+            createdAt: new Date(row.created_at),
+            updatedAt: new Date(row.updated_at),
+          } as Post
+        } catch (engagementError) {
+          console.error(`[posts] Error fetching engagement for post ${row.id}:`, engagementError)
+          // Return post with zero engagement if engagement fetch fails
+          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+          return {
+            id: row.id,
+            userId: row.user_id,
+            user: profile ? {
+              id: profile.id,
+              displayName: profile.display_name,
+              photoURL: profile.photo_url,
+            } : undefined,
+            caption: row.caption,
+            images: (row.images || []).map((url: string, idx: number) => ({
+              url,
+              path: row.image_paths?.[idx],
+            })),
+            outfitData: row.outfit_data,
+            privacyLevel: row.privacy_level,
+            engagement: {
+              likesCount: 0,
+              commentsCount: 0,
+              userLiked: false,
+              userSaved: false,
+            },
+            createdAt: new Date(row.created_at),
+            updatedAt: new Date(row.updated_at),
+          } as Post
+        }
       })
     )
 
@@ -120,8 +164,30 @@ export async function GET(request: NextRequest) {
     if (mapped instanceof PermissionError) {
       return NextResponse.json({ error: mapped.message }, { status: 401 })
     }
-    console.error('[posts] GET error:', error)
-    return NextResponse.json({ error: 'Failed to fetch posts' }, { status: 500 })
+    
+    // Log detailed error information
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorDetails = error instanceof Error ? {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    } : { error: String(error) }
+    
+    console.error('[posts] GET error:', {
+      message: errorMessage,
+      details: errorDetails,
+      error,
+    })
+    
+    // Return more informative error message in development
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return NextResponse.json(
+      { 
+        error: 'Failed to fetch posts',
+        ...(isDevelopment && { details: errorMessage })
+      },
+      { status: 500 }
+    )
   }
 }
 
