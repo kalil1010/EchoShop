@@ -2032,9 +2032,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         void syncServerSession('SIGNED_IN', session, null) // Profile not loaded yet
       }
-      setUser(authUser)
+      // MICRO-OPTIMIZATION: Don't set user yet - wait for profile to load first
+      // This prevents brief UI inconsistency where user.role is undefined
+      // setUser(authUser) // REMOVED - will set after profile loads
 
-      // Load user profile
+      // Load user profile FIRST
       const profileOutcome = await loadUserProfileWithTimeout(authUser)
       // Task C1: Re-sync with profile after it's loaded
       if (profileOutcome.profile && session) {
@@ -2062,7 +2064,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalFallback = true
       }
 
-      // CRITICAL FIX #2: Ensure role is in user object and update state BEFORE caching
+      // MICRO-OPTIMIZATION: Set user with role from profile (only after profile is loaded)
+      // This ensures UI never shows user.role as undefined
       const authUserWithRole = {
         ...authUser,
         role: finalProfile.role,
