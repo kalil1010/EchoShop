@@ -257,7 +257,6 @@ export async function POST(request: NextRequest) {
         url,
         path: postData.image_paths?.[idx],
       })),
-      outfitData: postData.outfit_data,
       privacyLevel: postData.privacy_level as Post['privacyLevel'],
       engagement: {
         likesCount: 0,
