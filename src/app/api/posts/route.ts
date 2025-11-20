@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50)
     const offset = parseInt(url.searchParams.get('offset') || '0')
 
-    // Try to fetch posts with profiles join, but handle gracefully if it fails
+    // Fetch posts first (without profiles join to avoid join errors)
     let query = supabase
       .from('posts')
       .select(`
@@ -36,12 +36,7 @@ export async function GET(request: NextRequest) {
         privacy_level,
         created_at,
         updated_at,
-        deleted_at,
-        profiles:user_id (
-          id,
-          display_name,
-          photo_url
-        )
+        deleted_at
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -100,6 +95,27 @@ export async function GET(request: NextRequest) {
       throw error
     }
 
+    // Get unique user IDs from posts
+    const userIds = [...new Set((data || []).map((row: any) => row.user_id).filter(Boolean))]
+    
+    // Fetch profiles for all users in one query (only if we have user IDs)
+    let profilesMap = new Map()
+    if (userIds.length > 0) {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, display_name, photo_url')
+        .in('id', userIds)
+      
+      if (profilesError) {
+        console.warn('[posts] Error fetching profiles:', profilesError)
+      } else {
+        // Create a map of user_id -> profile for quick lookup
+        profilesMap = new Map(
+          (profilesData || []).map((p: any) => [p.id, p])
+        )
+      }
+    }
+
     // Get engagement data for each post
     const postsWithEngagement = await Promise.all(
       (data || []).map(async (row: any) => {
@@ -115,15 +131,16 @@ export async function GET(request: NextRequest) {
           const commentsCount = commentsResult.error ? 0 : (commentsResult.count || 0)
           const userLiked = userLikeResult.error ? false : !!userLikeResult.data
 
-          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+          // Get profile from map
+          const profile = profilesMap.get(row.user_id)
 
           return {
             id: row.id,
             userId: row.user_id,
             user: profile ? {
               id: profile.id,
-              displayName: profile.display_name,
-              photoURL: profile.photo_url,
+              displayName: profile.display_name || undefined,
+              photoURL: profile.photo_url || undefined,
             } : undefined,
             caption: row.caption,
             images: (row.images || []).map((url: string, idx: number) => ({
@@ -143,14 +160,14 @@ export async function GET(request: NextRequest) {
         } catch (engagementError) {
           console.error(`[posts] Error fetching engagement for post ${row.id}:`, engagementError)
           // Return post with zero engagement if engagement fetch fails
-          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+          const profile = profilesMap.get(row.user_id)
           return {
             id: row.id,
             userId: row.user_id,
             user: profile ? {
               id: profile.id,
-              displayName: profile.display_name,
-              photoURL: profile.photo_url,
+              displayName: profile.display_name || undefined,
+              photoURL: profile.photo_url || undefined,
             } : undefined,
             caption: row.caption,
             images: (row.images || []).map((url: string, idx: number) => ({

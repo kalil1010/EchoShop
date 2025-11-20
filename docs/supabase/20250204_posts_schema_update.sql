@@ -11,10 +11,6 @@ create extension if not exists "pgcrypto";
 -- ------------------------------------------------------------------
 -- Posts Table - Update to remove outfit_data
 -- ------------------------------------------------------------------
--- Remove outfit_data column if it exists (no longer used in code)
-alter table public.posts
-  drop column if exists outfit_data;
-
 -- Ensure posts table exists with correct schema
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
@@ -28,6 +24,20 @@ create table if not exists public.posts (
   updated_at timestamptz not null default timezone('utc', now()),
   deleted_at timestamptz
 );
+
+-- Remove outfit_data column if it exists (no longer used in code)
+-- Do this after table creation to avoid errors
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns 
+    where table_schema = 'public' 
+    and table_name = 'posts' 
+    and column_name = 'outfit_data'
+  ) then
+    alter table public.posts drop column outfit_data;
+  end if;
+end $$;
 
 -- Add columns if they don't exist (for existing tables)
 do $$
