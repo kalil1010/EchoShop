@@ -14,33 +14,38 @@ function requireEnv(value: string | undefined, name: string): string {
   return value
 }
 
+// CRITICAL FIX: Create a fetch wrapper with timeout support
+// This prevents Supabase requests from hanging indefinitely
+function createTimeoutFetch(timeoutMs: number = 15000) {
+  return async (url: string, init?: RequestInit) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+}
+
 function createSupabaseClient(): SupabaseClientType {
   const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
   const anonKey = requireEnv(PUBLIC_SUPABASE_ANON_KEY, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
-  // CRITICAL FIX: Add explicit timeout configuration to Supabase client
-  // This prevents getSession() from hanging indefinitely
   const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: typeof window !== 'undefined',
     },
-    // CRITICAL: Set fetch timeout to prevent hanging on slow connections
-    // This applies to ALL requests made by the Supabase client
-    fetch: (url: string, init?: RequestInit) => {
-      // Use AbortController to enforce timeout on all requests
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15000) // 15 second timeout
-
-      return fetch(url, {
-        ...init,
-        signal: controller.signal,
-      }).finally(() => {
-        clearTimeout(timeout)
-      })
+    global: {
+      fetch: createTimeoutFetch(15000), // 15 second timeout for all requests
     },
-  })
+  } as any)
 
   return client
 }
