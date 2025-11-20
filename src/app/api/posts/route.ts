@@ -38,11 +38,7 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         deleted_at,
-        profiles:user_id (
-          id,
-          display_name,
-          photo_url
-        )
+        
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
