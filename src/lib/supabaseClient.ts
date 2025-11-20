@@ -18,11 +18,27 @@ function createSupabaseClient(): SupabaseClientType {
   const url = requireEnv(PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
   const anonKey = requireEnv(PUBLIC_SUPABASE_ANON_KEY, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
+  // CRITICAL FIX: Add explicit timeout configuration to Supabase client
+  // This prevents getSession() from hanging indefinitely
   const client = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: typeof window !== 'undefined',
+    },
+    // CRITICAL: Set fetch timeout to prevent hanging on slow connections
+    // This applies to ALL requests made by the Supabase client
+    fetch: (url: string, init?: RequestInit) => {
+      // Use AbortController to enforce timeout on all requests
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+      return fetch(url, {
+        ...init,
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeout)
+      })
     },
   })
 
@@ -33,11 +49,9 @@ export function getSupabaseClient(): SupabaseClientType {
   if (typeof window === 'undefined') {
     return createSupabaseClient()
   }
-
   if (!browserClient) {
     browserClient = createSupabaseClient()
   }
-
   return browserClient
 }
 
