@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50)
     const offset = parseInt(url.searchParams.get('offset') || '0')
 
+    // Try to fetch posts with profiles join, but handle gracefully if it fails
     let query = supabase
       .from('posts')
       .select(`
@@ -80,6 +81,22 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[posts] Error fetching posts query:', error)
+      
+      // Check if it's a "table doesn't exist" error
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorCode = (error as { code?: string })?.code
+      
+      // If posts table doesn't exist, return empty array instead of error
+      if (
+        errorCode === '42P01' || // PostgreSQL: relation does not exist
+        errorMessage.includes('relation') && errorMessage.includes('does not exist') ||
+        errorMessage.includes('table') && errorMessage.includes('does not exist') ||
+        errorMessage.includes('relation "public.posts" does not exist')
+      ) {
+        console.warn('[posts] Posts table does not exist. Returning empty feed.')
+        return NextResponse.json({ posts: [] })
+      }
+      
       throw error
     }
 
@@ -163,6 +180,7 @@ export async function GET(request: NextRequest) {
     
     // Log detailed error information
     const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorCode = (error as { code?: string })?.code
     const errorDetails = error instanceof Error ? {
       name: error.name,
       message: error.message,
@@ -171,9 +189,22 @@ export async function GET(request: NextRequest) {
     
     console.error('[posts] GET error:', {
       message: errorMessage,
+      code: errorCode,
       details: errorDetails,
       error,
     })
+    
+    // Check if it's a "table doesn't exist" error - return empty array
+    if (
+      errorCode === '42P01' || // PostgreSQL: relation does not exist
+      errorMessage.includes('relation') && errorMessage.includes('does not exist') ||
+      errorMessage.includes('table') && errorMessage.includes('does not exist') ||
+      errorMessage.includes('relation "public.posts" does not exist') ||
+      errorMessage.includes('relation "public.follows" does not exist')
+    ) {
+      console.warn('[posts] Database tables do not exist. Returning empty feed.')
+      return NextResponse.json({ posts: [] })
+    }
     
     // Return more informative error message in development
     const isDevelopment = process.env.NODE_ENV === 'development'
