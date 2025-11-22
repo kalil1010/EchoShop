@@ -2,7 +2,15 @@
 
 Complete list of SQL files to run at Supabase in the correct order.
 
-## Pre-Deployment: Run Verification Queries First
+## Pre-Deployment: Run Compatibility Check First
+
+### 0. Version Compatibility Check (NEW - Run This First!)
+**File**: `20250201_COMPATIBILITY_FIXES.sql`
+**Purpose**: Check PostgreSQL version and feature compatibility before starting
+**Action**: Run to identify any version compatibility issues
+**Note**: This will tell you which features are supported in your environment
+
+**Why This Is Important**: Some features (like `security_invoker`) require PostgreSQL 15+. This check will help you understand what will work and what will be skipped automatically.
 
 ### 1. Pre-Deployment Verification
 **File**: `20250201_pre_deployment_verification.sql`
@@ -13,18 +21,24 @@ Complete list of SQL files to run at Supabase in the correct order.
 - Query 3: Identify all RLS policies → Save to `pre_deployment_rls_policies.csv`
 - Query 4: Export current RLS policies → Save to `rollback_rls_policies.sql`
 - Query 5-7: Additional verification queries
+- Query 8-9: Version detection and compatibility checks (updated)
 
 **Note**: Review outputs and ensure you have backups before proceeding.
+**Updated**: Now includes version detection to handle PostgreSQL 13/14/15+ differences
 
 ---
 
 ## Phase 2: Security Fixes
 
-### 2. Fix Security Dashboard Stats View (Conditional)
+### 2. Fix Security Dashboard Stats View (Conditional & Version-Aware)
 **File**: `20250201_fix_security_view.sql`
 **Purpose**: Set `security_invoker = true` on the security dashboard stats view
-**Note**: Only applies if the view exists (handled automatically by the script)
-**Risk**: Low - View may not exist, which is fine
+**Note**: 
+- Only applies if the view exists (handled automatically by the script)
+- Requires PostgreSQL 15+ for `security_invoker` feature
+- **Updated**: Automatically detects PostgreSQL version and skips gracefully if < 15
+**Risk**: Low - Script will auto-detect and skip if feature not supported
+**Compatibility**: Works on all versions - will skip the fix if PostgreSQL < 15 (this is safe)
 
 ### 3. Fix Function Security Settings
 **File**: `20250201_fix_function_security.sql`

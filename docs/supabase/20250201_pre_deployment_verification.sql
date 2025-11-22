@@ -129,10 +129,64 @@ AND (
 );
 
 
--- Query 7: Baseline performance - function call statistics
+-- Query 7: Check PostgreSQL version
+-- ------------------------------------------------------------------
+-- First, check the PostgreSQL version to identify compatibility issues
+SELECT version() as postgresql_version;
+
+-- Query 8: Baseline performance - function call statistics (Version Compatible)
 -- ------------------------------------------------------------------
 -- Note: Requires pg_stat_statements extension
--- This helps establish baseline before optimization
+-- This query adapts to different PostgreSQL versions
+-- PostgreSQL 13 uses: calls, total_time, mean_time, stddev_time
+-- PostgreSQL 14+ uses: calls, total_exec_time, mean_exec_time, stddev_exec_time
+DO $$
+BEGIN
+    -- Check if pg_stat_statements is available
+    IF EXISTS (
+        SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
+    ) THEN
+        RAISE NOTICE 'pg_stat_statements extension is installed';
+        
+        -- Try PostgreSQL 14+ column names first (total_exec_time, mean_exec_time)
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_schema = 'pg_catalog' 
+            AND table_name = 'pg_stat_user_functions'
+            AND column_name = 'total_exec_time'
+        ) THEN
+            RAISE NOTICE 'Using PostgreSQL 14+ statistics (total_exec_time)';
+            -- Query will be run separately if needed
+        ELSE
+            RAISE NOTICE 'Using PostgreSQL 13 statistics (total_time)';
+            -- Query will be run separately if needed
+        END IF;
+    ELSE
+        RAISE NOTICE 'pg_stat_statements extension not installed - skipping performance baseline';
+    END IF;
+END $$;
+
+-- Query 8a: Baseline performance - PostgreSQL 14+ (run if version >= 14)
+-- ------------------------------------------------------------------
+-- Uncomment and run this if your PostgreSQL version is 14+
+/*
+SELECT 
+    schemaname,
+    funcname,
+    calls,
+    total_exec_time as total_time,
+    mean_exec_time as mean_time,
+    stddev_exec_time as stddev_time
+FROM pg_stat_user_functions
+WHERE schemaname = 'public'
+ORDER BY calls DESC
+LIMIT 20;
+*/
+
+-- Query 8b: Baseline performance - PostgreSQL 13 (run if version is 13)
+-- ------------------------------------------------------------------
+-- Uncomment and run this if your PostgreSQL version is 13
+/*
 SELECT 
     schemaname,
     funcname,
@@ -144,4 +198,16 @@ FROM pg_stat_user_functions
 WHERE schemaname = 'public'
 ORDER BY calls DESC
 LIMIT 20;
+*/
+
+-- Query 9: Check for security_invoker support (PostgreSQL 15+)
+-- ------------------------------------------------------------------
+-- Check if your version supports security_invoker on views
+SELECT 
+    CASE 
+        WHEN current_setting('server_version_num')::int >= 150000 
+        THEN '✅ security_invoker is supported (PostgreSQL 15+)'
+        ELSE '⚠️ security_invoker NOT supported (requires PostgreSQL 15+)'
+    END as security_invoker_support,
+    current_setting('server_version_num') as version_number;
 

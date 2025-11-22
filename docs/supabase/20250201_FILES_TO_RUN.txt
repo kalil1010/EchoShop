@@ -3,10 +3,17 @@ ECHOSHOP DATABASE SECURITY & PERFORMANCE DEPLOYMENT
 Complete List of SQL Files to Run at Supabase (In Order)
 ================================================================================
 
+PHASE 0: COMPATIBILITY CHECK (NEW - Run This First!)
+-----------------------------------------------------
+0.  docs/supabase/20250201_COMPATIBILITY_FIXES.sql
+    → Check PostgreSQL version and feature compatibility
+    → Identifies any version-specific issues before starting
+
 PHASE 1: PRE-DEPLOYMENT VERIFICATION
 -------------------------------------
 1.  docs/supabase/20250201_pre_deployment_verification.sql
     → Save outputs to CSV files before proceeding
+    → Updated: Now includes version detection queries
 
 PHASE 2: SECURITY FIXES
 -----------------------
@@ -49,7 +56,14 @@ PHASE 5: FINAL VERIFICATION
 23. docs/supabase/20250201_deployment_verification.sql
 
 ================================================================================
-TOTAL FILES: 23 SQL files
+TOTAL FILES: 24 SQL files (including compatibility check)
+================================================================================
+
+UPDATED FOR COMPATIBILITY:
+- All files now handle PostgreSQL 13, 14, and 15+ versions
+- security_invoker fix auto-detects version and skips if not supported
+- pg_stat_statements queries adapted for different column names
+- See 20250201_VERSION_COMPATIBILITY.md for details
 ================================================================================
 
 IMPORTANT NOTES:
