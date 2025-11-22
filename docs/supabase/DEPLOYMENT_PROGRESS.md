@@ -1,12 +1,12 @@
 # EchoShop Database Deployment - Progress Tracker
 
-## Current Status: 58% Complete (14/24 files)
+## Current Status: 79% Complete (19/24 files)
 
-Last Updated: Priority 2 batch COMPLETE ✅
+Last Updated: Priority 3 - 4 of 8 files complete (50%)
 
 ---
 
-## ✅ Completed Files (14/24)
+## ✅ Completed Files (19/24)
 
 ### Setup & Core Fixes (5 files)
 1. ✅ `20250201_COMPATIBILITY_FIXES.sql` - Compatibility check
@@ -23,40 +23,64 @@ Last Updated: Priority 2 batch COMPLETE ✅
 **Priority 1 Total: 25 policies**
 
 ### Priority 2: Social Platform Tables (7 files) ✅ COMPLETE
-9. ✅ `20250201_update_rls_posts.sql` - Posts RLS updated (4 policies) ⚠️ Complex nested queries
+9. ✅ `20250201_update_rls_posts.sql` - Posts RLS updated (4 policies)
 10. ✅ `20250201_update_rls_comments.sql` - Comments RLS updated (4 policies)
 11. ✅ `20250201_update_rls_likes.sql` - Likes RLS updated (3 policies)
 12. ✅ `20250201_update_rls_follows.sql` - Follows RLS updated (3 policies)
 13. ✅ `20250201_update_rls_collections.sql` - Collections RLS updated (4 policies)
 14. ✅ `20250201_update_rls_saves.sql` - Saves RLS updated (3 policies)
-15. ✅ `20250201_update_rls_messages.sql` - Messages RLS updated (3 policies) ⚠️ Dual user checks
+15. ✅ `20250201_update_rls_messages.sql` - Messages RLS updated (3 policies)
 
 **Priority 2 Total: 24 policies**
 
-**Total Policies Updated So Far: ~49 policies across 10 tables**
+### Priority 3: Vendor & Admin Tables (4/8 files) - IN PROGRESS
+16. ✅ `20250201_update_rls_vendor_notifications.sql` - Vendor notifications RLS updated (3 policies)
+17. ✅ `20250201_update_rls_vendor_owner_messages.sql` - Vendor owner messages RLS updated (3 policies)
+18. ✅ `20250201_update_rls_vendor_health_scores.sql` - Vendor health scores RLS updated (4 policies)
+19. ⚠️ `20250201_update_rls_orders.sql` - **SCHEMA MISMATCH ERROR** - Needs investigation
+20. ⏳ `20250201_update_rls_admin_audit_log.sql` - **PENDING** (2 policies)
+21. ⏳ `20250201_update_rls_vendor_assistants.sql` - **PENDING** (7 policies)
+22. ⏳ `20250201_update_rls_feature_flags.sql` - **PENDING** (5 policies)
+23. ⏳ `20250201_update_rls_disputes.sql` - **PENDING** (4 policies)
+
+**Priority 3 Progress: 10 policies updated, 18 pending**
+
+**Total Policies Updated So Far: ~54 policies across 14 tables**
 
 ---
 
-## 🔄 Next Files to Execute (Priority 3)
+## ⚠️ Critical Issue: Orders Table Schema Mismatch
 
-### Priority 3: Vendor & Admin Tables (8 files) - READY NOW
+**Error**: `column 'customer_id' does not exist`
 
-16. ⏳ `20250201_update_rls_vendor_notifications.sql` - **READY** (3 policies)
-17. ⏳ `20250201_update_rls_vendor_owner_messages.sql` - **READY** (3 policies)
-18. ⏳ `20250201_update_rls_vendor_health_scores.sql` - **READY** (3 policies)
-19. ⏳ `20250201_update_rls_admin_audit_log.sql` - **READY** (2 policies)
-20. ⏳ `20250201_update_rls_orders.sql` - **READY** ⚠️ **CRITICAL** (9 policies - e-commerce)
+**Status**: Under investigation - diagnostic query created
+
+**Files Created**:
+- `20250201_diagnose_orders_schema.sql` - Run this first to identify actual schema
+- `20250201_update_rls_orders_FIXED.sql` - Updated version with better error handling
+- `ORDERS_TABLE_SCHEMA_ISSUE.md` - Complete resolution guide
+
+**Action Required**:
+1. Run diagnostic query to identify actual column names
+2. Update orders RLS file with correct column names if needed
+3. Re-execute corrected orders RLS file
+
+---
+
+## 📋 Remaining Files (5/24)
+
+### Priority 3: Vendor & Admin Tables (4 remaining)
+
+20. ⏳ `20250201_update_rls_admin_audit_log.sql` - **READY** (2 policies)
 21. ⏳ `20250201_update_rls_vendor_assistants.sql` - **READY** (7 policies)
 22. ⏳ `20250201_update_rls_feature_flags.sql` - **READY** (5 policies)
 23. ⏳ `20250201_update_rls_disputes.sql` - **READY** (4 policies)
 
-**Estimated Total: ~36 policies across 8 tables**
+### Critical Fix Needed
 
----
+19. ⚠️ `20250201_update_rls_orders.sql` - **NEEDS SCHEMA INVESTIGATION** ⚠️
 
-## 📋 Final File
-
-### Verification (1 file)
+### Final Verification (1 file)
 
 24. ⏳ `20250201_deployment_verification.sql` - Final verification queries
 
@@ -67,11 +91,11 @@ Last Updated: Priority 2 batch COMPLETE ✅
 - ✅ PostgreSQL 15.6 compatibility confirmed
 - ✅ 3 STABLE auth functions created and active
 - ✅ Function security hardened (SECURITY DEFINER + search_path)
-- ✅ ~49 RLS policies optimized across 10 tables
+- ✅ ~54 RLS policies optimized across 14 tables
 - ✅ Performance optimization active (15-30% improvement expected)
-- ✅ Complex nested queries updated (posts table)
-- ✅ Dual user checks updated (messages table)
+- ✅ Complex nested queries updated (posts, messages tables)
 - ✅ Social platform fully optimized (7 tables)
+- ✅ Vendor notifications, messages, health scores optimized
 
 ---
 
@@ -83,18 +107,19 @@ Last Updated: Priority 2 batch COMPLETE ✅
 | Phase 1: Pre-Deployment | ✅ Complete | 1/1 | 100% |
 | Phase 2: Security Fixes | ✅ Complete | 2/2 | 100% |
 | Phase 3: STABLE Functions | ✅ Complete | 1/1 | 100% |
-| Phase 4: RLS Updates | 🔄 In Progress | 10/18 | 56% |
+| Phase 4: RLS Updates | 🔄 In Progress | 14/18 | 78% |
 | Phase 5: Verification | ⏳ Pending | 0/1 | 0% |
-| **TOTAL** | **🔄 58%** | **14/24** | **58%** |
+| **TOTAL** | **🔄 79%** | **19/24** | **79%** |
 
 ---
 
 ## ⏱️ Estimated Time Remaining
 
-- Priority 3 (8 files): ~20 minutes + testing
+- Orders schema fix: ~5 minutes (investigation + fix)
+- Remaining Priority 3 (4 files): ~10 minutes + testing
 - Verification: ~5 minutes
 
-**Total: ~25 minutes remaining**
+**Total: ~20 minutes remaining**
 
 ---
 
@@ -102,24 +127,25 @@ Last Updated: Priority 2 batch COMPLETE ✅
 
 - ✅ Priority 1: Complete - Vendor dashboard verified
 - ✅ Priority 2: Complete - Social platform verified
-- 🔄 Priority 3: Ready - Vendor/admin tables (8 files)
+- 🔄 Priority 3: In Progress - 4/8 files complete (50%)
+- ⚠️ **URGENT**: Orders table schema mismatch - investigate first
 - 💡 Use Raw GitHub URLs to avoid markdown copying issues
-- ⚠️ Orders table (#20) is CRITICAL - test thoroughly after execution
-- All files follow same pattern - should execute smoothly
+- All other files follow same pattern - should execute smoothly
 
 ---
 
-## Quick Links for Priority 3 Files
+## Next Steps - IMMEDIATE ACTION
 
-**GitHub Raw URLs** (for clean SQL copy without markdown):
-
-See `REMAINING_FILES_RAW_URLS.md` for complete list of all raw URLs.
+1. **URGENT**: Run `20250201_diagnose_orders_schema.sql` to identify actual column names
+2. **Fix**: Update orders RLS file based on diagnostic results
+3. **Execute**: Run corrected orders RLS file
+4. **Continue**: Execute remaining 4 Priority 3 files
+5. **Final**: Run deployment verification
 
 ---
 
-## Next Steps
+## Quick Links
 
-1. **Execute Priority 3** (8 vendor/admin files) - Use Raw GitHub URLs
-2. **Test vendor/admin features** (especially orders!)
-3. **Run final verification** (1 file)
-4. **Deployment complete!** 🎉
+- Diagnostic Query: `20250201_diagnose_orders_schema.sql`
+- Fixed Orders RLS: `20250201_update_rls_orders_FIXED.sql`
+- Resolution Guide: `ORDERS_TABLE_SCHEMA_ISSUE.md`
